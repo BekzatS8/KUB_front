@@ -1,0 +1,346 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { toast } from "sonner"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Plus, Edit, Trash2, Building2 } from "lucide-react"
+import * as BranchesAPI from "@/src/api/branches.api"
+import type { Branch } from "@/src/models/branches.model"
+
+export default function BranchesPage() {
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null)
+  
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    code: "",
+    is_active: true
+  })
+  
+  const [editForm, setEditForm] = useState({
+    name: "",
+    code: "",
+    is_active: true
+  })
+
+  const fetchBranches = async () => {
+    setIsLoading(true)
+    try {
+      const res = await BranchesAPI.listBranches()
+      const data = Array.isArray(res) ? res : (res as any)?.data || []
+      setBranches(data)
+    } catch (err: any) {
+      console.error("Error loading branches:", err)
+      toast.error("Ошибка при загрузке филиалов")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchBranches()
+  }, [])
+
+  const handleCreate = async () => {
+    if (!createForm.name.trim() || !createForm.code.trim()) {
+      toast.error("Заполните все обязательные поля")
+      return
+    }
+    
+    try {
+      await BranchesAPI.createBranch(createForm)
+      toast.success("Филиал успешно создан")
+      setIsCreateDialogOpen(false)
+      setCreateForm({ name: "", code: "", is_active: true })
+      fetchBranches()
+    } catch (err: any) {
+      console.error("Error creating branch:", err)
+      toast.error(err?.response?.data?.message || "Ошибка при создании филиала")
+    }
+  }
+
+  const handleUpdate = async () => {
+    if (!selectedBranch) return
+    if (!editForm.name.trim() || !editForm.code.trim()) {
+      toast.error("Заполните все обязательные поля")
+      return
+    }
+    
+    try {
+      await BranchesAPI.updateBranch(editForm, { id: selectedBranch.id })
+      toast.success("Филиал успешно обновлен")
+      setIsEditDialogOpen(false)
+      setSelectedBranch(null)
+      fetchBranches()
+    } catch (err: any) {
+      console.error("Error updating branch:", err)
+      toast.error(err?.response?.data?.message || "Ошибка при обновлении филиала")
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!selectedBranch) return
+    
+    try {
+      await BranchesAPI.deleteBranch({ id: selectedBranch.id })
+      toast.success("Филиал успешно удален")
+      setIsDeleteDialogOpen(false)
+      setSelectedBranch(null)
+      fetchBranches()
+    } catch (err: any) {
+      console.error("Error deleting branch:", err)
+      toast.error(err?.response?.data?.message || "Ошибка при удалении филиала")
+    }
+  }
+
+  const openEditDialog = (branch: Branch) => {
+    setSelectedBranch(branch)
+    setEditForm({
+      name: branch.name,
+      code: branch.code,
+      is_active: branch.is_active
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const openDeleteDialog = (branch: Branch) => {
+    setSelectedBranch(branch)
+    setIsDeleteDialogOpen(true)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="m-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 w-48 bg-gray-200 rounded" />
+          <div className="h-4 w-64 bg-gray-200 rounded" />
+          <div className="h-96 bg-gray-200 rounded" />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between m-6 gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Филиалы
+          </h1>
+          <p className="text-gray-600">
+            Управление филиалами компании
+          </p>
+        </div>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Новый филиал
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Создать новый филиал</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Название</Label>
+                <Input
+                  id="name"
+                  placeholder="Введите название филиала..."
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="code">Код</Label>
+                <Input
+                  id="code"
+                  placeholder="Введите код филиала..."
+                  value={createForm.code}
+                  onChange={(e) => setCreateForm({ ...createForm, code: e.target.value })}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="is_active"
+                  checked={createForm.is_active}
+                  onChange={(e) => setCreateForm({ ...createForm, is_active: e.target.checked })}
+                  className="rounded"
+                />
+                <Label htmlFor="is_active" className="cursor-pointer">Активен</Label>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-2 mt-4">
+              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Отмена</Button>
+              <Button onClick={handleCreate}>Создать</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <Card className="mx-6 mb-6">
+        <CardHeader>
+          <CardTitle>Список филиалов</CardTitle>
+          <CardDescription>
+            {branches.length} филиал{branches.length !== 1 ? 'ов' : ''}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>Название</TableHead>
+                <TableHead>Код</TableHead>
+                <TableHead>Статус</TableHead>
+                <TableHead className="text-right">Действия</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {branches.map((branch) => (
+                <TableRow key={branch.id}>
+                  <TableCell className="font-medium">{branch.id}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-gray-500" />
+                      {branch.name}
+                    </div>
+                  </TableCell>
+                  <TableCell>{branch.code}</TableCell>
+                  <TableCell>
+                    <Badge variant={branch.is_active ? "default" : "secondary"}>
+                      {branch.is_active ? "Активен" : "Неактивен"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditDialog(branch)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openDeleteDialog(branch)}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {branches.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-gray-500">
+                    Нет филиалов
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Редактировать филиал</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Название</Label>
+              <Input
+                id="edit-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-code">Код</Label>
+              <Input
+                id="edit-code"
+                value={editForm.code}
+                onChange={(e) => setEditForm({ ...editForm, code: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="edit-is_active"
+                checked={editForm.is_active}
+                onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
+                className="rounded"
+              />
+              <Label htmlFor="edit-is_active" className="cursor-pointer">Активен</Label>
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2 mt-4">
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Отмена</Button>
+            <Button onClick={handleUpdate}>Сохранить</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить филиал?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Это действие нельзя отменить. Филиал "{selectedBranch?.name}" будет удален.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>Удалить</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+}
