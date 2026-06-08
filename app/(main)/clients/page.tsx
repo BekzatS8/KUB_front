@@ -83,6 +83,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 
+const DEFAULT_CLIENT_COUNTRY = "kazakhstan";
+
 const EMPTY_CLIENT: Models.CreateClientRequest = {
   // Common fields
   name: "",
@@ -121,7 +123,7 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
     passport_number: "",
     registration_address: "",
     actual_address: "",
-    country: "",
+    country: DEFAULT_CLIENT_COUNTRY,
     trip_purpose: "",
     birth_date: "",
     birth_place: "",
@@ -170,7 +172,7 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
   passport_expire_date: "",
   registration_address: "",
   residential_address: "",
-  country: "",
+  country: DEFAULT_CLIENT_COUNTRY,
   country_other: "",
   trip_purpose: "",
   trip_purpose_other: "",
@@ -347,6 +349,7 @@ export default function ClientsPage() {
           iban: "",
           bik: "",
           kbe: "",
+          country: prev.country || DEFAULT_CLIENT_COUNTRY,
           legal_profile: {
             ...prev.legal_profile,
             company_name: "",
@@ -825,6 +828,23 @@ useEffect(() => {
 
   const handleBooleanChange = (id: string, value: string) => {
     setClientFormData((prev) => ({ ...prev, [id]: value === 'true' }));
+  };
+
+  const getClientSubmitErrorMessage = (err: any) => {
+    const message = String(err?.message || "").trim();
+    const lower = message.toLowerCase();
+
+    if (lower === "forbidden") {
+      return "Нет доступа для создания или изменения клиента. Проверьте вашу роль и филиал пользователя.";
+    }
+    if (lower.includes("read-only")) {
+      return "У вашей роли нет права создавать или редактировать клиентов. Обратитесь к администратору.";
+    }
+    if (lower.includes("branch")) {
+      return "Клиент не создан: у вашего пользователя не указан филиал. Попросите администратора назначить филиал.";
+    }
+
+    return message || "Не удалось сохранить клиента.";
   };
 
   const handleCreateClick = () => {
@@ -1395,11 +1415,12 @@ useEffect(() => {
       resetForm();
     } catch (err: any) {
       console.error("Form submit error", err);
-      setError(err?.message || "Произошла ошибка.");
+      const submitErrorMessage = getClientSubmitErrorMessage(err);
+      setError(submitErrorMessage);
       toast({
         variant: "destructive",
         title: "Ошибка",
-        description: err?.message || "Не удалось сохранить клиента.",
+        description: submitErrorMessage,
       });
       // Don't close modal on error - keep it open so user can fix the issue
     }
@@ -1809,6 +1830,7 @@ useEffect(() => {
                           value={clientFormData.country || ""}
                           onChange={(value) => setClientFormData(prev => ({ ...prev, country: value }))}
                           options={[
+                            { value: DEFAULT_CLIENT_COUNTRY, label: "Казахстан" },
                             { value: "south_korea", label: "Южная Корея" },
                             { value: "japan", label: "Япония" },
                             { value: "usa", label: "США" },

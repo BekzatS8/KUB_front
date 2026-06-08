@@ -30,9 +30,43 @@ function formatMissingFields(fields: unknown) {
   return `Не заполнены обязательные поля: ${fields.map((field) => fieldLabel(String(field))).join(', ')}.`;
 }
 
+function containsRussianText(message: string) {
+  return /[А-Яа-яЁё]/.test(message);
+}
+
 function translateClientError(message: string, code?: string, status?: number) {
   const lower = message.toLowerCase();
 
+  if (code === 'READ_ONLY_ROLE' || lower.includes('read-only role') || lower.includes('read-only')) {
+    return 'У вашей роли нет права создавать или редактировать клиентов. Обратитесь к администратору.';
+  }
+  if (code === 'USER_BRANCH_REQUIRED' || lower.includes('user branch is required') || lower.includes('no branch assigned')) {
+    return 'Клиент не создан: у вашего пользователя не указан филиал. Попросите администратора назначить филиал в карточке пользователя.';
+  }
+  if (code === 'FORBIDDEN' || lower === 'forbidden' || status === 403) {
+    return 'Нет доступа для создания или изменения клиента. Проверьте вашу роль и филиал пользователя.';
+  }
+  if (status === 401 || code === 'UNAUTHORIZED' || lower.includes('unauthorized')) {
+    return 'Сессия истекла или вы не авторизованы. Войдите в систему заново.';
+  }
+  if (status === 404 || code === 'CLIENT_NOT_FOUND') {
+    return 'Клиент не найден. Обновите список и попробуйте снова.';
+  }
+  if (code === 'BAD_REQUEST' && lower.includes('invalid client payload')) {
+    return 'Некорректные данные формы клиента. Проверьте заполненные поля и попробуйте снова.';
+  }
+  if (lower.includes('invalid client_type')) {
+    return 'Некорректный тип клиента. Выберите физическое или юридическое лицо.';
+  }
+  if (lower.includes('client_type is immutable')) {
+    return 'Тип клиента нельзя менять после создания. Создайте нового клиента с нужным типом.';
+  }
+  if (code === 'CLIENT_IN_USE' || lower.includes('linked entities')) {
+    return 'Клиента нельзя удалить: к нему привязаны сделки, документы или другие записи.';
+  }
+  if (lower.includes('timeout') || lower.includes('network error')) {
+    return 'Нет соединения с сервером или сервер не ответил вовремя. Проверьте интернет и попробуйте снова.';
+  }
   if (code === 'CLIENT_ALREADY_EXISTS') {
     return 'Клиент с таким БИН/ИИН уже существует.';
   }
@@ -79,7 +113,19 @@ function translateClientError(message: string, code?: string, status?: number) {
     return 'Не найдена связанная запись: пользователь, филиал или другая зависимость.';
   }
 
-  return message;
+  if (containsRussianText(message)) {
+    return message;
+  }
+  if (status && status >= 500) {
+    return 'Ошибка сервера. Попробуйте еще раз или обратитесь к администратору.';
+  }
+  if (status && status >= 400) {
+    return 'Не удалось выполнить действие. Проверьте данные и права доступа.';
+  }
+  if (message) {
+    return 'Произошла ошибка. Попробуйте еще раз.';
+  }
+  return 'Произошла ошибка. Попробуйте еще раз.';
 }
 
 function extractClientErrorMessage(error: any, fallback: string) {
@@ -87,7 +133,7 @@ function extractClientErrorMessage(error: any, fallback: string) {
   const backendError = error?.response?.data;
 
   if (!backendError) {
-    return error?.message || fallback;
+    return translateClientError(error?.message || fallback, undefined, status);
   }
 
   if (typeof backendError === 'string') {
@@ -95,7 +141,7 @@ function extractClientErrorMessage(error: any, fallback: string) {
   }
 
   if (Array.isArray(backendError)) {
-    return backendError.map((err) => err?.message || String(err)).join(', ');
+    return backendError.map((err) => translateClientError(err?.message || String(err), err?.error_code || err?.code, status)).join(', ');
   }
 
   const missingFieldsText = formatMissingFields(backendError.missing_fields);
@@ -140,23 +186,39 @@ export async function createClient(payload: Models.CreateClientRequest): Promise
 }
 
 export async function listClients(params?: { page?: number; size?: number; search?: string; client_type?: string }): Promise<Models.Client[] | { data: Models.Client[]; total: number }> {
-  const res = await api.get('/clients', { params: { ...params, paginate: true } });
-  return res.data;
+  try {
+    const res = await api.get('/clients', { params: { ...params, paginate: true } });
+    return res.data;
+  } catch (error: any) {
+    throw new Error(extractClientErrorMessage(error, 'Не удалось загрузить клиентов.'));
+  }
 }
 
 export async function listMyClients(params?: { page?: number; size?: number; search?: string; client_type?: string }): Promise<Models.Client[] | { data: Models.Client[]; total: number }> {
-  const res = await api.get('/clients/my', { params: { ...params, paginate: true } });
-  return res.data;
+  try {
+    const res = await api.get('/clients/my', { params: { ...params, paginate: true } });
+    return res.data;
+  } catch (error: any) {
+    throw new Error(extractClientErrorMessage(error, 'Не удалось загрузить клиентов.'));
+  }
 }
 
 export async function getClientById(id: string): Promise<Models.Client> {
-  const res = await api.get(`/clients/${id}`);
-  return res.data;
+  try {
+    const res = await api.get(`/clients/${id}`);
+    return res.data;
+  } catch (error: any) {
+    throw new Error(extractClientErrorMessage(error, 'Не удалось загрузить клиента.'));
+  }
 }
 
 export async function getClientProfile(id: string): Promise<any> {
-  const res = await api.get(`/clients/${id}/profile`);
-  return res.data;
+  try {
+    const res = await api.get(`/clients/${id}/profile`);
+    return res.data;
+  } catch (error: any) {
+    throw new Error(extractClientErrorMessage(error, 'Не удалось загрузить профиль клиента.'));
+  }
 }
 
 export async function getClientPhoto(clientId: string): Promise<string> {
@@ -196,18 +258,30 @@ export async function updateClient(id: string, payload: Models.UpdateClientReque
 }
 
 export async function deleteClient(id: string): Promise<void> {
-  const res = await api.delete(`/clients/${id}`);
-  return res.data;
+  try {
+    const res = await api.delete(`/clients/${id}`);
+    return res.data;
+  } catch (error: any) {
+    throw new Error(extractClientErrorMessage(error, 'Не удалось удалить клиента.'));
+  }
 }
 
 export async function archiveClient(id: string, payload?: { reason?: string }): Promise<any> {
-  const res = await api.post(`/clients/${id}/archive`, payload);
-  return res.data;
+  try {
+    const res = await api.post(`/clients/${id}/archive`, payload);
+    return res.data;
+  } catch (error: any) {
+    throw new Error(extractClientErrorMessage(error, 'Не удалось архивировать клиента.'));
+  }
 }
 
 export async function unarchiveClient(id: string): Promise<any> {
-  const res = await api.post(`/clients/${id}/unarchive`);
-  return res.data;
+  try {
+    const res = await api.post(`/clients/${id}/unarchive`);
+    return res.data;
+  } catch (error: any) {
+    throw new Error(extractClientErrorMessage(error, 'Не удалось разархивировать клиента.'));
+  }
 }
 
 // File upload functions
