@@ -1095,14 +1095,14 @@ export default function TasksPage() {
             <div className="overflow-hidden rounded-md border">
               <Table className="w-full table-fixed">
                 <colgroup>
-                  <col className="w-[17%]" />
-                  <col className="w-[22%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[21%]" />
                   <col className="w-[14%]" />
                   <col className="w-[13%]" />
                   <col className="w-[10%]" />
                   <col className="w-[9%]" />
                   <col className="w-[9%]" />
-                  <col className="w-[7%]" />
+                  <col className="w-[8%]" />
                 </colgroup>
                 <TableHeader>
                   <TableRow>

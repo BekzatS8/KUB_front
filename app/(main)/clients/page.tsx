@@ -82,8 +82,131 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { PaginationControls } from "@/components/ui/pagination-controls";
+import { getCountries, getCountryCallingCode } from "libphonenumber-js";
 
 const DEFAULT_CLIENT_COUNTRY = "kazakhstan";
+const DEFAULT_PHONE_COUNTRY = "KZ";
+const DEFAULT_PHONE_PREFIX = "+7";
+
+const PRIORITY_PHONE_COUNTRY_KEYS = ["KZ", "UZ", "RU", "KG", "TJ"];
+
+const COUNTRY_NAME_OVERRIDES: Record<string, string> = {
+  KZ: "Казахстан",
+  UZ: "Узбекистан",
+  RU: "Россия",
+  KG: "Кыргызстан",
+  TJ: "Таджикистан",
+};
+
+const countryDisplayNames =
+  typeof Intl.DisplayNames === "function"
+    ? new Intl.DisplayNames(["ru"], { type: "region" })
+    : null;
+
+const getCountryFlag = (countryCode: string) =>
+  countryCode
+    .toUpperCase()
+    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+
+const PHONE_COUNTRIES = getCountries().map((countryCode) => ({
+  key: countryCode,
+  country:
+    COUNTRY_NAME_OVERRIDES[countryCode] ||
+    countryDisplayNames?.of(countryCode) ||
+    countryCode,
+  code: `+${getCountryCallingCode(countryCode)}`,
+  flag: getCountryFlag(countryCode),
+}));
+
+const PHONE_COUNTRY_OPTIONS = [
+  ...PRIORITY_PHONE_COUNTRY_KEYS.map((key) =>
+    PHONE_COUNTRIES.find((country) => country.key === key)
+  ).filter((country): country is (typeof PHONE_COUNTRIES)[number] => Boolean(country)),
+  ...PHONE_COUNTRIES
+    .filter((country) => !PRIORITY_PHONE_COUNTRY_KEYS.includes(country.key))
+    .sort((a, b) => a.country.localeCompare(b.country, "ru")),
+].map((country) => ({
+  value: country.key,
+  label: `${country.flag} ${country.country} (${country.code})`,
+}));
+
+const getPhoneCountry = (key: string) =>
+  PHONE_COUNTRIES.find((country) => country.key === key) ||
+  PHONE_COUNTRIES.find((country) => country.key === DEFAULT_PHONE_COUNTRY)!;
+
+const detectPhoneCountryKey = (phone: string) => {
+  const trimmed = String(phone || "").trim();
+  if (!trimmed) return DEFAULT_PHONE_COUNTRY;
+
+  const match = PHONE_COUNTRIES
+    .filter((country) => country.key !== "RU")
+    .sort((a, b) => b.code.length - a.code.length)
+    .find((country) => trimmed.startsWith(country.code));
+
+  return match?.key || DEFAULT_PHONE_COUNTRY;
+};
+
+const withPhoneCountryCode = (phone: string, countryKey = DEFAULT_PHONE_COUNTRY) => {
+  const country = getPhoneCountry(countryKey);
+  const raw = String(phone || "").trim();
+  if (!raw) return country.code;
+  if (raw.startsWith("+")) return raw;
+  return `${country.code}${raw.replace(/\D/g, "")}`;
+};
+
+type PhoneInputWithCountryProps = {
+  id: string;
+  value: string;
+  countryKey: string;
+  placeholder?: string;
+  onCountryChange: (countryKey: string) => void;
+  onChange: (value: string) => void;
+};
+
+function PhoneInputWithCountry({
+  id,
+  value,
+  countryKey,
+  placeholder = "700 123 45 67",
+  onCountryChange,
+  onChange,
+}: PhoneInputWithCountryProps) {
+  const selectedCountry = getPhoneCountry(countryKey);
+
+  const handleCountryChange = (nextCountryKey: string) => {
+    const currentCountry = getPhoneCountry(countryKey);
+    const nextCountry = getPhoneCountry(nextCountryKey);
+    const raw = String(value || "").trim();
+    const localPart = raw.startsWith(currentCountry.code)
+      ? raw.slice(currentCountry.code.length).trimStart()
+      : raw.replace(/^\+\d{1,4}/, "").trimStart();
+
+    onCountryChange(nextCountryKey);
+    onChange(`${nextCountry.code}${localPart ? ` ${localPart}` : ""}`);
+  };
+
+  return (
+    <div className="flex min-w-0 gap-2">
+      <div className="w-44 shrink-0">
+        <CustomSelect
+          value={countryKey}
+          onChange={handleCountryChange}
+          options={PHONE_COUNTRY_OPTIONS}
+          placeholder={`${selectedCountry.flag} ${selectedCountry.code}`}
+        />
+      </div>
+      <Input
+        id={id}
+        inputMode="tel"
+        autoComplete="tel"
+        placeholder={placeholder}
+        value={withPhoneCountryCode(value, countryKey)}
+        onChange={(event) => onChange(withPhoneCountryCode(event.target.value, countryKey))}
+        className="min-w-0 flex-1"
+      />
+    </div>
+  );
+}
 
 const EMPTY_CLIENT: Models.CreateClientRequest = {
   // Common fields
@@ -91,7 +214,7 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
   bin_iin: "",
   address: "",
   actual_address: "",
-  phone: "",
+  phone: DEFAULT_PHONE_PREFIX,
   email: "",
   contact_info: "",
   client_type: "individual",
@@ -102,7 +225,7 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
     company_name: "",
     bin: "",
     contact_person_name: "",
-    contact_person_phone: "",
+    contact_person_phone: DEFAULT_PHONE_PREFIX,
     legal_address: "",
     actual_address: "",
     bank_name: "",
@@ -230,6 +353,7 @@ export default function ClientsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [clientFormData, setClientFormData] =
     useState<Models.CreateClientRequest>(EMPTY_CLIENT);
+  const [phoneCountryKey, setPhoneCountryKey] = useState(DEFAULT_PHONE_COUNTRY);
   const [editingClient, setEditingClient] = useState<Models.Client | null>(
     null
   );
@@ -791,6 +915,17 @@ useEffect(() => {
     }
   };
 
+  const handlePhoneChange = (value: string) => {
+    setClientFormData((prev) => ({
+      ...prev,
+      phone: value,
+      legal_profile: {
+        ...prev.legal_profile,
+        contact_person_phone: value,
+      },
+    }));
+  };
+
   const getPassportIdentityValue = () => {
     return [clientFormData.passport_series, clientFormData.passport_number]
       .map((part) => String(part || "").trim())
@@ -858,6 +993,8 @@ useEffect(() => {
 
     // Check if client has individual_profile (new backend structure)
     const hasIndividualProfile = client.individual_profile && Object.keys(client.individual_profile).length > 0;
+    const clientPhone = client.phone || client.legal_profile?.contact_person_phone || DEFAULT_PHONE_PREFIX;
+    setPhoneCountryKey(detectPhoneCountryKey(clientPhone));
 
     setClientFormData({
       // Organization info
@@ -872,7 +1009,7 @@ useEffect(() => {
         company_name: client.legal_profile?.company_name || client.name || "",
         bin: client.legal_profile?.bin || client.bin_iin || "",
         contact_person_name: client.legal_profile?.contact_person_name || client.contact_info || "",
-        contact_person_phone: client.legal_profile?.contact_person_phone || client.phone || "",
+        contact_person_phone: client.legal_profile?.contact_person_phone || clientPhone,
         legal_address: client.legal_profile?.legal_address || client.address || "",
         actual_address: client.legal_profile?.actual_address || client.actual_address || "",
         bank_name: client.legal_profile?.bank_name || client.bank_name || "",
@@ -934,7 +1071,7 @@ useEffect(() => {
       last_name: hasIndividualProfile ? client.individual_profile?.last_name || "" : client.last_name || "",
       first_name: hasIndividualProfile ? client.individual_profile?.first_name || "" : client.first_name || "",
       birth_date: hasIndividualProfile ? client.individual_profile?.birth_date || "" : client.birth_date || "",
-      phone: client.phone || "",
+      phone: clientPhone,
 
       // Additional required fields - kept for backward compatibility
       middle_name: hasIndividualProfile ? client.individual_profile?.middle_name || "" : client.middle_name || "",
@@ -1215,6 +1352,7 @@ useEffect(() => {
 
   const resetForm = (keepEditingClient = false) => {
     setClientFormData(EMPTY_CLIENT);
+    setPhoneCountryKey(DEFAULT_PHONE_COUNTRY);
     setSelectedPhotoFile(null);
     setPhotoPreview((previous) => {
       revokePhotoPreview(previous);
@@ -2143,7 +2281,13 @@ useEffect(() => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="phone">Телефон *</Label>
-                          <Input id="phone" placeholder="Телефон" value={clientFormData.phone || ""} onChange={handleFormChange} />
+                          <PhoneInputWithCountry
+                            id="phone"
+                            value={clientFormData.phone || ""}
+                            countryKey={phoneCountryKey}
+                            onCountryChange={setPhoneCountryKey}
+                            onChange={handlePhoneChange}
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="email">Email</Label>
@@ -2289,7 +2433,13 @@ useEffect(() => {
                     </div>
                     <div>
                       <Label htmlFor="phone" className="text-red-600">Телефон контактного лица *</Label>
-                      <Input id="phone" placeholder="+7 (___) ___-__-__" value={clientFormData.phone || ""} onChange={handleFormChange} />
+                      <PhoneInputWithCountry
+                        id="phone"
+                        value={clientFormData.phone || ""}
+                        countryKey={phoneCountryKey}
+                        onCountryChange={setPhoneCountryKey}
+                        onChange={handlePhoneChange}
+                      />
                     </div>
                     <div>
                       <Label htmlFor="bank_name">Название банка</Label>
