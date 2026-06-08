@@ -202,15 +202,22 @@ export default function RolesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="overflow-hidden rounded-md border">
+            <Table className="w-full table-fixed">
+              <colgroup>
+                <col className="w-[8%]" />
+                <col className="w-[24%]" />
+                <col className="w-[40%]" />
+                <col className="w-[14%]" />
+                <col className="w-[14%]" />
+              </colgroup>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Название</TableHead>
-                  <TableHead>Описание</TableHead>
-                  <TableHead>Пользователи</TableHead>
-                  <TableHead className="text-right">Действия</TableHead>
+                  <TableHead className="px-4">ID</TableHead>
+                  <TableHead className="px-4">Название</TableHead>
+                  <TableHead className="px-4">Описание</TableHead>
+                  <TableHead className="px-4">Пользователи</TableHead>
+                  <TableHead className="px-4 text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -229,20 +236,29 @@ export default function RolesPage() {
                 ) : (
                   roles.map((role) => (
                     <TableRow key={role.id}>
-                      <TableCell>{role.id}</TableCell>
-                      <TableCell className="font-medium">{role.name}</TableCell>
-                      <TableCell>{role.description}</TableCell>
-                      <TableCell>
+                      <TableCell className="px-4 align-top font-mono text-sm">{role.id}</TableCell>
+                      <TableCell className="px-4 align-top">
+                        <div className="break-words font-medium leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                          {role.name}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-4 align-top">
+                        <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
+                          {role.description || "—"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-4 align-top">
                         <div className="flex items-center">
                           <Users className="h-4 w-4 mr-2 text-gray-500" />
                           {role.user_count}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
+                      <TableCell className="px-4 align-top text-right">
+                        <div className="flex flex-wrap items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-8 w-8"
                             title="Редактировать"
                             onClick={() => handleEditClick(role)}
                           >
@@ -251,8 +267,8 @@ export default function RolesPage() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-8 w-8 text-red-600 hover:text-red-700"
                             title="Удалить"
-                            className="text-red-600 hover:text-red-700"
                             onClick={() => handleDeleteClick(role)}
                             disabled={role.user_count > 0}
                           >

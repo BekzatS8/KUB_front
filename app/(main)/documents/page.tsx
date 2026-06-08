@@ -1436,18 +1436,28 @@ export default function DocumentsPage() {
                             <p className="text-sm text-gray-400 mt-1">Создайте первый документ из шаблона</p>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <Table>
+                        <div className="overflow-hidden rounded-md border">
+                            <Table className="w-full table-fixed">
+                                <colgroup>
+                                    <col className="w-[5%]" />
+                                    <col className="w-[18%]" />
+                                    <col className="w-[18%]" />
+                                    <col className="w-[16%]" />
+                                    <col className="w-[12%]" />
+                                    <col className="w-[12%]" />
+                                    <col className="w-[10%]" />
+                                    <col className="w-[9%]" />
+                                </colgroup>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>ID</TableHead>
-                                        <TableHead>Тип документа</TableHead>
-                                        <TableHead>Клиент</TableHead>
-                                        <TableHead>Сделка</TableHead>
-                                        <TableHead>Статус</TableHead>
-                                        <TableHead>Подписание</TableHead>
-                                        <TableHead>Дата создания</TableHead>
-                                        <TableHead className="text-right">Действия</TableHead>
+                                        <TableHead className="px-4">ID</TableHead>
+                                        <TableHead className="px-4">Тип</TableHead>
+                                        <TableHead className="px-4">Клиент</TableHead>
+                                        <TableHead className="px-4">Сделка</TableHead>
+                                        <TableHead className="px-4">Статус</TableHead>
+                                        <TableHead className="px-4">Подписание</TableHead>
+                                        <TableHead className="px-4">Дата</TableHead>
+                                        <TableHead className="px-4 text-right">Действия</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -1460,24 +1470,32 @@ export default function DocumentsPage() {
 
                                         return (
                                             <TableRow key={doc.id} className={doc.is_archived ? "bg-gray-200" : ""}>
-                                                <TableCell className="font-mono text-sm">{doc.id}</TableCell>
-                                                <TableCell>{docTypeLabels[doc.doc_type] || doc.doc_type}</TableCell>
-                                                <TableCell className="text-sm">
-                                                    {(() => {
-                                                        if (doc.client_id) {
-                                                            return getClientLabel(doc.client_id);
-                                                        }
-                                                        if (doc.deal_id) {
-                                                            return getClientFromDeal(doc.deal_id);
-                                                        }
-                                                        return "—";
-                                                    })()}
+                                                <TableCell className="px-4 align-top font-mono text-sm">{doc.id}</TableCell>
+                                                <TableCell className="px-4 align-top">
+                                                    <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                                                        {docTypeLabels[doc.doc_type] || doc.doc_type}
+                                                    </div>
                                                 </TableCell>
-                                                <TableCell className="text-sm">
-                                                    {doc.deal_id ? getDealLabel(doc.deal_id) : "—"}
+                                                <TableCell className="px-4 align-top text-sm">
+                                                    <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                                                        {(() => {
+                                                            if (doc.client_id) {
+                                                                return getClientLabel(doc.client_id);
+                                                            }
+                                                            if (doc.deal_id) {
+                                                                return getClientFromDeal(doc.deal_id);
+                                                            }
+                                                            return "—";
+                                                        })()}
+                                                    </div>
                                                 </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
+                                                <TableCell className="px-4 align-top text-sm">
+                                                    <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                                                        {doc.deal_id ? getDealLabel(doc.deal_id) : "—"}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="px-4 align-top">
+                                                    <div className="flex flex-col items-start gap-1">
                                                         <Badge className={`${statusColors[doc.status] || "bg-gray-100 text-gray-700"} text-xs`}>
                                                             {statusLabels[doc.status] || doc.status}
                                                         </Badge>
@@ -1486,7 +1504,7 @@ export default function DocumentsPage() {
                                                         )}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>
+                                                <TableCell className="px-4 align-top">
                                                     {doc.sign_status ? (
                                                         <Badge className={`${signStatusColors[doc.sign_status] || "bg-gray-100 text-gray-700"} text-xs`}>
                                                             {signStatusLabels[doc.sign_status] || doc.sign_status}
@@ -1495,10 +1513,10 @@ export default function DocumentsPage() {
                                                         <span className="text-gray-400 text-xs">—</span>
                                                     )}
                                                 </TableCell>
-                                                <TableCell className="text-sm">
+                                                <TableCell className="px-4 align-top text-sm whitespace-nowrap">
                                                     {format(new Date(doc.created_at), "dd.MM.yyyy", { locale: ru })}
                                                 </TableCell>
-                                                <TableCell className="text-right">
+                                                <TableCell className="px-4 align-top text-right">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button variant="ghost" className="h-8 w-8 p-0">

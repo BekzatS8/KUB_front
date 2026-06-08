@@ -577,16 +577,24 @@ export default function UsersPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="overflow-hidden rounded-md border">
+            <Table className="w-full table-fixed">
+              <colgroup>
+                <col className="w-[24%]" />
+                <col className="w-[24%]" />
+                <col className="w-[16%]" />
+                <col className="w-[16%]" />
+                <col className="w-[10%]" />
+                <col className="w-[10%]" />
+              </colgroup>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Фамилия, Имя, Отчество</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Телефон</TableHead>
-                  <TableHead>Роль</TableHead>
-                  <TableHead>Статус</TableHead>
-                  <TableHead className="text-right">Действия</TableHead>
+                  <TableHead className="px-4">ФИО</TableHead>
+                  <TableHead className="px-4">Email</TableHead>
+                  <TableHead className="px-4">Телефон</TableHead>
+                  <TableHead className="px-4">Роль</TableHead>
+                  <TableHead className="px-4">Статус</TableHead>
+                  <TableHead className="px-4 text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -605,20 +613,33 @@ export default function UsersPage() {
                 ) : (
                   filteredUsers.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{getUserFullName(user)}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>{user.phone}</TableCell>
-                      <TableCell>{getRoleLabel(user.role?.id)}</TableCell>
-                      <TableCell>
+                      <TableCell className="px-4 align-top">
+                        <div className="break-words font-medium leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                          {getUserFullName(user)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-4 align-top">
+                        <div className="break-all leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                          {user.email}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-4 align-top break-words">{user.phone}</TableCell>
+                      <TableCell className="px-4 align-top">
+                        <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                          {getRoleLabel(user.role?.id)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-4 align-top">
                         <Badge variant={user.is_verified ? "default" : "outline"}>
                           {user.is_verified ? "Подтвержден" : "Не подтвержден"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
+                      <TableCell className="px-4 align-top text-right">
+                        <div className="flex flex-wrap items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-8 w-8"
                             title="Просмотр"
                             onClick={() => handleViewClick(user)}
                           >
@@ -628,6 +649,7 @@ export default function UsersPage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8"
                               title="Редактировать"
                               onClick={() => handleEditClick(user)}
                             >
@@ -638,8 +660,8 @@ export default function UsersPage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8 text-red-600 hover:text-red-700"
                               title="Удалить"
-                              className="text-red-600 hover:text-red-700"
                               onClick={() => handleDeleteClick(user)}
                             >
                               <Trash2 className="h-4 w-4" />

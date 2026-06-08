@@ -227,61 +227,74 @@ export default function BranchesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Название</TableHead>
-                <TableHead>Код</TableHead>
-                <TableHead>Статус</TableHead>
-                <TableHead className="text-right">Действия</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {branches.map((branch) => (
-                <TableRow key={branch.id}>
-                  <TableCell className="font-medium">{branch.id}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-gray-500" />
-                      {branch.name}
-                    </div>
-                  </TableCell>
-                  <TableCell>{branch.code}</TableCell>
-                  <TableCell>
-                    <Badge variant={branch.is_active ? "default" : "secondary"}>
-                      {branch.is_active ? "Активен" : "Неактивен"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditDialog(branch)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openDeleteDialog(branch)}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {branches.length === 0 && (
+          <div className="overflow-hidden rounded-md border">
+            <Table className="w-full table-fixed">
+              <colgroup>
+                <col className="w-[8%]" />
+                <col className="w-[42%]" />
+                <col className="w-[20%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+              </colgroup>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-gray-500">
-                    Нет филиалов
-                  </TableCell>
+                  <TableHead className="px-4">ID</TableHead>
+                  <TableHead className="px-4">Название</TableHead>
+                  <TableHead className="px-4">Код</TableHead>
+                  <TableHead className="px-4">Статус</TableHead>
+                  <TableHead className="px-4 text-right">Действия</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {branches.map((branch) => (
+                  <TableRow key={branch.id}>
+                    <TableCell className="px-4 align-top font-mono text-sm">{branch.id}</TableCell>
+                    <TableCell className="px-4 align-top">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Building2 className="h-4 w-4 shrink-0 text-gray-500" />
+                        <span className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                          {branch.name}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-4 align-top break-words">{branch.code}</TableCell>
+                    <TableCell className="px-4 align-top">
+                      <Badge variant={branch.is_active ? "default" : "secondary"}>
+                        {branch.is_active ? "Активен" : "Неактивен"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-4 align-top text-right">
+                      <div className="flex flex-wrap justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openEditDialog(branch)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openDeleteDialog(branch)}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {branches.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-gray-500">
+                      Нет филиалов
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 

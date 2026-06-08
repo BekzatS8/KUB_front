@@ -1597,17 +1597,26 @@ useEffect(() => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table className="animate-fade-in">
+          <div className="overflow-hidden rounded-md border">
+            <Table className="w-full table-fixed animate-fade-in">
+              <colgroup>
+                <col className="w-[5%]" />
+                <col className="w-[23%]" />
+                <col className="w-[15%]" />
+                <col className="w-[13%]" />
+                <col className="w-[20%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+              </colgroup>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Название/Имя</TableHead>
-                  <TableHead>Тип клиента</TableHead>
-                  <TableHead>БИН/ИИН</TableHead>
-                  <TableHead>Контакт</TableHead>
-                  <TableHead>Телефон</TableHead>
-                  <TableHead className="text-right">Действия</TableHead>
+                  <TableHead className="px-4">ID</TableHead>
+                  <TableHead className="px-4">Название/Имя</TableHead>
+                  <TableHead className="px-4">Тип</TableHead>
+                  <TableHead className="px-4">БИН/ИИН</TableHead>
+                  <TableHead className="px-4">Контакт</TableHead>
+                  <TableHead className="px-4">Телефон</TableHead>
+                  <TableHead className="px-4 text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1628,13 +1637,14 @@ useEffect(() => {
                     const isArchived = client.archived || client.is_archived;
                     return (
                       <TableRow key={client.id} className={isArchived ? "bg-gray-200" : ""}>
-                        <TableCell className="font-mono text-sm">{client.id}</TableCell>
-                        <TableCell className="font-medium">
-                          {client.name ||
-                            `${client.last_name} ${client.first_name}`}
+                        <TableCell className="px-4 align-top font-mono text-sm">{client.id}</TableCell>
+                        <TableCell className="px-4 align-top">
+                          <div className="break-words font-medium leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                            {client.name || `${client.last_name} ${client.first_name}`}
+                          </div>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
+                        <TableCell className="px-4 align-top">
+                          <div className="flex flex-col items-start gap-1">
                             <Badge variant={client.client_type === "legal" ? "default" : "secondary"}>
                               {client.client_type === "legal" ? "Юридическое лицо" : "Физическое лицо"}
                             </Badge>
@@ -1643,18 +1653,20 @@ useEffect(() => {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>{client.bin_iin || client.iin || '-'}</TableCell>
-                        <TableCell>
-                          {client.client_type === "legal" ? (client.contact_info || '-') : `${client.last_name} ${client.first_name}`}
+                        <TableCell className="px-4 align-top break-words">{client.bin_iin || client.iin || '-'}</TableCell>
+                        <TableCell className="px-4 align-top">
+                          <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                            {client.client_type === "legal" ? (client.contact_info || '-') : `${client.last_name} ${client.first_name}`}
+                          </div>
                         </TableCell>
-                        <TableCell>{client.phone}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
+                        <TableCell className="px-4 align-top break-words">{client.phone || '-'}</TableCell>
+                        <TableCell className="px-4 align-top text-right">
+                          <div className="flex flex-wrap items-center justify-end gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8 hover:bg-gray-100"
                               title="Просмотр"
-                              className="hover:bg-gray-100"
                               onClick={() => handleViewClick(client)}
                             >
                               <Eye className="h-4 w-4" />
@@ -1664,8 +1676,8 @@ useEffect(() => {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                 title="Редактировать"
-                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                 onClick={() => handleEditClick(client)}
                               >
                                 <Edit className="h-4 w-4" />
@@ -1676,6 +1688,7 @@ useEffect(() => {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8"
                                 onClick={() => {
                                   setClientToArchive(client);
                                   setIsUnarchiveDialogOpen(true);
@@ -1688,6 +1701,7 @@ useEffect(() => {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8"
                                 onClick={() => {
                                   setClientToArchive(client);
                                   setIsArchiveDialogOpen(true);
@@ -1704,8 +1718,8 @@ useEffect(() => {
                                   <Button
                                     variant="ghost"
                                     size="icon"
+                                    className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                                     title="Удалить"
-                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
                                     onClick={() => handleDeleteClick(client)}
                                   >
                                     <Trash2 className="h-4 w-4" />

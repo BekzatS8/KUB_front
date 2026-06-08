@@ -1431,18 +1431,28 @@ export default function DealsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="overflow-hidden rounded-md border">
+            <Table className="w-full table-fixed">
+              <colgroup>
+                <col className="w-[6%]" />
+                <col className="w-[19%]" />
+                <col className="w-[17%]" />
+                <col className="w-[11%]" />
+                <col className="w-[8%]" />
+                <col className="w-[16%]" />
+                <col className="w-[10%]" />
+                <col className="w-[13%]" />
+              </colgroup>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Клиент</TableHead>
-                  <TableHead>Лид</TableHead>
-                  <TableHead>Сумма</TableHead>
-                  <TableHead>Валюта</TableHead>
-                  <TableHead>Статус</TableHead>
-                  <TableHead>Дата создания</TableHead>
-                  <TableHead className="text-right">Действия</TableHead>
+                  <TableHead className="px-4">ID</TableHead>
+                  <TableHead className="px-4">Клиент</TableHead>
+                  <TableHead className="px-4">Лид</TableHead>
+                  <TableHead className="px-4">Сумма</TableHead>
+                  <TableHead className="px-4">Валюта</TableHead>
+                  <TableHead className="px-4">Статус</TableHead>
+                  <TableHead className="px-4">Дата</TableHead>
+                  <TableHead className="px-4 text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1457,28 +1467,32 @@ export default function DealsPage() {
                     const isArchived = deal.archived || deal.is_archived;
                     return (
                       <TableRow key={deal.id} className={isArchived ? "bg-gray-200" : ""}>
-                        <TableCell className="font-medium">#{deal.id}</TableCell>
-                        <TableCell>
-                          {deal.client_id ? getClientName(deal.client_id) : "Без клиента"}
+                        <TableCell className="px-4 align-top font-mono text-sm">#{deal.id}</TableCell>
+                        <TableCell className="px-4 align-top">
+                          <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                            {deal.client_id ? getClientName(deal.client_id) : "Без клиента"}
+                          </div>
                         </TableCell>
-                        <TableCell>
-                          {deal.lead_id ? getLeadTitle(deal.lead_id) : "Без лида"}
+                        <TableCell className="px-4 align-top">
+                          <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                            {deal.lead_id ? getLeadTitle(deal.lead_id) : "Без лида"}
+                          </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="px-4 align-top">
                           <div className="font-medium">
                             {Number(deal.amount || 0).toLocaleString()}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="px-4 align-top">
                           <Badge variant="outline">{deal.currency || "KZT"}</Badge>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
+                        <TableCell className="px-4 align-top">
+                          <div className="flex flex-col items-start gap-1">
                             {getStatusBadge(deal.status)}
                             {isArchived && (
                               <Badge className="bg-gray-100 text-gray-800 text-xs">Архив</Badge>
                             )}
-                            <div className="w-24">
+                            <div className="w-full max-w-24">
                               <Progress
                                 value={
                                   deal.status === "new" ? 20 :
@@ -1492,21 +1506,22 @@ export default function DealsPage() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="px-4 align-top">
                           {deal.created_at ? (
-                            <div className="flex items-center text-sm">
-                              <Calendar className="h-3 w-3 mr-1 text-gray-400" />
+                            <div className="flex items-center whitespace-nowrap text-sm">
+                              <Calendar className="mr-1 h-3 w-3 shrink-0 text-gray-400" />
                               {format(new Date(deal.created_at), "dd.MM.yyyy", { locale: ru })}
                             </div>
                           ) : (
                             "-"
                           )}
                         </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-2">
+                        <TableCell className="px-4 align-top">
+                          <div className="flex flex-wrap justify-end gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8"
                               onClick={() => openViewDialog(deal)}
                               title="Просмотр"
                             >
@@ -1516,6 +1531,7 @@ export default function DealsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8"
                                 onClick={() => openEditDialog(deal)}
                                 title="Редактировать"
                               >
@@ -1526,6 +1542,7 @@ export default function DealsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8"
                                 onClick={() => openStatusDialog(deal)}
                                 title="Изменить статус"
                               >
@@ -1536,6 +1553,7 @@ export default function DealsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8"
                                 onClick={() => {
                                   setDealToArchive(deal);
                                   setIsUnarchiveDialogOpen(true);
@@ -1548,6 +1566,7 @@ export default function DealsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8"
                                 onClick={() => {
                                   setDealToArchive(deal);
                                   setIsArchiveDialogOpen(true);
@@ -1563,7 +1582,7 @@ export default function DealsPage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                                     title="Удалить"
                                   >
                                     <Trash2 className="h-4 w-4" />

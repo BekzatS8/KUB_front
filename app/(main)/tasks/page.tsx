@@ -1092,18 +1092,28 @@ export default function TasksPage() {
               <p className="text-sm text-gray-400 mt-1">Создайте свою первую задачу</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
+            <div className="overflow-hidden rounded-md border">
+              <Table className="w-full table-fixed">
+                <colgroup>
+                  <col className="w-[17%]" />
+                  <col className="w-[22%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[9%]" />
+                  <col className="w-[9%]" />
+                  <col className="w-[7%]" />
+                </colgroup>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Название</TableHead>
-                    <TableHead>Описание</TableHead>
-                    <TableHead>Исполнитель</TableHead>
-                    <TableHead>Объект</TableHead>
-                    <TableHead>Срок</TableHead>
-                    <TableHead>Приоритет</TableHead>
-                    <TableHead>Статус</TableHead>
-                    <TableHead className="text-right">Действия</TableHead>
+                    <TableHead className="px-4">Название</TableHead>
+                    <TableHead className="px-4">Описание</TableHead>
+                    <TableHead className="px-4">Исполнитель</TableHead>
+                    <TableHead className="px-4">Объект</TableHead>
+                    <TableHead className="px-4">Срок</TableHead>
+                    <TableHead className="px-4">Приоритет</TableHead>
+                    <TableHead className="px-4">Статус</TableHead>
+                    <TableHead className="px-4 text-right">Действия</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1116,35 +1126,43 @@ export default function TasksPage() {
 
                     return (
                       <TableRow key={task.id} className={isArchived ? "bg-gray-200" : ""}>
-                        <TableCell className="font-medium max-w-[200px] truncate">
-                          {task.title}
+                        <TableCell className="px-4 align-top">
+                          <div className="break-words font-medium leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                            {task.title}
+                          </div>
                         </TableCell>
-                        <TableCell className="max-w-[200px] truncate text-gray-500">
-                          {task.description || "—"}
+                        <TableCell className="px-4 align-top text-gray-500">
+                          <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                            {task.description || "—"}
+                          </div>
                         </TableCell>
-                        <TableCell className="text-sm">
-                          {task.assignee_id ? getUserLabel(task.assignee_id) : "Не назначен"}
+                        <TableCell className="px-4 align-top text-sm">
+                          <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                            {task.assignee_id ? getUserLabel(task.assignee_id) : "Не назначен"}
+                          </div>
                         </TableCell>
-                        <TableCell className="text-sm">
-                          {task.entity_id && task.entity_type
-                            ? getEntityLabel(task.entity_id, task.entity_type)
-                            : "—"}
+                        <TableCell className="px-4 align-top text-sm">
+                          <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                            {task.entity_id && task.entity_type
+                              ? getEntityLabel(task.entity_id, task.entity_type)
+                              : "—"}
+                          </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="px-4 align-top">
                           {task.due_date ? (
-                            <div className="flex items-center text-sm">
-                              <Calendar className="h-3 w-3 mr-1 text-gray-400" />
+                            <div className="flex items-center whitespace-nowrap text-sm">
+                              <Calendar className="mr-1 h-3 w-3 shrink-0 text-gray-400" />
                               {format(new Date(task.due_date), "dd.MM.yyyy", { locale: ru })}
                             </div>
                           ) : "—"}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="px-4 align-top">
                           <Badge className={`${priorityColors[taskPriority] || priorityColors.normal} text-xs`}>
                             {priorityLabels[taskPriority] || taskPriority}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
+                        <TableCell className="px-4 align-top">
+                          <div className="flex flex-col items-start gap-1">
                             <Badge className={`${statusColors[taskStatus] || statusColors.new} text-xs`}>
                               {statusLabels[taskStatus] || taskStatus}
                             </Badge>
@@ -1153,7 +1171,7 @@ export default function TasksPage() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="px-4 align-top text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" className="h-8 w-8 p-0">

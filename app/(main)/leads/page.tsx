@@ -1069,17 +1069,26 @@ export default function LeadsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="overflow-hidden rounded-md border">
+            <Table className="w-full table-fixed">
+              <colgroup>
+                <col className="w-[5%]" />
+                <col className="w-[16%]" />
+                <col className="w-[30%]" />
+                <col className="w-[10%]" />
+                <col className="w-[15%]" />
+                <col className="w-[10%]" />
+                <col className="w-[14%]" />
+              </colgroup>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Название</TableHead>
-                  <TableHead>Описание</TableHead>
-                  <TableHead>Статус</TableHead>
-                  <TableHead>Ответственный</TableHead>
-                  <TableHead>Дата создания</TableHead>
-                  <TableHead className="text-right">Действия</TableHead>
+                  <TableHead className="px-4">ID</TableHead>
+                  <TableHead className="px-4">Название</TableHead>
+                  <TableHead className="px-4">Описание</TableHead>
+                  <TableHead className="px-4">Статус</TableHead>
+                  <TableHead className="px-4">Ответственный</TableHead>
+                  <TableHead className="px-4">Дата</TableHead>
+                  <TableHead className="px-4 text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1090,37 +1099,50 @@ export default function LeadsPage() {
                     const isArchived = lead.archived || lead.is_archived;
                     return (
                       <TableRow key={lead.id} className={isArchived ? "bg-gray-200" : ""}>
-                        <TableCell className="font-mono text-sm">{lead.id}</TableCell>
-                        <TableCell className="font-medium">{lead.title}</TableCell>
-                        <TableCell>{lead.description}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
+                        <TableCell className="px-4 align-top font-mono text-sm">{lead.id}</TableCell>
+                        <TableCell className="px-4 align-top">
+                          <div className="break-words font-medium leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
+                            {lead.title}
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-4 align-top">
+                          <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
+                            {lead.description || "—"}
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-4 align-top">
+                          <div className="flex flex-col items-start gap-1">
                             {getStatusBadge(lead.status)}
                             {isArchived && (
                               <Badge className="bg-gray-100 text-gray-800 text-xs">Архив</Badge>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>{renderResponsibleUser(lead)}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center text-sm">
-                            <Calendar className="h-3 w-3 mr-1 text-gray-400" />
+                        <TableCell className="px-4 align-top">
+                          <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                            {renderResponsibleUser(lead)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-4 align-top">
+                          <div className="flex items-center whitespace-nowrap text-sm">
+                            <Calendar className="mr-1 h-3 w-3 shrink-0 text-gray-400" />
                             {new Date(lead.created_at).toLocaleDateString()}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-end gap-2">
+                        <TableCell className="px-4 align-top">
+                          <div className="flex flex-wrap items-center justify-end gap-1">
                             {canWrite && (
-                              <Button variant="ghost" size="icon" onClick={() => openEditDialog(lead)} title="Редактировать">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(lead)} title="Редактировать">
                                 <Edit className="h-4 w-4" />
                               </Button>
                             )}
-                            <Button variant="ghost" size="icon" onClick={() => openAssignDialog(lead)} title="Назначить">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openAssignDialog(lead)} title="Назначить">
                               <UserPlus className="h-4 w-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8"
                               onClick={() => openStatusDialog(lead)}
                               disabled={statusTransitions[lead.status as LeadStatus]?.length === 0}
                               title="Сменить статус"
@@ -1130,6 +1152,7 @@ export default function LeadsPage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8"
                               onClick={() => openConvertDialog(lead)}
                               disabled={lead.status === 'converted' || lead.status === 'cancelled' || !!isArchived}
                               title="Конвертировать"
@@ -1140,6 +1163,7 @@ export default function LeadsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8"
                                 onClick={() => {
                                   setLeadToArchive(lead);
                                   setIsUnarchiveDialogOpen(true);
@@ -1152,6 +1176,7 @@ export default function LeadsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8"
                                 onClick={() => {
                                   setLeadToArchive(lead);
                                   setIsArchiveDialogOpen(true);
@@ -1164,15 +1189,15 @@ export default function LeadsPage() {
                             {isAdmin && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  title="Удалить"
-                                  disabled={lead.status === 'cancelled'}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    title="Удалить"
+                                    disabled={lead.status === 'cancelled'}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                   <AlertDialogHeader>
