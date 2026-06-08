@@ -85,7 +85,9 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { getCountries, getCountryCallingCode } from "libphonenumber-js";
 import type { CustomSelectOption } from "@/components/ui/custom-select";
 
-const DEFAULT_CLIENT_COUNTRY = "kazakhstan";
+const DEFAULT_CLIENT_COUNTRY = "";
+const KAZAKHSTAN_COUNTRY_VALUE = "kazakhstan";
+const DEFAULT_CITIZENSHIP = "Казахстан";
 const DEFAULT_PHONE_COUNTRY = "KZ";
 const DEFAULT_PHONE_PREFIX = "+7";
 
@@ -125,14 +127,44 @@ const PHONE_COUNTRY_OPTIONS = [
   value: country.key,
   label: `${country.country} ${country.code}`,
   country: country.country,
+  shortLabel: country.code === "+7" ? `${country.key} ${country.code}` : `${country.country} ${country.code}`,
   code: country.code,
   flagUrl: country.flagUrl,
 }));
 
+const CITIZENSHIP_COUNTRY_OPTIONS = [
+  ...PRIORITY_PHONE_COUNTRY_KEYS.map((key) =>
+    PHONE_COUNTRIES.find((country) => country.key === key)
+  ).filter((country): country is (typeof PHONE_COUNTRIES)[number] => Boolean(country)),
+  ...PHONE_COUNTRIES
+    .filter((country) => !PRIORITY_PHONE_COUNTRY_KEYS.includes(country.key))
+    .sort((a, b) => a.country.localeCompare(b.country, "ru")),
+].map((country) => ({
+  value: country.country,
+  label: country.country,
+}));
+
 type PhoneCountryOption = CustomSelectOption & {
   country: string;
+  shortLabel: string;
   code: string;
   flagUrl: string;
+};
+
+const renderPhoneCountryValue = (option: CustomSelectOption) => {
+  const country = option as PhoneCountryOption;
+
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <img
+        src={country.flagUrl}
+        alt=""
+        className="h-4 w-6 shrink-0 rounded-[2px] object-cover"
+        loading="lazy"
+      />
+      <span className="min-w-0 flex-1 truncate">{country.shortLabel}</span>
+    </span>
+  );
 };
 
 const renderPhoneCountryOption = (option: CustomSelectOption) => {
@@ -208,7 +240,7 @@ function PhoneInputWithCountry({
   };
 
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-[150px_minmax(0,1fr)]">
       <div className="min-w-0">
         <CustomSelect
           value={countryKey}
@@ -217,7 +249,7 @@ function PhoneInputWithCountry({
           placeholder={`${selectedCountry.country} ${selectedCountry.code}`}
           triggerClassName="h-11 rounded-2xl px-4 text-base"
           dropdownWidth={320}
-          renderValue={renderPhoneCountryOption}
+          renderValue={renderPhoneCountryValue}
           renderOption={renderPhoneCountryOption}
         />
       </div>
@@ -276,7 +308,7 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
     trip_purpose: "",
     birth_date: "",
     birth_place: "",
-    citizenship: "",
+    citizenship: DEFAULT_CITIZENSHIP,
     sex: "",
     marital_status: "",
     passport_issue_date: "",
@@ -327,7 +359,7 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
   trip_purpose_other: "",
   birth_date: "",
   birth_place: "",
-  citizenship: "",
+  citizenship: DEFAULT_CITIZENSHIP,
   sex: "",
   marital_status: "",
   previous_last_name: "",
@@ -500,6 +532,7 @@ export default function ClientsPage() {
           bik: "",
           kbe: "",
           country: prev.country || DEFAULT_CLIENT_COUNTRY,
+          citizenship: prev.citizenship || DEFAULT_CITIZENSHIP,
           legal_profile: {
             ...prev.legal_profile,
             company_name: "",
@@ -2008,7 +2041,7 @@ useEffect(() => {
                           value={clientFormData.country || ""}
                           onChange={(value) => setClientFormData(prev => ({ ...prev, country: value }))}
                           options={[
-                            { value: DEFAULT_CLIENT_COUNTRY, label: "Казахстан" },
+                            { value: KAZAKHSTAN_COUNTRY_VALUE, label: "Казахстан" },
                             { value: "south_korea", label: "Южная Корея" },
                             { value: "japan", label: "Япония" },
                             { value: "usa", label: "США" },
@@ -2118,11 +2151,16 @@ useEffect(() => {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="citizenship">Гражданство *</Label>
-                        <Input id="citizenship" placeholder="Гражданство" value={clientFormData.citizenship || ""} onChange={handleFormChange} />
+                        <CustomSelect
+                          value={clientFormData.citizenship || ""}
+                          onChange={(value) => setClientFormData(prev => ({ ...prev, citizenship: value }))}
+                          options={CITIZENSHIP_COUNTRY_OPTIONS}
+                          placeholder="Выберите гражданство..."
+                        />
                       </div>
-                      <div className="space-y-2 md:col-span-2">
+                      <div className="space-y-2 md:col-span-3">
                         <Label htmlFor="birth_place">Место рождения</Label>
-                        <Input id="birth_place" placeholder="Место рождения" value={clientFormData.birth_place || ""} onChange={handleFormChange} />
+                        <Textarea id="birth_place" placeholder="Место рождения" value={clientFormData.birth_place || ""} onChange={handleFormChange} rows={2} className="min-h-[72px]" />
                       </div>
                     </div>
                   </div>
@@ -2183,9 +2221,9 @@ useEffect(() => {
                           />
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(110px,0.55fr)_minmax(190px,1fr)_minmax(170px,0.9fr)_minmax(170px,0.9fr)]">
                         <div className="space-y-2">
-                          <Label htmlFor="driver_license_categories">Категории водительских прав</Label>
+                          <Label htmlFor="driver_license_categories">Категория ВУ</Label>
                           <CustomSelect
                             value={clientFormData.driver_license_categories || ""}
                             onChange={(value) => setClientFormData(prev => ({ ...prev, driver_license_categories: value }))}
@@ -2204,15 +2242,13 @@ useEffect(() => {
                               { value: "Tm", label: "Tm" },
                               { value: "Tb", label: "Tb" }
                             ]}
-                            placeholder="Выберите категории..."
+                            placeholder="Категория"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="driver_license_number">Серия и номер водительского удостоверения</Label>
-                          <Input id="driver_license_number" placeholder="Серия и номер" value={clientFormData.driver_license_number || ""} onChange={handleFormChange} />
+                          <Label htmlFor="driver_license_number">Серия и номер ВУ</Label>
+                          <Input id="driver_license_number" placeholder="Серия и номер ВУ" value={clientFormData.driver_license_number || ""} onChange={handleFormChange} />
                         </div>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="driver_license_issue_date">Дата выдачи</Label>
                           <DateInput
@@ -2304,7 +2340,7 @@ useEffect(() => {
                         <Label htmlFor="actual_address">Адрес проживания</Label>
                         <Textarea id="actual_address" placeholder="Адрес проживания" value={clientFormData.actual_address || ""} onChange={handleFormChange} rows={2} />
                       </div>
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1.45fr)_minmax(180px,0.55fr)]">
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(360px,1fr)_minmax(240px,0.85fr)]">
                         <div className="space-y-2">
                           <Label htmlFor="phone">Телефон *</Label>
                           <PhoneInputWithCountry
@@ -2348,28 +2384,22 @@ useEffect(() => {
                           <Label htmlFor="specialty">Специальность</Label>
                           <Input id="specialty" placeholder="Специальность" value={clientFormData.specialty || ""} onChange={handleFormChange} />
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="education_institution_name">Название учебного заведения</Label>
-                          <Input id="education_institution_name" placeholder="Название учебного заведения" value={clientFormData.education_institution_name || ""} onChange={handleFormChange} />
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="education_institution_name">Название места работы</Label>
+                          <Input id="education_institution_name" placeholder="Название места работы" value={clientFormData.education_institution_name || ""} onChange={handleFormChange} />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="education_institution_address">Адрес учебного заведения</Label>
-                          <Textarea id="education_institution_address" placeholder="Адрес учебного заведения" value={clientFormData.education_institution_address || ""} onChange={handleFormChange} rows={2} />
+                          <Label htmlFor="job">Место работы</Label>
+                          <Input id="job" placeholder="Место работы" value={clientFormData.job || ""} onChange={handleFormChange} />
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="job">Место работы</Label>
-                            <Input id="job" placeholder="Место работы" value={clientFormData.job || ""} onChange={handleFormChange} />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="position">Должность</Label>
-                            <Input id="position" placeholder="Должность" value={clientFormData.position || ""} onChange={handleFormChange} />
-                          </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="position">Должность</Label>
+                          <Input id="position" placeholder="Должность" value={clientFormData.position || ""} onChange={handleFormChange} />
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="education">Образование (текст)</Label>
-                        <Input id="education" placeholder="Дополнительная информация об образовании" value={clientFormData.education || ""} onChange={handleFormChange} />
+                        <Label htmlFor="education">Адрес работы</Label>
+                        <Input id="education" placeholder="Адрес работы" value={clientFormData.education || ""} onChange={handleFormChange} />
                       </div>
                     </div>
                   </div>
