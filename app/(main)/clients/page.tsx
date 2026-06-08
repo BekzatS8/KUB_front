@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Badge } from "@/components/ui/badge";
 import { CustomSelect } from "@/components/ui/custom-select";
 import {
@@ -101,6 +102,7 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
     contact_person_name: "",
     contact_person_phone: "",
     legal_address: "",
+    actual_address: "",
     bank_name: "",
     iban: "",
     bik: "",
@@ -355,6 +357,7 @@ export default function ClientsPage() {
             contact_person_phone: "",
             contact_person_email: "",
             legal_address: "",
+            actual_address: "",
             tax_regime: "",
             website: "",
             industry: "",
@@ -372,8 +375,10 @@ export default function ClientsPage() {
   const [clientToArchive, setClientToArchive] = useState<Models.Client | null>(null);
   const [selectedPhotoFile, setSelectedPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoPreviewError, setPhotoPreviewError] = useState(false);
   const [clientProfile, setClientProfile] = useState<any>(null);
   const [clientPhotoUrl, setClientPhotoUrl] = useState<string | null>(null);
+  const [clientPhotoError, setClientPhotoError] = useState(false);
 
   const [clients, setClients] = useState<Models.Client[]>([]);
   const [totalClients, setTotalClients] = useState(0);
@@ -766,7 +771,10 @@ useEffect(() => {
     // Convert height and weight to numbers
     if (id === 'height' || id === 'weight') {
       setClientFormData((prev) => ({ ...prev, [id]: value ? Number(value) : 0 }));
-    } else if (['contact_person_name', 'contact_person_phone', 'legal_address', 'bank_name', 'iban', 'bik', 'kbe', 'additional_info'].includes(id)) {
+    } else if (
+      clientFormData.client_type === "legal" &&
+      ['contact_person_name', 'contact_person_phone', 'legal_address', 'actual_address', 'bank_name', 'iban', 'bik', 'kbe', 'additional_info'].includes(id)
+    ) {
       // Handle legal_profile nested fields
       setClientFormData((prev) => ({
         ...prev,
@@ -811,6 +819,7 @@ useEffect(() => {
         contact_person_name: client.legal_profile?.contact_person_name || client.contact_info || "",
         contact_person_phone: client.legal_profile?.contact_person_phone || client.phone || "",
         legal_address: client.legal_profile?.legal_address || client.address || "",
+        actual_address: client.legal_profile?.actual_address || client.actual_address || "",
         bank_name: client.legal_profile?.bank_name || client.bank_name || "",
         iban: client.legal_profile?.iban || client.iban || "",
         bik: client.legal_profile?.bik || client.bik || "",
@@ -885,7 +894,7 @@ useEffect(() => {
       passport_issue_date: hasIndividualProfile ? client.individual_profile?.passport_issue_date || "" : client.passport_issue_date || "",
       passport_expire_date: hasIndividualProfile ? client.individual_profile?.passport_expire_date || "" : client.passport_expire_date || "",
       registration_address: hasIndividualProfile ? client.individual_profile?.registration_address || "" : client.registration_address || "",
-      actual_address: hasIndividualProfile ? client.individual_profile?.actual_address || "" : client.actual_address || "",
+      actual_address: hasIndividualProfile ? client.individual_profile?.actual_address || "" : client.legal_profile?.actual_address || client.actual_address || "",
       email: client.email || "",
       photo_35x45: client.photo_35x45 || "",
 
@@ -926,6 +935,7 @@ useEffect(() => {
   const handleViewClick = async (client: Models.Client) => {
     setViewingClient(client);
     setClientPhotoUrl(null);
+    setClientPhotoError(false);
     try {
       const profile = await ClientAPI.getClientProfile(client.id.toString());
       setClientProfile(profile);
@@ -1014,22 +1024,73 @@ useEffect(() => {
 
   const isAdmin = user?.role_id === 50;
 
+  const requiredClientFieldLabels: Record<string, string> = {
+    client_type: "Тип лица",
+    country: "Страна",
+    trip_purpose: "Цель поездки",
+    last_name: "Фамилия",
+    first_name: "Имя",
+    birth_date: "Дата рождения",
+    sex: "Пол",
+    citizenship: "Гражданство",
+    phone: "Телефон",
+    name: "Название компании",
+    bin_iin: "БИН",
+    contact_info: "Контактное лицо",
+    address: "Юридический адрес",
+    iin: "ИИН",
+  };
+
+  const getClientFormFieldValue = (field: string) => {
+    if (clientFormData.client_type === "legal") {
+      if (field === "name") {
+        return clientFormData.legal_profile?.company_name || clientFormData.name;
+      }
+      if (field === "bin_iin") {
+        return clientFormData.legal_profile?.bin || clientFormData.bin_iin;
+      }
+      if (field === "contact_info") {
+        return clientFormData.legal_profile?.contact_person_name || clientFormData.contact_info;
+      }
+      if (field === "phone") {
+        return clientFormData.legal_profile?.contact_person_phone || clientFormData.phone;
+      }
+      if (field === "address") {
+        return clientFormData.legal_profile?.legal_address || clientFormData.address;
+      }
+    }
+
+    return clientFormData[field as keyof Models.CreateClientRequest];
+  };
+
+  const getMissingFieldText = (fields: string[]) =>
+    fields.map((field) => requiredClientFieldLabels[field] || field).join(", ");
+
   const validateRequiredFields = (): boolean => {
-    const requiredFields = ['client_type', 'phone'];
+    const requiredFields = ['client_type'];
 
     // Individual-specific required fields
     if (clientFormData.client_type === "individual") {
-      requiredFields.push('last_name', 'first_name');
+      requiredFields.push('country', 'trip_purpose', 'last_name', 'first_name', 'birth_date', 'sex', 'citizenship', 'phone');
     }
 
     // Legal-specific required fields
     if (clientFormData.client_type === "legal") {
-      requiredFields.push('name', 'bin_iin');
+      requiredFields.push('name', 'bin_iin', 'contact_info', 'phone', 'address');
     }
 
-    const missingFields = requiredFields.filter(field => !clientFormData[field as keyof Models.CreateClientRequest]);
+    const missingFields = requiredFields.filter(field => {
+      const value = getClientFormFieldValue(field);
+      return value === undefined || value === null || String(value).trim() === "";
+    });
     
     if (missingFields.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Ошибка валидации",
+        description: `Заполните обязательные поля: ${getMissingFieldText(missingFields)}.`,
+      });
+      return false;
       toast({
         variant: "destructive",
         title: "Ошибка валидации",
@@ -1037,54 +1098,74 @@ useEffect(() => {
       });
       return false;
     }
-    
+    const iinDigits = String(clientFormData.iin || "").replace(/\D/g, "");
+    if (clientFormData.client_type === "individual" && clientFormData.iin && iinDigits.length !== 12) {
+      toast({
+        variant: "destructive",
+        title: "Ошибка валидации",
+        description: "ИИН должен состоять из 12 цифр.",
+      });
+      return false;
+    }
+
+    const binDigits = String(clientFormData.bin_iin || clientFormData.legal_profile?.bin || "").replace(/\D/g, "");
+    if (clientFormData.client_type === "legal" && binDigits.length !== 12) {
+      toast({
+        variant: "destructive",
+        title: "Ошибка валидации",
+        description: "БИН должен состоять из 12 цифр.",
+      });
+      return false;
+    }
+
+    const phoneDigits = String(clientFormData.phone || "").replace(/\D/g, "");
+    if (phoneDigits.length < 10) {
+      toast({
+        variant: "destructive",
+        title: "Ошибка валидации",
+        description: "Телефон должен содержать минимум 10 цифр.",
+      });
+      return false;
+    }
+
     return true;
+  };
+
+  const revokePhotoPreview = (url: string | null) => {
+    if (url?.startsWith("blob:")) {
+      URL.revokeObjectURL(url);
+    }
   };
 
   const handlePhotoSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Validate file type
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-      if (!allowedTypes.includes(file.type)) {
-        toast({
-          variant: "destructive",
-          title: "Ошибка",
-          description: "Пожалуйста, выберите файл изображения (JPG, JPEG, PNG).",
-        });
-        return;
-      }
-      
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          variant: "destructive",
-          title: "Ошибка",
-          description: "Размер файла не должен превышать 5 МБ.",
-        });
-        return;
-      }
-      
       setSelectedPhotoFile(file);
-      
-      // Create preview
-      const reader = new FileReader();
-      reader.onload = () => {
-        setPhotoPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      setPhotoPreviewError(false);
+      setPhotoPreview((previous) => {
+        revokePhotoPreview(previous);
+        return URL.createObjectURL(file);
+      });
     }
   };
 
   const clearPhoto = () => {
     setSelectedPhotoFile(null);
-    setPhotoPreview(null);
+    setPhotoPreview((previous) => {
+      revokePhotoPreview(previous);
+      return null;
+    });
+    setPhotoPreviewError(false);
   };
 
   const resetForm = (keepEditingClient = false) => {
     setClientFormData(EMPTY_CLIENT);
     setSelectedPhotoFile(null);
-    setPhotoPreview(null);
+    setPhotoPreview((previous) => {
+      revokePhotoPreview(previous);
+      return null;
+    });
+    setPhotoPreviewError(false);
     if (!keepEditingClient) {
       setEditingClient(null);
     }
@@ -1115,6 +1196,7 @@ useEffect(() => {
       phone: clientFormData.phone || "",
       email: clientFormData.email || "",
       contact_info: clientFormData.contact_info || "",
+      actual_address: clientFormData.client_type === "legal" ? clientFormData.legal_profile?.actual_address || "" : clientFormData.actual_address || "",
     };
 
     // Add legal_profile for legal clients
@@ -1125,6 +1207,7 @@ useEffect(() => {
         contact_person_name: clientFormData.contact_info || "",
         contact_person_phone: clientFormData.phone || "",
         legal_address: clientFormData.address || "",
+        actual_address: clientFormData.legal_profile?.actual_address || "",
         bank_name: clientFormData.legal_profile?.bank_name || "",
         iban: clientFormData.legal_profile?.iban || "",
         bik: clientFormData.legal_profile?.bik || "",
@@ -1198,7 +1281,7 @@ useEffect(() => {
           passport_series: clientFormData.passport_series || "",
           passport_number: clientFormData.passport_number || "",
           registration_address: clientFormData.registration_address || "",
-          actual_address: clientFormData.actual_address || "",
+          actual_address: clientFormData.client_type === "legal" ? clientFormData.legal_profile?.actual_address || "" : clientFormData.actual_address || "",
           country: clientFormData.country || "",
           trip_purpose: clientFormData.trip_purpose || "",
           birth_date: clientFormData.birth_date ? clientFormData.birth_date.split('T')[0] : "",
@@ -1255,6 +1338,7 @@ useEffect(() => {
             contact_person_name: clientFormData.contact_info || "",
             contact_person_phone: clientFormData.phone || "",
             legal_address: clientFormData.address || "",
+            actual_address: clientFormData.legal_profile?.actual_address || "",
             bank_name: clientFormData.legal_profile?.bank_name || "",
             iban: clientFormData.legal_profile?.iban || "",
             bik: clientFormData.legal_profile?.bik || "",
@@ -1461,6 +1545,7 @@ useEffect(() => {
             <Table className="animate-fade-in">
               <TableHeader>
                 <TableRow>
+                  <TableHead>ID</TableHead>
                   <TableHead>Название/Имя</TableHead>
                   <TableHead>Тип клиента</TableHead>
                   <TableHead>БИН/ИИН</TableHead>
@@ -1472,13 +1557,13 @@ useEffect(() => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       <Spinner />
                     </TableCell>
                   </TableRow>
                 ) : (!clients || clients.length === 0) ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       Клиенты не найдены.
                     </TableCell>
                   </TableRow>
@@ -1487,6 +1572,7 @@ useEffect(() => {
                     const isArchived = client.archived || client.is_archived;
                     return (
                       <TableRow key={client.id} className={isArchived ? "bg-gray-200" : ""}>
+                        <TableCell className="font-mono text-sm">{client.id}</TableCell>
                         <TableCell className="font-medium">
                           {client.name ||
                             `${client.last_name} ${client.first_name}`}
@@ -1642,23 +1728,33 @@ useEffect(() => {
                     <Input
                       id="photo_35x45"
                       type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          setSelectedPhotoFile(file);
-                          const preview = URL.createObjectURL(file);
-                          setPhotoPreview(preview);
-                        }
-                      }}
+                      onChange={handlePhotoSelect}
                     />
                     {(photoPreview || (editingClient && clientFormData.photo_35x45)) && (
-                      <div className="mt-2">
-                        <img
-                          src={photoPreview || clientFormData.photo_35x45 || ""}
-                          alt="Preview"
-                          className="max-w-xs rounded-lg border"
-                        />
+                      <div className="mt-2 flex items-start gap-3">
+                        {!photoPreviewError ? (
+                          <img
+                            src={photoPreview || clientFormData.photo_35x45 || ""}
+                            alt="Preview"
+                            className="h-40 w-32 rounded-lg border object-contain bg-white"
+                            onError={() => setPhotoPreviewError(true)}
+                          />
+                        ) : (
+                          <div className="flex h-40 w-32 items-center justify-center rounded-lg border bg-white px-3 text-center text-xs text-muted-foreground">
+                            Предпросмотр недоступен
+                          </div>
+                        )}
+                        <div className="min-w-0 space-y-2 text-sm text-muted-foreground">
+                          {selectedPhotoFile && (
+                            <>
+                              <div className="truncate font-medium text-foreground">{selectedPhotoFile.name}</div>
+                              <div>{(selectedPhotoFile.size / 1024 / 1024).toFixed(2)} МБ</div>
+                            </>
+                          )}
+                          <Button type="button" variant="outline" size="sm" onClick={clearPhoto}>
+                            Убрать фото
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1766,7 +1862,12 @@ useEffect(() => {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="birth_date">Дата рождения *</Label>
-                        <Input id="birth_date" type="date" value={clientFormData.birth_date || ""} onChange={handleFormChange} />
+                        <DateInput
+                          id="birth_date"
+                          value={clientFormData.birth_date || ""}
+                          onChange={(value) => setClientFormData(prev => ({ ...prev, birth_date: value }))}
+                          maxYear={new Date().getFullYear()}
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="sex">Пол *</Label>
@@ -1803,11 +1904,20 @@ useEffect(() => {
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="id_issue_date">Дата выдачи</Label>
-                          <Input id="id_issue_date" type="date" value={clientFormData.id_issue_date || ""} onChange={handleFormChange} />
+                          <DateInput
+                            id="id_issue_date"
+                            value={clientFormData.id_issue_date || ""}
+                            onChange={(value) => setClientFormData(prev => ({ ...prev, id_issue_date: value }))}
+                            maxYear={new Date().getFullYear() + 1}
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="id_expire_date">Дата окончания</Label>
-                          <Input id="id_expire_date" type="date" value={clientFormData.id_expire_date || ""} onChange={handleFormChange} />
+                          <DateInput
+                            id="id_expire_date"
+                            value={clientFormData.id_expire_date || ""}
+                            onChange={(value) => setClientFormData(prev => ({ ...prev, id_expire_date: value }))}
+                          />
                         </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1821,11 +1931,20 @@ useEffect(() => {
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="passport_issue_date">Дата выдачи паспорта</Label>
-                          <Input id="passport_issue_date" type="date" value={clientFormData.passport_issue_date || ""} onChange={handleFormChange} />
+                          <DateInput
+                            id="passport_issue_date"
+                            value={clientFormData.passport_issue_date || ""}
+                            onChange={(value) => setClientFormData(prev => ({ ...prev, passport_issue_date: value }))}
+                            maxYear={new Date().getFullYear() + 1}
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="passport_expire_date">Дата окончания паспорта</Label>
-                          <Input id="passport_expire_date" type="date" value={clientFormData.passport_expire_date || ""} onChange={handleFormChange} />
+                          <DateInput
+                            id="passport_expire_date"
+                            value={clientFormData.passport_expire_date || ""}
+                            onChange={(value) => setClientFormData(prev => ({ ...prev, passport_expire_date: value }))}
+                          />
                         </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1860,11 +1979,20 @@ useEffect(() => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="driver_license_issue_date">Дата выдачи</Label>
-                          <Input id="driver_license_issue_date" type="date" value={clientFormData.driver_license_issue_date || ""} onChange={handleFormChange} />
+                          <DateInput
+                            id="driver_license_issue_date"
+                            value={clientFormData.driver_license_issue_date || ""}
+                            onChange={(value) => setClientFormData(prev => ({ ...prev, driver_license_issue_date: value }))}
+                            maxYear={new Date().getFullYear() + 1}
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="driver_license_expire_date">Дата окончания</Label>
-                          <Input id="driver_license_expire_date" type="date" value={clientFormData.driver_license_expire_date || ""} onChange={handleFormChange} />
+                          <DateInput
+                            id="driver_license_expire_date"
+                            value={clientFormData.driver_license_expire_date || ""}
+                            onChange={(value) => setClientFormData(prev => ({ ...prev, driver_license_expire_date: value }))}
+                          />
                         </div>
                       </div>
                     </div>
@@ -2080,6 +2208,10 @@ useEffect(() => {
                       <Input id="address" placeholder="Введите юридический адрес..." value={clientFormData.address || ""} onChange={handleFormChange} />
                     </div>
                     <div>
+                      <Label htmlFor="actual_address">Фактический адрес</Label>
+                      <Input id="actual_address" placeholder="Введите фактический адрес..." value={clientFormData.legal_profile?.actual_address || ""} onChange={handleFormChange} />
+                    </div>
+                    <div>
                       <Label htmlFor="contact_info" className="text-red-600">Контактное лицо (ФИО) *</Label>
                       <Input id="contact_info" placeholder="ФИО контактного лица..." value={clientFormData.contact_info || ""} onChange={handleFormChange} />
                     </div>
@@ -2127,6 +2259,7 @@ useEffect(() => {
             URL.revokeObjectURL(clientPhotoUrl);
           }
           setClientPhotoUrl(null);
+          setClientPhotoError(false);
         }
       }}>
         <DialogContent className="max-w-4xl">
@@ -2146,7 +2279,18 @@ useEffect(() => {
                         <h3 className="font-semibold text-lg">ФОТО</h3>
                         <Separator />
                         <div className="flex justify-center">
-                          <img src={clientPhotoUrl} alt="Client photo" className="max-w-xs rounded-lg border" />
+                          {!clientPhotoError ? (
+                            <img
+                              src={clientPhotoUrl}
+                              alt="Client photo"
+                              className="max-h-96 max-w-full rounded-lg border object-contain bg-white"
+                              onError={() => setClientPhotoError(true)}
+                            />
+                          ) : (
+                            <div className="flex h-48 w-40 items-center justify-center rounded-lg border bg-white px-3 text-center text-sm text-muted-foreground">
+                              Фото загружено, но этот формат не поддерживается предпросмотром браузера
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -2278,6 +2422,7 @@ useEffect(() => {
                         <DetailItem label="Название компании" value={viewingClient.legal_profile?.company_name || viewingClient.name} />
                         <DetailItem label="БИН" value={viewingClient.legal_profile?.bin || viewingClient.bin_iin} />
                         <DetailItem label="Юридический адрес" value={viewingClient.legal_profile?.legal_address || viewingClient.address} />
+                        <DetailItem label="Фактический адрес" value={viewingClient.legal_profile?.actual_address || viewingClient.actual_address} />
                       </div>
                     </div>
 

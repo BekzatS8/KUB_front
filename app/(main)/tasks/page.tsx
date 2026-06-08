@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DateInput } from "@/components/ui/date-input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
@@ -1340,19 +1341,19 @@ export default function TasksPage() {
 
             <div className="space-y-2">
               <Label>Дедлайн</Label>
-              <Input
-                type="datetime-local"
+              <DateInput
+                mode="datetime"
                 value={formData.due_date}
-                onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                onChange={(value) => setFormData({ ...formData, due_date: value })}
               />
             </div>
 
             <div className="space-y-2">
               <Label>Напоминание</Label>
-              <Input
-                type="datetime-local"
+              <DateInput
+                mode="datetime"
                 value={formData.reminder_at}
-                onChange={(e) => setFormData({ ...formData, reminder_at: e.target.value })}
+                onChange={(value) => setFormData({ ...formData, reminder_at: value })}
               />
             </div>
           </div>

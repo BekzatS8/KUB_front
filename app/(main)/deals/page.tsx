@@ -403,7 +403,7 @@ export default function DealsPage() {
   }: {
     value: string | number;
     onChange: (value: string) => void;
-    options: { value: string; label: string }[];
+    options: { value: string; label: string; searchValue?: string }[];
     placeholder?: string;
     searchPlaceholder?: string;
     emptyText?: string;
@@ -438,7 +438,7 @@ export default function DealsPage() {
                 {options.map((option) => (
                   <CommandItem
                     key={option.value}
-                    value={option.label}
+                    value={option.searchValue || option.label}
                     onSelect={() => {
                       onChange(option.value);
                       setOpen(false);
@@ -617,8 +617,11 @@ export default function DealsPage() {
             if (userData) {
               const currentUserForDropdown = {
                 id: typeof userData.id === 'string' ? parseInt(userData.id) : userData.id,
-                firstName: userData.full_name || userData.company_name || '',
-                lastName: '',
+                full_name: userData.full_name || userData.company_name || '',
+                first_name: userData.first_name || '',
+                last_name: userData.last_name || '',
+                middle_name: userData.middle_name || '',
+                company_name: userData.company_name || '',
                 email: userData.email,
                 role: userData.role
               };
@@ -631,8 +634,11 @@ export default function DealsPage() {
           if (userData) {
             const currentUserForDropdown = {
               id: typeof userData.id === 'string' ? parseInt(userData.id) : userData.id,
-              firstName: userData.full_name || userData.company_name || '',
-              lastName: '',
+              full_name: userData.full_name || userData.company_name || '',
+              first_name: userData.first_name || '',
+              last_name: userData.last_name || '',
+              middle_name: userData.middle_name || '',
+              company_name: userData.company_name || '',
               email: userData.email,
               role: userData.role
             };
@@ -747,11 +753,12 @@ export default function DealsPage() {
 
   // Open edit dialog
   const openEditDialog = (deal: any) => {
+    const dealClient = clients.find(c => String(c.id) === String(deal.client_id));
     setCurrentDeal(deal);
     setEditDeal({
       lead_id: deal.lead_id || 0,
       client_id: deal.client_id || 0,
-      client_type: deal.client_type || "individual",
+      client_type: deal.client_type || getClientType(dealClient) || "individual",
       owner_id: deal.owner_id || (user?.id ? parseInt(user.id) : 0),
       amount: Number(deal.amount) || 0,
       currency: deal.currency || "KZT",
@@ -1031,15 +1038,113 @@ export default function DealsPage() {
     }
   };
 
-  // Get client name by ID
-  const getClientName = (clientId: number) => {
-    const client = clients.find(c => c.id === clientId);
-    return client ? client.name : `Клиент #${clientId}`;
+  const getCleanText = (value: unknown) => {
+    if (value === null || value === undefined) return "";
+    return String(value).trim();
   };
 
+  const getClientType = (client?: Record<string, any>) => {
+    return getCleanText(client?.client_type) || "individual";
+  };
+
+  const getClientDisplayName = (client?: Record<string, any>) => {
+    if (!client) return "";
+
+    if (getClientType(client) === "legal") {
+      return (
+        getCleanText(client.legal_profile?.company_name) ||
+        getCleanText(client.name) ||
+        getCleanText(client.display_name) ||
+        getCleanText(client.contact_info) ||
+        getCleanText(client.email) ||
+        getCleanText(client.id)
+      );
+    }
+
+    const nameParts = [
+      client.individual_profile?.last_name || client.last_name,
+      client.individual_profile?.first_name || client.first_name,
+      client.individual_profile?.middle_name || client.middle_name,
+    ].map(getCleanText).filter(Boolean);
+
+    if (nameParts.length) return nameParts.join(" ");
+
+    return (
+      getCleanText(client.display_name) ||
+      getCleanText(client.name) ||
+      getCleanText(client.email) ||
+      getCleanText(client.phone) ||
+      getCleanText(client.id)
+    );
+  };
+
+  const getClientSearchValue = (client: Record<string, any>) => [
+    getClientDisplayName(client),
+    client.display_name,
+    client.name,
+    client.legal_profile?.company_name,
+    client.legal_profile?.contact_person_name,
+    client.individual_profile?.last_name,
+    client.individual_profile?.first_name,
+    client.individual_profile?.middle_name,
+    client.last_name,
+    client.first_name,
+    client.middle_name,
+    client.bin_iin,
+    client.legal_profile?.bin,
+    client.iin,
+    client.individual_profile?.iin,
+    client.phone,
+    client.primary_phone,
+    client.email,
+    client.primary_email,
+  ].map(getCleanText).filter(Boolean).join(" ");
+
+  const getClientOptions = (clientType?: string) => clients
+    .filter((client) => !clientType || getClientType(client) === clientType)
+    .map((client) => ({
+      value: client.id.toString(),
+      label: getClientDisplayName(client),
+      searchValue: getClientSearchValue(client),
+    }));
+
+  // Get client name by ID
+  const getClientName = (clientId: number) => {
+    const client = clients.find(c => String(c.id) === String(clientId));
+    return client ? getClientDisplayName(client) : `Клиент #${clientId}`;
+  };
+
+  const getUserDisplayName = (u?: Partial<User> & Record<string, any>) => {
+    if (!u) return "";
+
+    const fullName = getCleanText(u.full_name || u.fullName);
+    if (fullName) return fullName;
+
+    const nameParts = [
+      u.last_name || u.lastName,
+      u.first_name || u.firstName,
+      u.middle_name || u.middleName,
+    ].map(getCleanText).filter(Boolean);
+
+    if (nameParts.length) return nameParts.join(" ");
+
+    return (
+      getCleanText(u.company_name || u.legacy?.company_name) ||
+      getCleanText(u.email) ||
+      getCleanText(u.id)
+    );
+  };
+
+  const getUserSearchValue = (u: Partial<User> & Record<string, any>) => [
+    getUserDisplayName(u),
+    u.email,
+    u.company_name,
+    u.legacy?.company_name,
+  ].map(getCleanText).filter(Boolean).join(" ");
+
   const getUserLabel = (userId: number) => {
-    const u = users.find(user => user.id === userId);
-    return u ? (u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : (u.company_name || u.email)) : `Пользователь #${userId}`;
+    const u = users.find(user => String(user.id) === String(userId));
+    return u ? getUserDisplayName(u) : `Пользователь #${userId}`;
   };
 
   // Get lead title by ID
@@ -1290,10 +1395,7 @@ export default function DealsPage() {
                     placeholder="Клиент"
                     searchPlaceholder="Поиск клиента..."
                     emptyText="Клиент не найден"
-                    options={clients.map((client) => ({
-                      value: client.id.toString(),
-                      label: client.name || `Клиент #${client.id}`
-                    }))}
+                    options={getClientOptions()}
                   />
                 </div>
                 {/* Branch filter - only for elevated roles */}
@@ -1540,40 +1642,11 @@ export default function DealsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="client_id">Клиент <span className="text-red-500">*</span></Label>
-              <ComboboxSelect
-                value={newDeal.client_id?.toString() || ""}
-                onChange={(value) => {
-                  const clientId = parseInt(value) || 0;
-                  const selectedClient = clients.find(c => c.id === clientId);
-                  setNewDeal({
-                    ...newDeal,
-                    client_id: clientId,
-                    client_type: selectedClient?.client_type || "individual"
-                  });
-                }}
-                placeholder="Выберите клиента"
-                searchPlaceholder="Поиск клиента..."
-                emptyText="Клиент не найден"
-                options={clients.map((client) => ({
-                  value: client.id.toString(),
-                  label: client.name || `Клиент #${client.id}`
-                }))}
-              />
-              {!newDeal.client_id && (
-                <p className="text-xs text-red-500">Выберите клиента для продолжения</p>
-              )}
-              {clients.length === 0 && (
-                <p className="text-xs text-amber-600">Сначала создайте клиента в разделе Клиенты</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="client_type">Тип клиента</Label>
               <CustomSelect
                 value={newDeal.client_type}
                 onChange={(value) =>
-                  setNewDeal({ ...newDeal, client_type: value })
+                  setNewDeal({ ...newDeal, client_type: value, client_id: 0 })
                 }
                 placeholder="Выберите тип клиента"
                 options={[
@@ -1581,7 +1654,30 @@ export default function DealsPage() {
                   { value: "legal", label: "Юридическое лицо" },
                 ]}
               />
-              <p className="text-xs text-muted-foreground">Тип клиента определяется автоматически при выборе клиента, но можно изменить вручную</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="client_id">Клиент <span className="text-red-500">*</span></Label>
+              <ComboboxSelect
+                value={newDeal.client_id?.toString() || ""}
+                onChange={(value) => {
+                  const clientId = parseInt(value) || 0;
+                  setNewDeal({
+                    ...newDeal,
+                    client_id: clientId,
+                  });
+                }}
+                placeholder="Выберите клиента"
+                searchPlaceholder="Поиск клиента..."
+                emptyText="Клиент не найден"
+                options={getClientOptions(newDeal.client_type)}
+              />
+              {!newDeal.client_id && (
+                <p className="text-xs text-red-500">Выберите клиента для продолжения</p>
+              )}
+              {clients.length === 0 && (
+                <p className="text-xs text-amber-600">Сначала создайте клиента в разделе Клиенты</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -1595,7 +1691,8 @@ export default function DealsPage() {
                 searchPlaceholder="Поиск сотрудника..."
                 options={users.map((u) => ({
                   value: u.id.toString(),
-                  label: u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : (u.company_name || u.email)
+                  label: getUserDisplayName(u),
+                  searchValue: getUserSearchValue(u),
                 }))}
               />
             </div>
@@ -1693,33 +1790,11 @@ export default function DealsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit_client_id">Клиент</Label>
-              <ComboboxSelect
-                value={editDeal.client_id?.toString() || ""}
-                onChange={(value) => {
-                  const clientId = parseInt(value) || 0;
-                  const selectedClient = clients.find(c => c.id === clientId);
-                  setEditDeal({
-                    ...editDeal,
-                    client_id: clientId,
-                    client_type: selectedClient?.client_type || "individual"
-                  });
-                }}
-                placeholder="Выберите клиента"
-                searchPlaceholder="Поиск клиента..."
-                options={clients.map((client) => ({
-                  value: client.id.toString(),
-                  label: client.name || `Клиент #${client.id}`
-                }))}
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="edit_client_type">Тип клиента</Label>
               <CustomSelect
                 value={editDeal.client_type}
                 onChange={(value) =>
-                  setEditDeal({ ...editDeal, client_type: value })
+                  setEditDeal({ ...editDeal, client_type: value, client_id: 0 })
                 }
                 placeholder="Выберите тип клиента"
                 options={[
@@ -1727,7 +1802,24 @@ export default function DealsPage() {
                   { value: "legal", label: "Юридическое лицо" },
                 ]}
               />
-              <p className="text-xs text-muted-foreground">Тип клиента определяется автоматически при выборе клиента, но можно изменить вручную</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_client_id">Клиент</Label>
+              <ComboboxSelect
+                value={editDeal.client_id?.toString() || ""}
+                onChange={(value) => {
+                  const clientId = parseInt(value) || 0;
+                  setEditDeal({
+                    ...editDeal,
+                    client_id: clientId,
+                  });
+                }}
+                placeholder="Выберите клиента"
+                searchPlaceholder="Поиск клиента..."
+                emptyText="Клиент не найден"
+                options={getClientOptions(editDeal.client_type)}
+              />
             </div>
 
             <div className="space-y-2">
@@ -1741,7 +1833,8 @@ export default function DealsPage() {
                 searchPlaceholder="Поиск сотрудника..."
                 options={users.map((u) => ({
                   value: u.id.toString(),
-                  label: u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : (u.company_name || u.email)
+                  label: getUserDisplayName(u),
+                  searchValue: getUserSearchValue(u),
                 }))}
               />
             </div>
@@ -1849,7 +1942,7 @@ export default function DealsPage() {
                 <div>
                   <Label className="text-sm text-gray-500">Ответственный</Label>
                   <p className="font-medium">
-                    ID: {currentDeal.owner_id}
+                    {getUserLabel(currentDeal.owner_id)}
                   </p>
                 </div>
                 <div>

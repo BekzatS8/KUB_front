@@ -17,11 +17,19 @@ export async function confirm_sms(payload: Models.SMS_Verify_Confirm_SMS_Request
 }
 
 export async function get_latest_sms(payload?: void, params?: Record<string, any>): Promise<any> {
-  const res = await api.get(`/sms/latest/${params.document_id}`, { params })
+  const documentId = params?.document_id
+  if (!documentId) {
+    throw new Error('document_id is required')
+  }
+  const res = await api.get(`/sms/latest/${encodeURIComponent(String(documentId))}`, { params })
   return res.data
 }
 
 export async function delete_sms(payload?: void, params?: Record<string, any>): Promise<any> {
-  const res = await api.delete(`/sms/${params.document_id}`, { params })
+  const documentId = params?.document_id
+  if (!documentId) {
+    throw new Error('document_id is required')
+  }
+  const res = await api.delete(`/sms/${encodeURIComponent(String(documentId))}`, { params })
   return res.data
 }

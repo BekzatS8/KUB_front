@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DateInput } from "@/components/ui/date-input"
 import { Textarea } from "@/components/ui/textarea"
 import { CustomSelect } from "@/components/ui/custom-select"
 
@@ -110,11 +111,11 @@ export function TaskForm({ onSubmit, task }: TaskFormProps) {
         value={formData.assignee_id}
         onChange={handleChange}
       />
-      <Input
-        name="due_date"
-        type="datetime-local"
+      <DateInput
+        id="due_date"
+        mode="datetime"
         value={formData.due_date}
-        onChange={handleChange}
+        onChange={(value) => setFormData((prev) => ({ ...prev, due_date: value }))}
       />
       <CustomSelect
         value={formData.priority}

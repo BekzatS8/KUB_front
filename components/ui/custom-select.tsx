@@ -33,6 +33,7 @@ export function CustomSelect({
   const containerRef = React.useRef<HTMLDivElement>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const listRef = React.useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find((opt) => opt.value === value);
 
@@ -124,8 +125,8 @@ export function CustomSelect({
 
   // Scroll highlighted option into view
   React.useEffect(() => {
-    if (isOpen && dropdownRef.current) {
-      const highlightedElement = dropdownRef.current.children[
+    if (isOpen && listRef.current) {
+      const highlightedElement = listRef.current.children[
         highlightedIndex
       ] as HTMLElement;
       if (highlightedElement) {
@@ -136,6 +137,14 @@ export function CustomSelect({
       }
     }
   }, [highlightedIndex, isOpen]);
+
+  const handleDropdownWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!listRef.current) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    listRef.current.scrollTop += event.deltaY;
+  };
 
   const handleToggle = () => {
     if (!disabled) {
@@ -197,8 +206,9 @@ export function CustomSelect({
           }}
           role="listbox"
           onMouseDown={(e) => e.stopPropagation()}
+          onWheelCapture={handleDropdownWheel}
         >
-          <div className="max-h-96 overflow-y-auto p-1">
+          <div ref={listRef} className="max-h-96 overflow-y-auto overscroll-contain p-1">
             {options.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
                 Нет доступных опций

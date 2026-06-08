@@ -92,6 +92,45 @@ const DetailItem = ({ label, value }: { label: string; value?: string | number |
   </div>
 );
 
+const ROLE_LABELS: Record<number, string> = {
+  [Roles.SALES]: "Отдел продаж",
+  [Roles.OPERATIONS]: "Операционный отдел",
+  [Roles.CONTROL]: "Отдел контроля",
+  [Roles.MANAGEMENT]: "Руководство",
+  [Roles.SYSTEM_ADMIN]: "Системный администратор",
+};
+
+const E164_PHONE_PATTERN = /^\+[1-9]\d{10,14}$/;
+
+const getUserFullName = (user?: Partial<Models.User> | null) => {
+  if (!user) return "-";
+  const fullName = (
+    user.full_name ||
+    [user.last_name, user.first_name, user.middle_name]
+      .map((part) => (part || "").trim())
+      .filter(Boolean)
+      .join(" ")
+  ).trim();
+  return fullName || user.company_name || user.email || "-";
+};
+
+const normalizePhoneToE164 = (value?: string) => {
+  const raw = (value || "").trim();
+  if (E164_PHONE_PATTERN.test(raw)) return raw;
+
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("8")) {
+    return `+7${digits.slice(1)}`;
+  }
+  if (raw.startsWith("+") && digits.length >= 11 && digits.length <= 15) {
+    return `+${digits}`;
+  }
+  return raw;
+};
+
+const roleRequiresBranch = (roleId?: number) =>
+  roleId === Roles.SALES || roleId === Roles.OPERATIONS || roleId === Roles.CONTROL;
+
 // ComboboxSelect component for searchable dropdowns
 function ComboboxSelect({
   value,
@@ -279,22 +318,7 @@ export default function UsersPage() {
 
   const getRoleLabel = (id?: number) => {
     if (!id) return "-";
-
-    // Use backend role codes
-    switch (id) {
-      case 10:
-        return "RoleSales";
-      case 20:
-        return "RoleOperations";
-      case 30:
-        return "RoleControl";
-      case 40:
-        return "RoleManagement";
-      case 50:
-        return "RoleSystemAdmin";
-      default:
-        return "Unknown Role";
-    }
+    return ROLE_LABELS[id] || "Неизвестная роль";
   };
 
   const handlePageChange = (page: number) => {
@@ -383,38 +407,101 @@ export default function UsersPage() {
     }
   };
 
+  const validateUserForm = (): {
+    payload?: Models.CreateUserRequest | Models.UpdateUserRequest;
+    error?: string;
+  } => {
+    const firstName = String((userFormData as any).first_name || "").trim();
+    const lastName = String((userFormData as any).last_name || "").trim();
+    const middleName = String((userFormData as any).middle_name || "").trim();
+    const email = String((userFormData as any).email || "").trim();
+    const phone = normalizePhoneToE164((userFormData as any).phone);
+    const roleId = Number((userFormData as any).role_id || 0);
+    const branchId = (userFormData as any).branch_id ? Number((userFormData as any).branch_id) : undefined;
+
+    if (!lastName) return { error: "Укажите фамилию." };
+    if (!firstName) return { error: "Укажите имя." };
+    if (!middleName) return { error: "Укажите отчество." };
+    if (!email) return { error: "Укажите email." };
+    if (!phone) return { error: "Укажите телефон." };
+    if (!E164_PHONE_PATTERN.test(phone)) {
+      return { error: "Телефон должен быть в международном формате: +77001234567." };
+    }
+    if (!roleId) return { error: "Выберите роль." };
+    if (roleRequiresBranch(roleId) && !branchId) {
+      return { error: "Выберите филиал для этой роли." };
+    }
+    if (!editingUser && !String((userFormData as Models.CreateUserRequest).password || "").trim()) {
+      return { error: "Укажите пароль." };
+    }
+
+    return {
+      payload: {
+        ...userFormData,
+        first_name: firstName,
+        last_name: lastName,
+        middle_name: middleName,
+        email,
+        phone,
+        role_id: roleId,
+        branch_id: branchId,
+        position: String((userFormData as any).position || "").trim(),
+      },
+    };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const { payload, error: validationError } = validateUserForm();
+    if (!payload) {
+      toast({
+        variant: "destructive",
+        title: "Проверьте данные",
+        description: validationError || "Заполните обязательные поля.",
+      });
+      return;
+    }
+
     try {
       if (editingUser) {
-        await UserAPI.updateUser(String(editingUser.id), userFormData as Models.UpdateUserRequest);
+        await UserAPI.updateUser(String(editingUser.id), payload as Models.UpdateUserRequest);
         toast({ title: "Успех", description: "Пользователь успешно обновлен." });
       } else {
-        const payload = { ...userFormData } as Models.CreateUserRequest;
+        const createPayload = { ...payload } as Models.CreateUserRequest;
         // Auto-verify if created by Leadership or System Admin only
         if (currentUser?.role?.id === Roles.MANAGEMENT || currentUser?.role?.id === Roles.SYSTEM_ADMIN) {
-          payload.is_verified = true;
+          createPayload.is_verified = true;
         }
-        await UserAPI.createUser(payload);
+        await UserAPI.createUser(createPayload);
         toast({ title: "Успех", description: "Пользователь успешно создан." });
       }
       void fetchUsersAndStats();
+      setIsFormOpen(false);
     } catch (err: any) {
       toast({
         variant: "destructive",
         title: "Ошибка",
-        description: err?.message || "Не удалось сохранить пользователя.",
+        description: err?.response?.data?.message || err?.message || "Не удалось сохранить пользователя.",
       });
-    } finally {
-      setIsFormOpen(false);
     }
   };
 
-  const filteredUsers = users.filter((user) =>
-    Object.values(user).some((value) =>
-      String(value).toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  );
+  const filteredUsers = users.filter((user) => {
+    const query = searchTerm.trim().toLowerCase();
+    const searchableText = [
+      getUserFullName(user),
+      user.email,
+      user.phone,
+      user.position,
+      user.branch?.name,
+      getRoleLabel(user.role?.id),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return searchableText.includes(query);
+  });
 
   return (
     <>
@@ -499,7 +586,7 @@ export default function UsersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Название/Компания</TableHead>
+                  <TableHead>Фамилия, Имя, Отчество</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Телефон</TableHead>
                   <TableHead>Роль</TableHead>
@@ -523,7 +610,7 @@ export default function UsersPage() {
                 ) : (
                   filteredUsers.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.full_name || user.company_name}</TableCell>
+                      <TableCell className="font-medium">{getUserFullName(user)}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{user.phone}</TableCell>
                       <TableCell>{getRoleLabel(user.role?.id)}</TableCell>
@@ -595,15 +682,15 @@ export default function UsersPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="last_name">Фамилия</Label>
-                  <Input id="last_name" placeholder="Фамилия..." value={(userFormData as any).last_name || ''} onChange={handleFormChange} />
+                  <Input id="last_name" placeholder="Фамилия..." value={(userFormData as any).last_name || ''} onChange={handleFormChange} required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="first_name">Имя</Label>
-                  <Input id="first_name" placeholder="Имя..." value={(userFormData as any).first_name || ''} onChange={handleFormChange} />
+                  <Input id="first_name" placeholder="Имя..." value={(userFormData as any).first_name || ''} onChange={handleFormChange} required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="middle_name">Отчество</Label>
-                  <Input id="middle_name" placeholder="Отчество..." value={(userFormData as any).middle_name || ''} onChange={handleFormChange} />
+                  <Input id="middle_name" placeholder="Отчество..." value={(userFormData as any).middle_name || ''} onChange={handleFormChange} required />
                 </div>
               </div>
               <div className="space-y-2">
@@ -622,7 +709,18 @@ export default function UsersPage() {
               )}
               <div className="space-y-2">
                 <Label htmlFor="phone">Телефон</Label>
-                <Input id="phone" placeholder="Введите телефон..." value={userFormData.phone} onChange={handleFormChange} required />
+                <Input
+                  id="phone"
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="+77001234567"
+                  pattern="\+[1-9][0-9]{10,14}"
+                  title="Телефон в международном формате, например +77001234567"
+                  value={userFormData.phone}
+                  onChange={handleFormChange}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">Формат: +77001234567</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="role_id">Роль</Label>
@@ -698,7 +796,7 @@ export default function UsersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
             <AlertDialogDescription>
-              Вы уверены, что хотите удалить пользователя "{userToDelete?.company_name}"? Это действие нельзя будет отменить.
+              Вы уверены, что хотите удалить пользователя "{getUserFullName(userToDelete)}"? Это действие нельзя будет отменить.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -713,7 +811,7 @@ export default function UsersPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Детали пользователя</DialogTitle>
-            <DialogDescription>{viewingUser?.company_name}</DialogDescription>
+            <DialogDescription>{getUserFullName(viewingUser)}</DialogDescription>
           </DialogHeader>
           {isLoading ? <Spinner /> : (
             <div className="grid grid-cols-2 gap-4 py-4">

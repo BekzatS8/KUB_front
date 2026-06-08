@@ -1,6 +1,120 @@
 import api from './index';
 import type * as Models from '@/src/models/clients.model';
 
+const CLIENT_FIELD_LABELS: Record<string, string> = {
+  client_type: 'Тип лица',
+  country: 'Страна',
+  trip_purpose: 'Цель поездки',
+  birth_date: 'Дата рождения',
+  phone: 'Телефон',
+  last_name: 'Фамилия',
+  first_name: 'Имя',
+  company_name: 'Название компании',
+  name: 'Название компании',
+  bin: 'БИН',
+  bin_iin: 'БИН/ИИН',
+  contact_person_name: 'Контактное лицо',
+  contact_person_phone: 'Телефон контактного лица',
+  legal_address: 'Юридический адрес',
+  address: 'Юридический адрес',
+  email: 'Email',
+  iin: 'ИИН',
+};
+
+function fieldLabel(field: string) {
+  return CLIENT_FIELD_LABELS[field] || field;
+}
+
+function formatMissingFields(fields: unknown) {
+  if (!Array.isArray(fields) || fields.length === 0) return '';
+  return `Не заполнены обязательные поля: ${fields.map((field) => fieldLabel(String(field))).join(', ')}.`;
+}
+
+function translateClientError(message: string, code?: string, status?: number) {
+  const lower = message.toLowerCase();
+
+  if (code === 'CLIENT_ALREADY_EXISTS') {
+    return 'Клиент с таким БИН/ИИН уже существует.';
+  }
+  if (code === 'EMAIL_ALREADY_USED' || lower.includes('email already used')) {
+    return 'Этот email уже указан у другого клиента.';
+  }
+  if (code === 'INVALID_EMAIL' || lower.includes('invalid email') || lower.includes('email has invalid format')) {
+    return 'Некорректный формат email.';
+  }
+  if (code === 'INVALID_DATE_FORMAT' || lower.includes('invalid date')) {
+    return 'Некорректная дата. Используйте формат дд.мм.гггг.';
+  }
+  if (lower.includes('individual profile with this iin')) {
+    return 'Клиент с таким ИИН уже существует.';
+  }
+  if (lower.includes('legal profile with this bin')) {
+    return 'Клиент с таким БИН уже существует.';
+  }
+  if (lower.includes('invalid education_level')) {
+    return 'Некорректное значение поля “Образование”. Выберите вариант из списка.';
+  }
+  if (lower.includes('read-only role')) {
+    return 'У вашей роли нет права создавать или редактировать клиентов.';
+  }
+  if (status === 413 || lower.includes('request entity too large') || lower.includes('payload too large')) {
+    return 'Файл слишком большой для текущей настройки сервера или внешнего прокси.';
+  }
+  if (lower.includes('unsupported file extension')) {
+    return 'Этот формат файла пока не поддерживается сервером.';
+  }
+  if (lower.includes('file is required')) {
+    return 'Файл не был передан на сервер. Выберите фото еще раз.';
+  }
+  if (lower.includes('unsupported category')) {
+    return 'Фото нельзя прикрепить к этому типу клиента.';
+  }
+  if (lower.includes('forbidden') || status === 403) {
+    return 'Нет доступа для выполнения этого действия.';
+  }
+  if (lower.includes('database schema mismatch') || lower.includes('missing or outdated database migration')) {
+    return `Ошибка базы данных: не применена нужная миграция. ${message}`;
+  }
+  if (lower.includes('related record not found')) {
+    return 'Не найдена связанная запись: пользователь, филиал или другая зависимость.';
+  }
+
+  return message;
+}
+
+function extractClientErrorMessage(error: any, fallback: string) {
+  const status = error?.response?.status;
+  const backendError = error?.response?.data;
+
+  if (!backendError) {
+    return error?.message || fallback;
+  }
+
+  if (typeof backendError === 'string') {
+    return translateClientError(backendError, undefined, status);
+  }
+
+  if (Array.isArray(backendError)) {
+    return backendError.map((err) => err?.message || String(err)).join(', ');
+  }
+
+  const missingFieldsText = formatMissingFields(backendError.missing_fields);
+  const code = backendError.error_code || backendError.code;
+  const rawMessage =
+    backendError.message ||
+    backendError.error ||
+    backendError.detail ||
+    backendError.details ||
+    fallback;
+  const translatedMessage = translateClientError(String(rawMessage), code, status);
+
+  if (missingFieldsText) {
+    return missingFieldsText;
+  }
+
+  return translatedMessage;
+}
+
 export async function createClient(payload: Models.CreateClientRequest): Promise<Models.Client> {
   try {
     console.log('Creating client with payload:', payload);
@@ -21,33 +135,7 @@ export async function createClient(payload: Models.CreateClientRequest): Promise
       }
     });
     
-    // Extract detailed error message from backend if available
-    const backendError = error?.response?.data;
-    let errorMessage = 'Failed to create client';
-
-    if (backendError) {
-      console.log('Backend error response:', backendError);
-
-      if (typeof backendError === 'string') {
-        errorMessage = backendError;
-      } else if (backendError.message) {
-        errorMessage = backendError.message;
-        if (backendError.missing_fields && Array.isArray(backendError.missing_fields)) {
-          errorMessage += ` (Missing: ${backendError.missing_fields.join(', ')})`;
-        }
-      } else if (backendError.error) {
-        errorMessage = backendError.error;
-      } else if (backendError.detail) {
-        errorMessage = backendError.detail;
-      } else if (Array.isArray(backendError)) {
-        // Handle validation errors array
-        errorMessage = backendError.map(err => err.message || err).join(', ');
-      } else if (backendError.missing_fields) {
-        errorMessage = `Missing required fields: ${backendError.missing_fields.join(', ')}`;
-      }
-    }
-
-    throw new Error(errorMessage);
+    throw new Error(extractClientErrorMessage(error, 'Не удалось создать клиента.'));
   }
 }
 
@@ -103,32 +191,7 @@ export async function updateClient(id: string, payload: Models.UpdateClientReque
       }
     });
 
-    // Extract detailed error message from backend if available
-    const backendError = error?.response?.data;
-    let errorMessage = 'Failed to update client';
-
-    if (backendError) {
-      console.log('Backend error response:', backendError);
-
-      if (typeof backendError === 'string') {
-        errorMessage = backendError;
-      } else if (backendError.message) {
-        errorMessage = backendError.message;
-        if (backendError.missing_fields && Array.isArray(backendError.missing_fields)) {
-          errorMessage += ` (Missing: ${backendError.missing_fields.join(', ')})`;
-        }
-      } else if (backendError.error) {
-        errorMessage = backendError.error;
-      } else if (backendError.detail) {
-        errorMessage = backendError.detail;
-      } else if (Array.isArray(backendError)) {
-        errorMessage = backendError.map(err => err.message || err).join(', ');
-      } else if (backendError.missing_fields) {
-        errorMessage = `Missing required fields: ${backendError.missing_fields.join(', ')}`;
-      }
-    }
-
-    throw new Error(errorMessage);
+    throw new Error(extractClientErrorMessage(error, 'Не удалось обновить клиента.'));
   }
 }
 
@@ -149,16 +212,17 @@ export async function unarchiveClient(id: string): Promise<any> {
 
 // File upload functions
 export async function uploadClientPhoto(clientId: string, file: File): Promise<any> {
-  const formData = new FormData();
-  formData.append('file', file); // Backend expects 'file' field name
-  formData.append('category', 'photo35x45');
-  
-  const res = await api.post(`/clients/${clientId}/files`, formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
-  return res.data;
+  try {
+    const res = await api.postForm(`/clients/${clientId}/files`, {
+      file,
+      category: 'photo35x45',
+    }, {
+      timeout: 120000,
+    });
+    return res.data;
+  } catch (error: any) {
+    throw new Error(extractClientErrorMessage(error, 'Не удалось загрузить фото клиента.'));
+  }
 }
 
 export async function createClientWithPhoto(payload: Models.CreateClientRequest, photoFile?: File): Promise<Models.Client> {
@@ -170,7 +234,7 @@ export async function createClientWithPhoto(payload: Models.CreateClientRequest,
     try {
       await uploadClientPhoto(client.id.toString(), photoFile);
     } catch (error) {
-      console.warn('Failed to upload photo but client was created:', error);
+      throw new Error(`Клиент создан, но фото не загрузилось: ${(error as Error)?.message || 'неизвестная ошибка'}`);
     }
   }
   
@@ -186,7 +250,7 @@ export async function updateClientWithPhoto(id: string, payload: Models.UpdateCl
     try {
       await uploadClientPhoto(id, photoFile);
     } catch (error) {
-      console.warn('Failed to upload photo but client was updated:', error);
+      throw new Error(`Клиент обновлен, но фото не загрузилось: ${(error as Error)?.message || 'неизвестная ошибка'}`);
     }
     
     return updatedClient;

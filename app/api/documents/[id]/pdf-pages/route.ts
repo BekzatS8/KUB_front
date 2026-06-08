@@ -11,9 +11,9 @@ declare global {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const documentId = params.id
+  const { id: documentId } = await params
 
   try {
     // Get the backend API URL from environment or use default
@@ -131,7 +131,7 @@ export async function GET(
         const canvas = await page.$('#canvas')
         if (canvas) {
           const screenshot = await canvas.screenshot({ type: 'png' })
-          pages.push(`data:image/png;base64,${screenshot.toString('base64')}`)
+          pages.push(`data:image/png;base64,${Buffer.from(screenshot).toString('base64')}`)
         }
       } catch (error) {
         console.error(`Error rendering page ${i}:`, error)

@@ -25,9 +25,17 @@ import {
   delete_task,
   remind_later,
 } from "@/src/api/tasks.api"
+import type { Task } from "@/src/models/tasks.model"
 import { MoreHorizontal } from "lucide-react"
 
-export function TaskActions({ task, onTaskDeleted, onTaskUpdated, onEditTask }) {
+type TaskActionsProps = {
+  task: Task
+  onTaskDeleted: (taskId: number) => void
+  onTaskUpdated: () => void
+  onEditTask: (task: Task) => void
+}
+
+export function TaskActions({ task, onTaskDeleted, onTaskUpdated, onEditTask }: TaskActionsProps) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false)
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false)
@@ -38,7 +46,7 @@ export function TaskActions({ task, onTaskDeleted, onTaskUpdated, onEditTask }) 
 
   const handleDelete = async () => {
     try {
-      await delete_task(null, { id: task.id })
+      await delete_task(undefined, { id: task.id })
       onTaskDeleted(task.id)
     } catch (error) {
       console.error("Failed to delete task", error)
@@ -60,7 +68,7 @@ export function TaskActions({ task, onTaskDeleted, onTaskUpdated, onEditTask }) 
 
   const handleChangeStatus = async () => {
     try {
-      await change_task_status({ status }, { id: task.id })
+      await change_task_status({ to: status }, { id: task.id })
       onTaskUpdated()
     } catch (error) {
       console.error("Failed to change task status", error)
@@ -71,7 +79,7 @@ export function TaskActions({ task, onTaskDeleted, onTaskUpdated, onEditTask }) 
 
   const handleComplete = async () => {
     try {
-      await complete_task(null, { id: task.id })
+      await complete_task(undefined, { id: task.id })
       onTaskUpdated()
     } catch (error) {
       console.error("Failed to complete task", error)
@@ -82,7 +90,7 @@ export function TaskActions({ task, onTaskDeleted, onTaskUpdated, onEditTask }) 
 
   const handleRemindLater = async () => {
     try {
-      await remind_later(null, { id: task.id })
+      await remind_later(undefined, { id: task.id })
       onTaskUpdated()
     } catch (error) {
       console.error("Failed to remind later", error)

@@ -11,9 +11,9 @@ declare global {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const documentId = params.id
+  const { id: documentId } = await params
   
   console.log('=== VIEW API CALLED ===')
   console.log('Document ID:', documentId)

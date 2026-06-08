@@ -46,6 +46,11 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -192,6 +197,104 @@ export default function LeadsPage() {
       return getRoleFromId(user.role_id);
     }
     return undefined;
+  };
+
+  const getUserDisplayName = (profile: any, fallbackId?: number) => {
+    if (!profile) return fallbackId ? `ID: ${fallbackId}` : "Не назначен";
+
+    const fullName = [
+      profile.last_name || profile.lastName,
+      profile.first_name || profile.firstName,
+      profile.middle_name || profile.middleName,
+    ].filter(Boolean).join(" ").trim();
+
+    return (
+      profile.full_name ||
+      fullName ||
+      profile.name ||
+      profile.legacy?.company_name ||
+      profile.company_name ||
+      profile.email ||
+      (profile.id ? `ID: ${profile.id}` : "Не указано")
+    );
+  };
+
+  const getUserRoleLabel = (profile: any) => {
+    if (!profile) return "";
+    return (
+      profile.position ||
+      profile.role?.name ||
+      profile.role?.legacy_name ||
+      profile.role?.code ||
+      (profile.role_id ? getRoleFromId(Number(profile.role_id)) : "")
+    );
+  };
+
+  const getUserSearchValue = (profile: any) => [
+    getUserDisplayName(profile),
+    profile.first_name,
+    profile.last_name,
+    profile.middle_name,
+    profile.full_name,
+    profile.email,
+    profile.phone,
+    profile.position,
+    profile.role?.name,
+    profile.role?.legacy_name,
+    profile.role?.code,
+    profile.id,
+  ].filter(Boolean).join(" ");
+
+  const getLeadResponsibleId = (lead: any) => Number(lead.assignee_id || lead.owner_id || 0);
+
+  const getUserById = (id: number) => {
+    if (!id) return null;
+    const loadedUser = users.find((u) => Number(u.id) === Number(id));
+    if (loadedUser) return loadedUser;
+    if (user && Number(user.id) === Number(id)) return user;
+    return null;
+  };
+
+  const renderUserMiniCard = (profile: any, fallbackId: number) => (
+    <div className="space-y-3">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
+          {getUserDisplayName(profile, fallbackId).charAt(0).toUpperCase()}
+        </div>
+        <div className="min-w-0">
+          <div className="font-semibold text-slate-900">{getUserDisplayName(profile, fallbackId)}</div>
+          <div className="text-sm text-slate-500">{getUserRoleLabel(profile) || "Должность не указана"}</div>
+        </div>
+      </div>
+      <div className="space-y-1 text-sm text-slate-600">
+        <div><span className="text-slate-400">ID:</span> {profile?.id || fallbackId}</div>
+        <div><span className="text-slate-400">Email:</span> {profile?.email || "Не указан"}</div>
+        <div><span className="text-slate-400">Телефон:</span> {profile?.phone || "Не указан"}</div>
+        <div><span className="text-slate-400">Филиал:</span> {profile?.branch?.name || "Не указан"}</div>
+      </div>
+    </div>
+  );
+
+  const renderResponsibleUser = (lead: Lead) => {
+    const responsibleId = getLeadResponsibleId(lead);
+    const responsible = getUserById(responsibleId);
+
+    if (!responsibleId) {
+      return <span className="text-sm text-gray-400">Не назначен</span>;
+    }
+
+    return (
+      <HoverCard openDelay={150}>
+        <HoverCardTrigger asChild>
+          <button type="button" className="text-left font-medium text-slate-900 hover:text-blue-600">
+            {getUserDisplayName(responsible, responsibleId)}
+          </button>
+        </HoverCardTrigger>
+        <HoverCardContent className="w-72" align="start">
+          {renderUserMiniCard(responsible, responsibleId)}
+        </HoverCardContent>
+      </HoverCard>
+    );
   };
 
   // Fetch branches for elevated roles
@@ -383,7 +486,8 @@ export default function LeadsPage() {
     try {
       const { listUsers } = await import("@/src/api/users.api");
       const res = await listUsers();
-      setUsers(Array.isArray(res) ? res : []);
+      const usersData = Array.isArray(res) ? res : ((res as any)?.data || (res as any)?.items || []);
+      setUsers(Array.isArray(usersData) ? usersData : []);
     } catch (err: any) {
       // If 403 error, just set empty users array - sales users don't need this anyway
       if (err?.response?.status === 403) {
@@ -663,7 +767,7 @@ export default function LeadsPage() {
 
   const openAssignDialog = (lead: Lead) => {
     setSelectedLead(lead);
-    setAssignLeadData({ assignee_id: 0, comment: "" });
+    setAssignLeadData({ assignee_id: getLeadResponsibleId(lead), comment: "" });
     setIsAssignDialogOpen(true);
   };
 
@@ -969,6 +1073,7 @@ export default function LeadsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>ID</TableHead>
                   <TableHead>Название</TableHead>
                   <TableHead>Описание</TableHead>
                   <TableHead>Статус</TableHead>
@@ -979,12 +1084,13 @@ export default function LeadsPage() {
               </TableHeader>
               <TableBody>
                 {(!leads || leads.length === 0) ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-500">Лиды не найдены</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-500">Лиды не найдены</TableCell></TableRow>
                 ) : (
                   leads.map((lead) => {
                     const isArchived = lead.archived || lead.is_archived;
                     return (
                       <TableRow key={lead.id} className={isArchived ? "bg-gray-200" : ""}>
+                        <TableCell className="font-mono text-sm">{lead.id}</TableCell>
                         <TableCell className="font-medium">{lead.title}</TableCell>
                         <TableCell>{lead.description}</TableCell>
                         <TableCell>
@@ -995,7 +1101,7 @@ export default function LeadsPage() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>{lead.owner_id}</TableCell>
+                        <TableCell>{renderResponsibleUser(lead)}</TableCell>
                         <TableCell>
                           <div className="flex items-center text-sm">
                             <Calendar className="h-3 w-3 mr-1 text-gray-400" />
@@ -1133,46 +1239,59 @@ export default function LeadsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="assignee-id">ID Ответственного</Label>
-              <div className="flex w-full items-center space-x-2">
-                <Input
-                  id="assignee-id"
-                  type="number"
-                  placeholder="Введите ID ответственного..."
-                  value={assignLeadData.assignee_id}
-                  onChange={(e) => setAssignLeadData({ ...assignLeadData, assignee_id: Number(e.target.value) })}
-                />
-                <Popover open={isAssignUserOpen} onOpenChange={setIsAssignUserOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="icon">
-                      <UserPlus className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[300px] p-0" align="end">
-                    <Command>
-                      <CommandInput placeholder="Поиск пользователя..." />
-                      <CommandList>
-                        <CommandEmpty>Пользователь не найден.</CommandEmpty>
-                        <CommandGroup>
-                          {users.map((u) => (
-                            <CommandItem
-                              key={u.id}
-                              value={`${u.firstName || ""} ${u.lastName || ""} ${u.company_name || ""} ${u.id}`}
-                              onSelect={() => {
-                                setAssignLeadData({ ...assignLeadData, assignee_id: Number(u.id) });
-                                setIsAssignUserOpen(false);
-                              }}
-                            >
-                              <span>{u.firstName ? `${u.firstName} ${u.lastName}` : (u.name || u.company_name || `User ${u.id}`)}</span>
-                              <span className="ml-auto text-xs text-gray-400">ID: {u.id}</span>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
+              <Label htmlFor="assignee-id">Ответственный</Label>
+              <Popover open={isAssignUserOpen} onOpenChange={setIsAssignUserOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="assignee-id"
+                    type="button"
+                    variant="outline"
+                    className="h-auto min-h-12 w-full justify-between px-4 py-3 text-left font-normal"
+                  >
+                    {assignLeadData.assignee_id ? (
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate font-medium text-slate-900">
+                          {getUserDisplayName(getUserById(assignLeadData.assignee_id), assignLeadData.assignee_id)}
+                        </span>
+                        <span className="truncate text-xs text-slate-500">
+                          {getUserRoleLabel(getUserById(assignLeadData.assignee_id)) || `ID: ${assignLeadData.assignee_id}`}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">Выберите ответственного...</span>
+                    )}
+                    <UserPlus className="ml-3 h-4 w-4 shrink-0 text-slate-500" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[420px] max-w-[calc(100vw-2rem)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Поиск по ФИО, email, телефону..." />
+                    <CommandList>
+                      <CommandEmpty>Пользователь не найден.</CommandEmpty>
+                      <CommandGroup>
+                        {users.map((u) => (
+                          <CommandItem
+                            key={u.id}
+                            value={getUserSearchValue(u)}
+                            onSelect={() => {
+                              setAssignLeadData({ ...assignLeadData, assignee_id: Number(u.id) });
+                              setIsAssignUserOpen(false);
+                            }}
+                          >
+                            <div className="flex min-w-0 flex-col">
+                              <span className="truncate font-medium">{getUserDisplayName(u)}</span>
+                              <span className="truncate text-xs text-slate-500">
+                                {[getUserRoleLabel(u), u.email, u.phone].filter(Boolean).join(" • ")}
+                              </span>
+                            </div>
+                            <span className="ml-auto shrink-0 text-xs text-gray-400">ID: {u.id}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <Label htmlFor="assign-comment">Комментарий</Label>
@@ -1181,7 +1300,7 @@ export default function LeadsPage() {
           </div>
           <div className="flex justify-end space-x-2 mt-4">
             <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>Отмена</Button>
-            <Button onClick={handleAssignLead}>Назначить</Button>
+            <Button onClick={handleAssignLead} disabled={!assignLeadData.assignee_id}>Назначить</Button>
           </div>
         </DialogContent>
       </Dialog>

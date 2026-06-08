@@ -11,10 +11,10 @@ declare global {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string; pageNumber: string } }
+  { params }: { params: Promise<{ id: string; pageNumber: string }> }
 ) {
-  const documentId = params.id
-  const pageNumber = parseInt(params.pageNumber)
+  const { id: documentId, pageNumber: pageNumberParam } = await params
+  const pageNumber = parseInt(pageNumberParam)
 
   if (isNaN(pageNumber) || pageNumber < 1) {
     return NextResponse.json(

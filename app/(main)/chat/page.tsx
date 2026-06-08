@@ -185,12 +185,38 @@ export default function ChatPage() {
 
   // Helper function to get user display name for both User and ChatUserDirectoryItem structures
   const getUserDisplayName = (user: any) => {
+    if (!user) return "Without name";
+    const fullName = (user.full_name || user.fullName || "").trim();
+    if (fullName) return fullName;
+    const nameParts = [
+      user.last_name || user.lastName,
+      user.first_name || user.firstName,
+      user.middle_name || user.middleName,
+    ]
+      .map((part) => (part || "").trim())
+      .filter(Boolean);
+    if (nameParts.length > 0) return nameParts.join(" ");
     // Handle ChatUserDirectoryItem structure (from /chats/users endpoint)
-    if (user.display_name) return user.display_name;
-    // Fallback for regular User structure
-    if (user.firstName) return `${user.firstName} ${user.lastName || ''}`.trim();
+    if (user.display_name) return user.display_name.trim();
     return user.company_name || user.email || "Without name";
   };
+
+  const getUserSearchText = (user: any) => [
+    getUserDisplayName(user),
+    user?.display_name,
+    user?.full_name,
+    user?.fullName,
+    user?.first_name,
+    user?.firstName,
+    user?.last_name,
+    user?.lastName,
+    user?.middle_name,
+    user?.middleName,
+  ]
+    .map((part) => (part || "").toString().trim())
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 
   const handleNewMessage = useCallback((newMessage: any) => {
     console.log('WebSocket data received:', newMessage);
@@ -266,7 +292,7 @@ export default function ChatPage() {
   async function fetchUsers() {
     setUsersLoading(true);
     try {
-      const res = await api.get('/chats/users');
+      const res = await api.get('/chats/users', { params: { limit: 100 } });
       const usersData = res.data?.value || res.data || [];
       const usersArray = Array.isArray(usersData) ? usersData : [];
       setUsers(usersArray);
@@ -777,8 +803,9 @@ export default function ChatPage() {
     // Use the global getUserDisplayName function
 
     // Filter users based on search
+    const normalizedSearch = search.trim().toLowerCase();
     const filteredUsers = users.filter((user) =>
-      getUserDisplayName(user).toLowerCase().includes(search.toLowerCase())
+      getUserSearchText(user).includes(normalizedSearch)
     );
 
     const handleSelect = (userId: string) => {
@@ -816,7 +843,7 @@ export default function ChatPage() {
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[300px] p-0" align="start">
-          <Command>
+          <Command shouldFilter={false}>
             <CommandInput placeholder="Поиск участника..." onValueChange={setSearch} />
             <CommandList>
               <CommandEmpty>Пользователь не найден.</CommandEmpty>

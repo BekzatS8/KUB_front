@@ -10,8 +10,16 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { TaskActions } from "./task-actions"
+import type { Task } from "@/src/models/tasks.model"
 
-export function TaskTable({ tasks, onEditTask, onTaskDeleted, onTaskUpdated }) {
+type TaskTableProps = {
+  tasks: Task[]
+  onEditTask: (task: Task) => void
+  onTaskDeleted: (taskId: number) => void
+  onTaskUpdated: () => void
+}
+
+export function TaskTable({ tasks, onEditTask, onTaskDeleted, onTaskUpdated }: TaskTableProps) {
   return (
     <Table>
       <TableHeader>
@@ -61,7 +69,7 @@ export function TaskTable({ tasks, onEditTask, onTaskDeleted, onTaskUpdated }) {
                 task={task}
                 onTaskDeleted={onTaskDeleted}
                 onTaskUpdated={onTaskUpdated}
-                onEditTask={() => onEditTask(task)}
+                onEditTask={onEditTask}
               />
             </TableCell>
           </TableRow>

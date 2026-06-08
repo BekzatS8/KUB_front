@@ -39,9 +39,9 @@ export interface User {
 }
 
 export interface CreateUserRequest {
-  first_name?: string;
-  last_name?: string;
-  middle_name?: string;
+  first_name: string;
+  last_name: string;
+  middle_name: string;
   email: string;
   password?: string;
   phone: string;
