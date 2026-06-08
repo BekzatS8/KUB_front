@@ -83,6 +83,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { getCountries, getCountryCallingCode } from "libphonenumber-js";
+import type { CustomSelectOption } from "@/components/ui/custom-select";
 
 const DEFAULT_CLIENT_COUNTRY = "kazakhstan";
 const DEFAULT_PHONE_COUNTRY = "KZ";
@@ -103,11 +104,6 @@ const countryDisplayNames =
     ? new Intl.DisplayNames(["ru"], { type: "region" })
     : null;
 
-const getCountryFlag = (countryCode: string) =>
-  countryCode
-    .toUpperCase()
-    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
-
 const PHONE_COUNTRIES = getCountries().map((countryCode) => ({
   key: countryCode,
   country:
@@ -115,7 +111,7 @@ const PHONE_COUNTRIES = getCountries().map((countryCode) => ({
     countryDisplayNames?.of(countryCode) ||
     countryCode,
   code: `+${getCountryCallingCode(countryCode)}`,
-  flag: getCountryFlag(countryCode),
+  flagUrl: `https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`,
 }));
 
 const PHONE_COUNTRY_OPTIONS = [
@@ -127,8 +123,34 @@ const PHONE_COUNTRY_OPTIONS = [
     .sort((a, b) => a.country.localeCompare(b.country, "ru")),
 ].map((country) => ({
   value: country.key,
-  label: `${country.flag} ${country.country} (${country.code})`,
+  label: `${country.country} ${country.code}`,
+  country: country.country,
+  code: country.code,
+  flagUrl: country.flagUrl,
 }));
+
+type PhoneCountryOption = CustomSelectOption & {
+  country: string;
+  code: string;
+  flagUrl: string;
+};
+
+const renderPhoneCountryOption = (option: CustomSelectOption) => {
+  const country = option as PhoneCountryOption;
+
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <img
+        src={country.flagUrl}
+        alt=""
+        className="h-4 w-6 shrink-0 rounded-[2px] object-cover"
+        loading="lazy"
+      />
+      <span className="min-w-0 flex-1 truncate">{country.country}</span>
+      <span className="shrink-0 text-slate-500">{country.code}</span>
+    </span>
+  );
+};
 
 const getPhoneCountry = (key: string) =>
   PHONE_COUNTRIES.find((country) => country.key === key) ||
@@ -186,13 +208,17 @@ function PhoneInputWithCountry({
   };
 
   return (
-    <div className="flex min-w-0 gap-2">
-      <div className="w-44 shrink-0">
+    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="min-w-0">
         <CustomSelect
           value={countryKey}
           onChange={handleCountryChange}
           options={PHONE_COUNTRY_OPTIONS}
-          placeholder={`${selectedCountry.flag} ${selectedCountry.code}`}
+          placeholder={`${selectedCountry.country} ${selectedCountry.code}`}
+          triggerClassName="h-11 rounded-2xl px-4 text-base"
+          dropdownWidth={320}
+          renderValue={renderPhoneCountryOption}
+          renderOption={renderPhoneCountryOption}
         />
       </div>
       <Input
@@ -202,7 +228,7 @@ function PhoneInputWithCountry({
         placeholder={placeholder}
         value={withPhoneCountryCode(value, countryKey)}
         onChange={(event) => onChange(withPhoneCountryCode(event.target.value, countryKey))}
-        className="min-w-0 flex-1"
+        className="h-11 min-w-0 rounded-2xl px-4 text-base"
       />
     </div>
   );
@@ -2278,7 +2304,7 @@ useEffect(() => {
                         <Label htmlFor="actual_address">Адрес проживания</Label>
                         <Textarea id="actual_address" placeholder="Адрес проживания" value={clientFormData.actual_address || ""} onChange={handleFormChange} rows={2} />
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1.45fr)_minmax(180px,0.55fr)]">
                         <div className="space-y-2">
                           <Label htmlFor="phone">Телефон *</Label>
                           <PhoneInputWithCountry

@@ -17,6 +17,10 @@ export interface CustomSelectProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  triggerClassName?: string;
+  dropdownWidth?: number;
+  renderValue?: (option: CustomSelectOption) => React.ReactNode;
+  renderOption?: (option: CustomSelectOption) => React.ReactNode;
 }
 
 export function CustomSelect({
@@ -26,6 +30,10 @@ export function CustomSelect({
   placeholder = "Выберите...",
   disabled = false,
   className,
+  triggerClassName,
+  dropdownWidth,
+  renderValue,
+  renderOption,
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [highlightedIndex, setHighlightedIndex] = React.useState(0);
@@ -170,6 +178,7 @@ export function CustomSelect({
           "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
           "disabled:cursor-not-allowed disabled:opacity-50",
           isOpen && "ring-2 ring-ring ring-offset-2",
+          triggerClassName,
         )}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -180,7 +189,7 @@ export function CustomSelect({
             !selectedOption && "text-muted-foreground",
           )}
         >
-          {selectedOption ? selectedOption.label : placeholder}
+          {selectedOption ? (renderValue ? renderValue(selectedOption) : selectedOption.label) : placeholder}
         </span>
         <ChevronDown
           className={cn(
@@ -201,7 +210,7 @@ export function CustomSelect({
           style={{
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
-            width: `${dropdownPosition.width}px`,
+            width: `${dropdownWidth || dropdownPosition.width}px`,
             zIndex: 99999,
           }}
           role="listbox"
@@ -235,7 +244,9 @@ export function CustomSelect({
                       <Check className="h-4 w-4" />
                     </span>
                   )}
-                  <span className="block truncate">{option.label}</span>
+                  <span className="block min-w-0 flex-1 truncate">
+                    {renderOption ? renderOption(option) : option.label}
+                  </span>
                 </button>
               ))
             )}
