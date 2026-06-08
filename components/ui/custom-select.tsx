@@ -82,7 +82,7 @@ export function CustomSelect({
 
   React.useEffect(() => {
     if (isOpen) updateDropdownPosition();
-  }, [isOpen]);
+  }, [isOpen, updateDropdownPosition]);
 
   // Close dropdown when clicking outside
   React.useEffect(() => {
@@ -199,10 +199,10 @@ export function CustomSelect({
         onClick={handleToggle}
         disabled={disabled}
         className={cn(
-          "flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background",
-          "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+          "flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm",
+          "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-inset",
           "disabled:cursor-not-allowed disabled:opacity-50",
-          isOpen && "ring-2 ring-ring ring-offset-2",
+          isOpen && "ring-2 ring-ring ring-inset",
           triggerClassName,
         )}
         aria-haspopup="listbox"
@@ -210,7 +210,7 @@ export function CustomSelect({
       >
         <span
           className={cn(
-            "block truncate",
+            "min-w-0 flex-1 text-left",
             !selectedOption && "text-muted-foreground",
           )}
         >
@@ -218,7 +218,7 @@ export function CustomSelect({
         </span>
         <ChevronDown
           className={cn(
-            "h-4 w-4 opacity-50 transition-transform",
+            "h-4 w-4 shrink-0 opacity-50 transition-transform",
             isOpen && "transform rotate-180",
           )}
         />
@@ -276,7 +276,7 @@ export function CustomSelect({
                       <Check className="h-4 w-4" />
                     </span>
                   )}
-                  <span className="block min-w-0 flex-1 truncate">
+                  <span className="min-w-0 flex-1">
                     {renderOption ? renderOption(option) : option.label}
                   </span>
                 </button>

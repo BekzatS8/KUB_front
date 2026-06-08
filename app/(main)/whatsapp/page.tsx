@@ -1,559 +1,407 @@
 "use client";
 
-import type React from "react";
-import { useState, useRef, useEffect, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+  AlertCircle,
+  CheckCircle2,
+  ExternalLink,
+  Instagram,
+  MessageCircle,
+  RefreshCw,
+  Send,
+  Settings,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-  DialogClose
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  MessageCircle,
-  Send,
-  MoreVertical,
-  Search,
-  Plus,
-  Paperclip,
-  Smile,
-  Users,
-  User as UserIcon,
-  Trash2,
-  LogOut,
-  UserPlus,
-  MessageSquare,
-  Phone,
-  Video,
-  Clock,
-  Check,
-  CheckCheck,
-  AlertCircle,
-  UserCheck,
-  ArrowRight,
-  Settings,
-  RefreshCw,
-  XCircle
-} from "lucide-react";
-import { format, isToday, isYesterday } from "date-fns";
-import { ru } from "date-fns/locale";
-import { getWazzupIframe, setupWazzup, sendWazzupMessage } from "@/src/api/integrations_wazzup.api";
 import { getCurrentUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { getWazzupIframe, setupWazzup } from "@/src/api/integrations_wazzup.api";
 
-// Types for WhatsApp integration
-interface WhatsAppDialog {
-  id: string;
-  phone: string;
-  name?: string;
-  avatar?: string;
-  lastMessage?: string;
-  lastMessageTime?: string;
-  unreadCount: number;
-  isOnline: boolean;
-  assignedTo?: string;
-  assignedToName?: string;
-  leadId?: number;
-  clientId?: number;
-  dealId?: number;
-  status: 'active' | 'archived' | 'blocked';
-}
+type ChannelId = "whatsapp" | "telegram" | "instagram";
+type WidgetState = "loading" | "ready" | "error" | "not_connected" | "service_unavailable";
 
-interface WhatsAppMessage {
-  id: string;
-  text: string;
-  timestamp: string;
-  isIncoming: boolean;
-  status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
-  attachments?: string[];
-  senderName?: string;
-}
+const SOFT_REFRESH_DURATION_MS = 7.5 * 60 * 60 * 1000;
 
-// Widget state types
-type WidgetState = 'loading' | 'ready' | 'error' | 'not_connected' | 'service_unavailable';
-type WidgetError = { type: '404' | '502' | 'network' | 'unknown'; message: string };
+const getWidgetErrorMessage = (error: any) => {
+  if (error?.response?.status === 404) {
+    return { state: "not_connected" as const, message: "Интеграция Wazzup не подключена" };
+  }
 
-// Session management constants
-const SESSION_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
-const SOFT_REFRESH_DURATION_MS = 7.5 * 60 * 60 * 1000; // 7.5 hours (soft refresh before expiration)
+  if (error?.response?.status === 502 || error?.response?.status === 503) {
+    return { state: "service_unavailable" as const, message: "Сервис Wazzup временно недоступен" };
+  }
 
-export default function WhatsAppPage() {
-  const [selectedDialog, setSelectedDialog] = useState<WhatsAppDialog | null>(null);
-  const [message, setMessage] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [iframeUrl, setIframeUrl] = useState<string>("");
-  const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  if (error?.code === "NETWORK_ERROR" || error?.code === "ECONNABORTED") {
+    return { state: "error" as const, message: "Ошибка сети. Проверьте подключение к интернету" };
+  }
 
-  // Widget state management
-  const [widgetState, setWidgetState] = useState<WidgetState>('loading');
-  const [widgetError, setWidgetError] = useState<WidgetError | null>(null);
+  return {
+    state: "error" as const,
+    message: error?.response?.data?.message || error?.message || "Не удалось загрузить мессенджер",
+  };
+};
+
+export default function MessengerPage() {
+  const router = useRouter();
+  const currentUser = getCurrentUser();
+
+  const [activeChannel, setActiveChannel] = useState<ChannelId>("whatsapp");
+  const [iframeUrl, setIframeUrl] = useState("");
+  const [widgetState, setWidgetState] = useState<WidgetState>("loading");
+  const [widgetError, setWidgetError] = useState("");
   const [sessionReceivedAt, setSessionReceivedAt] = useState<number | null>(null);
   const [isManualRefresh, setIsManualRefresh] = useState(false);
 
-  // Setup form state
-  const [setupForm, setSetupForm] = useState({
-    webhooks_base_url: 'https://api.kubcrm.kz',
-    enabled: true
-  });
+  const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
   const [isSetupLoading, setIsSetupLoading] = useState(false);
-  const [setupError, setSetupError] = useState<string | null>(null);
+  const [setupError, setSetupError] = useState("");
+  const [setupForm, setSetupForm] = useState({
+    webhooks_base_url: "https://api.kubcrm.kz",
+    enabled: true,
+  });
 
-  // Mock data for dialogs
-  const [dialogs, setDialogs] = useState<WhatsAppDialog[]>([]);
-  const [dialogsLoading, setDialogsLoading] = useState(false);
-  const [dialogsError, setDialogsError] = useState<string | null>(null);
+  const telegramChatId =
+    currentUser?.telegram?.chat_id || currentUser?.telegram_chat_id || 0;
+  const telegramConnected = Boolean(telegramChatId);
+  const wazzupConnected = widgetState === "ready";
 
-  // Mock messages
-  const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
-  const [messagesLoading, setMessagesLoading] = useState(false);
-  const [messagesError, setMessagesError] = useState<string | null>(null);
-
-  const currentUser = getCurrentUser();
-  const [isChatVisible, setIsChatVisible] = useState(true); // Show chat by default
-
-  // Fetch WhatsApp dialogs
-  const fetchDialogs = async () => {
-    setDialogsLoading(true);
-    setDialogsError(null);
-    try {
-      // TODO: Replace with actual API call when backend provides dialogs endpoint
-      // For now, we'll keep it empty until the backend implements WhatsApp dialog listing
-      setDialogs([]);
-    } catch (error: any) {
-      console.error("Failed to fetch WhatsApp dialogs:", error);
-      setDialogsError(error.message || "Не удалось загрузить диалоги WhatsApp");
-    } finally {
-      setDialogsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDialogs();
-  }, []);
-
-  // Load widget: fetch iframe URL and manage session
   const loadWidget = useCallback(async () => {
-    setWidgetState('loading');
-    setWidgetError(null);
-    setIsManualRefresh(false);
+    setWidgetState("loading");
+    setWidgetError("");
 
     try {
       const response = await getWazzupIframe();
-      console.log('Wazzup iframe response:', response);
-      setIframeUrl(response.iframe_url || response.url);
-      setSessionReceivedAt(Date.now());
-      setWidgetState('ready');
-      console.log('Widget state set to ready, iframe URL:', response.iframe_url || response.url);
-    } catch (error: any) {
-      console.error("Failed to load Wazzup widget:", error);
+      const nextUrl = response.iframe_url || response.url;
 
-      // Handle different error types
-      if (error.response?.status === 404) {
-        setWidgetError({ type: '404', message: 'Интеграция мессенджера не подключена' });
-        setWidgetState('not_connected');
-      } else if (error.response?.status === 502 || error.response?.status === 503) {
-        setWidgetError({ type: '502', message: 'Мессенджер временно недоступен' });
-        setWidgetState('service_unavailable');
-      } else if (error.code === 'NETWORK_ERROR' || error.code === 'ECONNABORTED') {
-        setWidgetError({ type: 'network', message: 'Ошибка сети. Проверьте подключение к интернету.' });
-        setWidgetState('error');
-      } else {
-        setWidgetError({ type: 'unknown', message: error.message || 'Не удалось загрузить виджет' });
-        setWidgetState('error');
+      if (!nextUrl) {
+        setWidgetState("error");
+        setWidgetError("Wazzup не вернул ссылку на виджет");
+        return;
       }
+
+      setIframeUrl(nextUrl);
+      setSessionReceivedAt(Date.now());
+      setWidgetState("ready");
+    } catch (error: any) {
+      const nextError = getWidgetErrorMessage(error);
+      setWidgetState(nextError.state);
+      setWidgetError(nextError.message);
+    } finally {
+      setIsManualRefresh(false);
     }
   }, []);
 
-  // Refresh widget: re-fetch iframe URL and update iframe
   const refreshWidget = useCallback(async () => {
     setIsManualRefresh(true);
     await loadWidget();
   }, [loadWidget]);
 
-  // Load widget when component mounts
   useEffect(() => {
     loadWidget();
   }, [loadWidget]);
 
-  // Auto-refresh before session expiration (soft refresh at 7.5 hours)
   useEffect(() => {
-    if (!sessionReceivedAt || widgetState !== 'ready') return;
+    if (!sessionReceivedAt || widgetState !== "ready") return;
 
-    const timeUntilSoftRefresh = SOFT_REFRESH_DURATION_MS - (Date.now() - sessionReceivedAt);
+    const refreshIn = SOFT_REFRESH_DURATION_MS - (Date.now() - sessionReceivedAt);
+    const timer = window.setTimeout(refreshWidget, Math.max(refreshIn, 0));
 
-    if (timeUntilSoftRefresh <= 0) {
-      // Session already expired, refresh immediately
-      refreshWidget();
-      return;
-    }
+    return () => window.clearTimeout(timer);
+  }, [refreshWidget, sessionReceivedAt, widgetState]);
 
-    const timer = setTimeout(() => {
-      console.log('Soft refresh: session approaching expiration');
-      refreshWidget();
-    }, timeUntilSoftRefresh);
+  const channels = useMemo(
+    () => [
+      {
+        id: "whatsapp" as const,
+        title: "WhatsApp",
+        description: "Диалоги и клиенты через Wazzup",
+        status: wazzupConnected ? "Подключено" : "Нужно подключить",
+        statusClassName: wazzupConnected
+          ? "bg-emerald-50 text-emerald-700"
+          : "bg-amber-50 text-amber-700",
+        icon: MessageCircle,
+        iconClassName: "bg-emerald-500 text-white",
+      },
+      {
+        id: "telegram" as const,
+        title: "Telegram",
+        description: "Уведомления, задачи и бот CRM",
+        status: telegramConnected ? "Подключено" : "Нужно привязать",
+        statusClassName: telegramConnected
+          ? "bg-sky-50 text-sky-700"
+          : "bg-slate-100 text-slate-600",
+        icon: Send,
+        iconClassName: "bg-sky-500 text-white",
+      },
+      {
+        id: "instagram" as const,
+        title: "Instagram",
+        description: "Direct через канал Wazzup",
+        status: wazzupConnected ? "Готово к настройке" : "Нужен Wazzup",
+        statusClassName: wazzupConnected
+          ? "bg-pink-50 text-pink-700"
+          : "bg-slate-100 text-slate-600",
+        icon: Instagram,
+        iconClassName: "bg-pink-500 text-white",
+      },
+    ],
+    [telegramConnected, wazzupConnected],
+  );
 
-    return () => clearTimeout(timer);
-  }, [sessionReceivedAt, widgetState, refreshWidget]);
-
-  // Handle iframe load errors
-  const handleIframeError = useCallback(() => {
-    console.error('Iframe loading error detected');
-    // Attempt to refresh the widget
-    refreshWidget();
-  }, [refreshWidget]);
-
-  const loadWhatsAppChat = async (dialog: WhatsAppDialog) => {
-    // This function is now deprecated - we use loadWidget instead
-    // which doesn't require dialog-specific parameters per spec
-    await loadWidget();
-  };
-
-  // Handle setup form submission
   const handleSetup = async () => {
     setIsSetupLoading(true);
-    setSetupError(null);
+    setSetupError("");
 
     try {
-      const response = await setupWazzup(setupForm);
-      console.log('Wazzup setup successful:', response);
+      await setupWazzup(setupForm);
       setIsSetupModalOpen(false);
-
-      // Force widget reload with a small delay to ensure backend has processed
-      setTimeout(async () => {
-        await loadWidget();
-      }, 500);
+      await loadWidget();
     } catch (error: any) {
-      console.error('Failed to setup Wazzup:', error);
-      setSetupError(error.message || 'Не удалось настроить интеграцию');
+      setSetupError(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Не удалось сохранить настройки Wazzup",
+      );
     } finally {
       setIsSetupLoading(false);
     }
   };
 
-  useEffect(() => {
-    // Load widget when component mounts or when selectedDialog changes
-    loadWidget();
-  }, [loadWidget]);
-
-  const formatTimestamp = (timestamp: string) => {
-    if (!timestamp) return "";
-    return timestamp;
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'sent':
-        return <Check className="h-3 w-3 text-gray-400" />;
-      case 'delivered':
-        return <CheckCheck className="h-3 w-3 text-gray-400" />;
-      case 'read':
-        return <CheckCheck className="h-3 w-3 text-blue-500" />;
-      case 'failed':
-        return <AlertCircle className="h-3 w-3 text-red-500" />;
-      default:
-        return <Clock className="h-3 w-3 text-gray-400" />;
+  const renderWhatsAppPanel = () => {
+    if (widgetState === "loading") {
+      return (
+        <div className="flex min-h-[520px] items-center justify-center rounded-xl border bg-white">
+          <div className="text-center">
+            <RefreshCw className="mx-auto mb-4 h-8 w-8 animate-spin text-blue-600" />
+            <p className="text-slate-600">Загрузка Wazzup...</p>
+          </div>
+        </div>
+      );
     }
+
+    if (widgetState === "ready") {
+      return (
+        <div className="h-[calc(100dvh-260px)] min-h-[560px] overflow-hidden rounded-xl border bg-white shadow-sm">
+          <iframe
+            src={iframeUrl}
+            className="h-full w-full border-0"
+            title="WhatsApp Wazzup"
+            onError={refreshWidget}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex min-h-[520px] items-center justify-center rounded-xl border bg-white p-6">
+        <div className="max-w-md text-center">
+          <AlertCircle className="mx-auto mb-4 h-12 w-12 text-amber-500" />
+          <h3 className="mb-2 text-lg font-semibold text-slate-900">
+            WhatsApp не загружен
+          </h3>
+          <p className="mb-5 text-sm text-slate-600">
+            {widgetError || "Проверьте подключение Wazzup и повторите попытку"}
+          </p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant="outline" onClick={() => setIsSetupModalOpen(true)}>
+              <Settings className="mr-2 h-4 w-4" />
+              Настроить
+            </Button>
+            <Button onClick={refreshWidget}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Обновить
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
-  const filteredDialogs = dialogs.filter((dialog) =>
-    dialog.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    dialog.phone.includes(searchTerm.replace(/\s/g, ''))
+  const renderTelegramPanel = () => (
+    <div className="rounded-xl border bg-white p-6 shadow-sm">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-500 text-white">
+          <Send className="h-5 w-5" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900">Telegram</h3>
+          <p className="text-sm text-slate-600">
+            {telegramConnected
+              ? `Аккаунт привязан, Chat ID: ${telegramChatId}`
+              : "Привяжите Telegram, чтобы получать уведомления и работать с задачами"}
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {["Уведомления по задачам", "Статусы документов", "Команды через бота"].map((item) => (
+          <div key={item} className="rounded-lg border bg-slate-50 p-4 text-sm text-slate-700">
+            <CheckCircle2 className="mb-2 h-4 w-4 text-sky-600" />
+            {item}
+          </div>
+        ))}
+      </div>
+      <div className="mt-6">
+        <Button onClick={() => router.push("/telegram")}>
+          Открыть подключение Telegram
+          <ExternalLink className="ml-2 h-4 w-4" />
+        </Button>
+      </div>
+    </div>
   );
 
-  const handleAssignDialog = (userId: string) => {
-    if (selectedDialog) {
-      setDialogs(prev => prev.map(d => 
-        d.id === selectedDialog.id 
-          ? { ...d, assignedTo: userId, assignedToName: `Менеджер ${userId}` }
-          : d
-      ));
-      setIsAssignModalOpen(false);
-      // TODO: Call API to update assignment in backend
-    }
-  };
-
-  const navigateToCRM = (type: 'lead' | 'client' | 'deal', id: number) => {
-    const path = `/${type}s/${id}`;
-    window.open(path, '_blank');
-  };
-
-  const handleSendMessage = async () => {
-    if (!message.trim() || !selectedDialog) return;
-
-    try {
-      await sendWazzupMessage(selectedDialog.phone, message);
-      setMessage("");
-      // Optionally add the message to local state for immediate feedback
-      // The actual message will appear in the iframe
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      // Show error to user
-    }
-  };
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  const renderInstagramPanel = () => (
+    <div className="rounded-xl border bg-white p-6 shadow-sm">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-pink-500 text-white">
+          <Instagram className="h-5 w-5" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900">Instagram Direct</h3>
+          <p className="text-sm text-slate-600">
+            Канал подключается через Wazzup. После настройки диалоги будут доступны в общем виджете.
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {["Direct-сообщения", "История диалогов", "Работа менеджеров"].map((item) => (
+          <div key={item} className="rounded-lg border bg-slate-50 p-4 text-sm text-slate-700">
+            <CheckCircle2 className="mb-2 h-4 w-4 text-pink-600" />
+            {item}
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 flex flex-wrap gap-2">
+        <Button onClick={() => setIsSetupModalOpen(true)}>
+          Настроить Wazzup
+          <Settings className="ml-2 h-4 w-4" />
+        </Button>
+        <Button variant="outline" onClick={() => setActiveChannel("whatsapp")}>
+          Открыть общий виджет
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="flex h-screen">
-      {/* Dialog List - completely hidden for Wazzup since iframe shows dialogs internally */}
-      <div className="hidden">
+    <div className="min-h-[calc(100dvh-1rem)] space-y-4 bg-slate-50 p-4 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Мессенджер</h1>
+          <p className="text-sm text-slate-600">
+            WhatsApp, Telegram и Instagram в одном рабочем разделе
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={refreshWidget}>
+            <RefreshCw className={cn("mr-2 h-4 w-4", isManualRefresh && "animate-spin")} />
+            Обновить
+          </Button>
+          <Button onClick={() => setIsSetupModalOpen(true)}>
+            <Settings className="mr-2 h-4 w-4" />
+            Wazzup
+          </Button>
+        </div>
       </div>
 
-      {/* Chat Area */}
-      <div className="flex flex-1 flex-col">
-        {/* Always show widget when ready, or show placeholder when not */}
-        {widgetState === 'ready' || widgetState === 'loading' || widgetState === 'error' || widgetState === 'not_connected' || widgetState === 'service_unavailable' ? (
-          <>
-            {/* Chat Header */}
-            <div className="p-4 bg-white border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsChatVisible(false)}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                    </svg>
-                  </Button>
-                  <div className="relative">
-                    <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-                      <MessageCircle className="h-5 w-5 text-white" />
-                    </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        {channels.map((channel) => {
+          const Icon = channel.icon;
+          const isActive = activeChannel === channel.id;
+
+          return (
+            <button
+              key={channel.id}
+              type="button"
+              onClick={() => setActiveChannel(channel.id)}
+              className={cn(
+                "rounded-xl border bg-white p-4 text-left shadow-sm transition",
+                "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset",
+                isActive ? "border-blue-500 shadow-md" : "border-slate-200 hover:border-blue-200",
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", channel.iconClassName)}>
+                    <Icon className="h-5 w-5" />
                   </div>
                   <div>
-                    <h3 className="font-medium">Мессенджер</h3>
-                    <p className="text-sm text-gray-600">
-                      {widgetState === 'ready' ? 'Подключено' : 'Загрузка...'}
-                    </p>
+                    <div className="font-semibold text-slate-900">{channel.title}</div>
+                    <div className="text-sm text-slate-500">{channel.description}</div>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  {/* Manual refresh button */}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={refreshWidget}
-                    title="Обновить мессенджер"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${isManualRefresh ? 'animate-spin' : ''}`} />
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setIsSetupModalOpen(true)}>
-                    <Settings className="h-4 w-4" />
-                  </Button>
-                </div>
+                <Badge className={cn("shrink-0 border-0", channel.statusClassName)}>
+                  {channel.status}
+                </Badge>
               </div>
-            </div>
-
-            {/* Messages or Iframe */}
-            <div className="flex-1 bg-gray-50">
-              {widgetState === 'loading' && (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <RefreshCw className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-4" />
-                    <p className="text-gray-600">Загрузка мессенджера...</p>
-                  </div>
-                </div>
-              )}
-
-              {widgetState === 'ready' && (
-                <iframe
-                  src={iframeUrl}
-                  className="w-full h-full border-0"
-                  title="Мессенджер"
-                  onError={handleIframeError}
-                />
-              )}
-
-              {widgetState === 'not_connected' && (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center max-w-md">
-                    <XCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                      Интеграция не подключена
-                    </h3>
-                    <p className="text-gray-600 mb-4">
-                      {widgetError?.message || 'Интеграция мессенджера не настроена'}
-                    </p>
-                    <div className="flex gap-2 justify-center">
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsSetupModalOpen(true)}
-                      >
-                        Настроить интеграцию
-                      </Button>
-                      <Button
-                        onClick={refreshWidget}
-                      >
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Попробовать снова
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {widgetState === 'service_unavailable' && (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center max-w-md">
-                    <AlertCircle className="h-12 w-12 text-orange-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                      Сервис временно недоступен
-                    </h3>
-                    <p className="text-gray-600 mb-4">
-                      {widgetError?.message || 'Мессенджер временно недоступен'}
-                    </p>
-                    <Button
-                      onClick={refreshWidget}
-                    >
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Повторить
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {widgetState === 'error' && (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center max-w-md">
-                    <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                      Ошибка загрузки
-                    </h3>
-                    <p className="text-gray-600 mb-4">
-                      {widgetError?.message || 'Не удалось загрузить виджет'}
-                    </p>
-                    <Button
-                      onClick={refreshWidget}
-                    >
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Повторить
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center bg-gray-50">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <MessageCircle className="h-8 w-8 text-green-600" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Интеграция мессенджера
-              </h3>
-              <p className="text-gray-600">
-                Загрузка...
-              </p>
-            </div>
-          </div>
-        )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Assign Dialog Modal */}
-      <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Назначить ответственного</DialogTitle>
-            <DialogDescription>
-              Выберите менеджера, который будет отвечать за этот диалог
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-2">
-            {['user1', 'user2', 'user3'].map(userId => (
-              <div key={userId} className="flex items-center space-x-3 p-2 rounded hover:bg-gray-50 cursor-pointer"
-                   onClick={() => handleAssignDialog(userId)}>
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback>
-                    {userId.toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">Менеджер {userId}</p>
-                  <p className="text-sm text-gray-500">user{userId}@example.com</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="ghost">Отмена</Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {activeChannel === "whatsapp" && renderWhatsAppPanel()}
+      {activeChannel === "telegram" && renderTelegramPanel()}
+      {activeChannel === "instagram" && renderInstagramPanel()}
 
-      {/* Setup Modal */}
       <Dialog open={isSetupModalOpen} onOpenChange={setIsSetupModalOpen}>
-        <DialogContent>
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-lg">
           <DialogHeader>
-            <DialogTitle>Настройка интеграции мессенджера</DialogTitle>
+            <DialogTitle>Настройка Wazzup</DialogTitle>
             <DialogDescription>
-              Настройте подключение к мессенджеру
+              Подключение используется для WhatsApp и Instagram Direct.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4 space-y-4">
+
+          <div className="space-y-4 py-2">
             {setupError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                 {setupError}
               </div>
             )}
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="webhook-url">Webhook Base URL</Label>
               <Input
                 id="webhook-url"
-                placeholder="https://api.kubcrm.kz"
                 value={setupForm.webhooks_base_url}
-                onChange={(e) => setSetupForm({ ...setupForm, webhooks_base_url: e.target.value })}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    webhooks_base_url: event.target.value,
+                  }))
+                }
+                placeholder="https://api.kubcrm.kz"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Базовый URL для вебхуков (без пути к вебхуку)
-              </p>
             </div>
-            <div className="flex items-center space-x-2">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
                 type="checkbox"
-                id="enabled"
                 checked={setupForm.enabled}
-                onChange={(e) => setSetupForm({ ...setupForm, enabled: e.target.checked })}
-                className="w-4 h-4"
+                onChange={(event) =>
+                  setSetupForm((prev) => ({ ...prev, enabled: event.target.checked }))
+                }
+                className="h-4 w-4 rounded border-slate-300"
               />
-              <Label htmlFor="enabled" className="cursor-pointer">
-                Включить интеграцию
-              </Label>
-            </div>
+              Включить интеграцию
+            </label>
           </div>
+
           <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="ghost" disabled={isSetupLoading}>Отмена</Button>
-            </DialogClose>
+            <Button variant="outline" onClick={() => setIsSetupModalOpen(false)}>
+              Отмена
+            </Button>
             <Button onClick={handleSetup} disabled={isSetupLoading}>
-              {isSetupLoading ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Настройка...
-                </>
-              ) : (
-                'Сохранить настройки'
-              )}
+              {isSetupLoading && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+              Сохранить
             </Button>
           </DialogFooter>
         </DialogContent>

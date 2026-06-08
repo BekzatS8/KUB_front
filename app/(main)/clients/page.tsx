@@ -155,14 +155,15 @@ const renderPhoneCountryValue = (option: CustomSelectOption) => {
   const country = option as PhoneCountryOption;
 
   return (
-    <span className="flex min-w-0 items-center gap-2">
+    <span className="grid min-w-0 grid-cols-[24px_minmax(30px,1fr)_auto] items-center gap-2">
       <img
         src={country.flagUrl}
         alt=""
         className="h-4 w-6 shrink-0 rounded-[2px] object-cover"
         loading="lazy"
       />
-      <span className="min-w-0 flex-1 truncate">{country.shortLabel}</span>
+      <span className="min-w-0 text-center font-medium tabular-nums">{country.value}</span>
+      <span className="shrink-0 text-right text-slate-500 tabular-nums">{country.code}</span>
     </span>
   );
 };
@@ -171,15 +172,15 @@ const renderPhoneCountryOption = (option: CustomSelectOption) => {
   const country = option as PhoneCountryOption;
 
   return (
-    <span className="flex min-w-0 items-center gap-2">
+    <span className="grid min-w-0 grid-cols-[24px_minmax(30px,1fr)_48px] items-center gap-2">
       <img
         src={country.flagUrl}
         alt=""
         className="h-4 w-6 shrink-0 rounded-[2px] object-cover"
         loading="lazy"
       />
-      <span className="min-w-0 flex-1 truncate">{country.value}</span>
-      <span className="shrink-0 text-slate-500">{country.code}</span>
+      <span className="min-w-0 text-center font-medium tabular-nums">{country.value}</span>
+      <span className="text-right text-slate-500 tabular-nums">{country.code}</span>
     </span>
   );
 };
@@ -240,15 +241,15 @@ function PhoneInputWithCountry({
   };
 
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-[120px_minmax(0,1fr)]">
+    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-[108px_minmax(0,1fr)]">
       <div className="min-w-0">
         <CustomSelect
           value={countryKey}
           onChange={handleCountryChange}
           options={PHONE_COUNTRY_OPTIONS}
           placeholder={`${selectedCountry.key} ${selectedCountry.code}`}
-          triggerClassName="h-11 rounded-2xl px-3 text-base"
-          dropdownWidth={220}
+          triggerClassName="h-11 rounded-2xl px-2 text-sm"
+          dropdownWidth={190}
           listClassName="max-h-72"
           renderValue={renderPhoneCountryValue}
           renderOption={renderPhoneCountryOption}
@@ -2239,9 +2240,9 @@ useEffect(() => {
                           />
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(110px,0.55fr)_minmax(190px,1fr)_minmax(170px,0.9fr)_minmax(170px,0.9fr)]">
-                        <div className="space-y-2">
-                          <Label htmlFor="driver_license_categories">Категория ВУ</Label>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-[76px_minmax(210px,1fr)_minmax(170px,0.9fr)_minmax(170px,0.9fr)]">
+                        <div className="space-y-2 md:max-w-[76px]">
+                          <Label htmlFor="driver_license_categories" className="text-xs leading-tight">Категория ВУ</Label>
                           <CustomSelect
                             value={clientFormData.driver_license_categories || ""}
                             onChange={(value) => setClientFormData(prev => ({ ...prev, driver_license_categories: value }))}
@@ -2261,9 +2262,10 @@ useEffect(() => {
                               { value: "Tb", label: "Tb" }
                             ]}
                             placeholder="Кат."
-                            triggerClassName="px-2 text-xs"
-                            optionClassName="py-1 text-xs"
-                            listClassName="max-h-64"
+                            dropdownWidth={88}
+                            triggerClassName="h-9 rounded-xl px-2 text-xs"
+                            optionClassName="justify-center py-1 text-xs"
+                            listClassName="max-h-56"
                           />
                         </div>
                         <div className="space-y-2">
