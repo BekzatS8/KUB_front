@@ -788,6 +788,41 @@ useEffect(() => {
     }
   };
 
+  const getPassportIdentityValue = () => {
+    return [clientFormData.passport_series, clientFormData.passport_number]
+      .map((part) => String(part || "").trim())
+      .filter(Boolean)
+      .join(" ");
+  };
+
+  const handlePassportIdentityChange = (value: string) => {
+    const normalized = value.replace(/\s+/g, " ").trimStart();
+    const trimmed = normalized.trim();
+    let passportSeries = "";
+    let passportNumber = "";
+
+    if (trimmed) {
+      const withSeparator = trimmed.match(/^(.+?)[\s\-\/]+(.+)$/);
+      const compactWithPrefix = trimmed.match(/^([A-Za-zА-Яа-я]{1,4})(\d.*)$/);
+
+      if (withSeparator) {
+        passportSeries = withSeparator[1].trim();
+        passportNumber = withSeparator[2].replace(/[\s\-\/]+/g, "");
+      } else if (compactWithPrefix) {
+        passportSeries = compactWithPrefix[1].trim();
+        passportNumber = compactWithPrefix[2].replace(/\s+/g, "");
+      } else {
+        passportNumber = trimmed;
+      }
+    }
+
+    setClientFormData((prev) => ({
+      ...prev,
+      passport_series: passportSeries,
+      passport_number: passportNumber,
+    }));
+  };
+
   const handleBooleanChange = (id: string, value: string) => {
     setClientFormData((prev) => ({ ...prev, [id]: value === 'true' }));
   };
@@ -1922,12 +1957,13 @@ useEffect(() => {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="passport_series">Серия паспорта</Label>
-                          <Input id="passport_series" placeholder="Серия" value={clientFormData.passport_series || ""} onChange={handleFormChange} />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="passport_number">Номер паспорта</Label>
-                          <Input id="passport_number" placeholder="Номер" value={clientFormData.passport_number || ""} onChange={handleFormChange} />
+                          <Label htmlFor="passport_identity">Серия и номер паспорта</Label>
+                          <Input
+                            id="passport_identity"
+                            placeholder="Например: AB 1234567"
+                            value={getPassportIdentityValue()}
+                            onChange={(event) => handlePassportIdentityChange(event.target.value)}
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="passport_issue_date">Дата выдачи паспорта</Label>
@@ -2328,8 +2364,13 @@ useEffect(() => {
                       <Separator />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <DetailItem label="Номер удостоверения" value={viewingClient.id_number} />
-                        <DetailItem label="Серия паспорта" value={viewingClient.passport_series} />
-                        <DetailItem label="Номер паспорта" value={viewingClient.passport_number} />
+                        <DetailItem
+                          label="Серия и номер паспорта"
+                          value={[
+                            viewingClient.individual_profile?.passport_series || viewingClient.passport_series,
+                            viewingClient.individual_profile?.passport_number || viewingClient.passport_number,
+                          ].filter(Boolean).join(" ")}
+                        />
                         <DetailItem label="Дата выдачи паспорта" value={viewingClient.passport_issue_date} />
                         <DetailItem label="Дата окончания паспорта" value={viewingClient.passport_expire_date} />
                       </div>

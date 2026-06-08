@@ -173,6 +173,7 @@ export function DateInput({
     `${pad(parsedValue?.hour || 0)}:${pad(parsedValue?.minute || 0)}`
   );
   const [isInvalid, setIsInvalid] = React.useState(false);
+  const lastWheelAtRef = React.useRef(0);
 
   React.useEffect(() => {
     const nextParts = parseValue(value);
@@ -235,6 +236,28 @@ export function DateInput({
     const next = new Date(viewYear, viewMonth - 1 + step, 1);
     setViewYear(clampYear(next.getFullYear(), minYear, maxYear));
     setViewMonth(next.getMonth() + 1);
+  };
+
+  const moveYear = (step: number) => {
+    setViewYear((year) => clampYear(year + step, minYear, maxYear));
+  };
+
+  const handleCalendarWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const now = Date.now();
+    if (now - lastWheelAtRef.current < 120 || Math.abs(event.deltaY) < 3) {
+      return;
+    }
+    lastWheelAtRef.current = now;
+
+    const step = event.deltaY > 0 ? 1 : -1;
+    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+      moveYear(step);
+    } else {
+      moveMonth(step);
+    }
   };
 
   const clearValue = () => {
@@ -302,7 +325,7 @@ export function DateInput({
               <CalendarDays className="size-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-[320px] p-3" align="end">
+          <PopoverContent className="w-[320px] p-3" align="end" onWheelCapture={handleCalendarWheel}>
             <div className="space-y-3">
               <div className="grid grid-cols-[32px_1fr_88px_32px] items-center gap-2">
                 <Button
