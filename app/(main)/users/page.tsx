@@ -128,9 +128,6 @@ const normalizePhoneToE164 = (value?: string) => {
   return raw;
 };
 
-const roleRequiresBranch = (roleId?: number) =>
-  roleId === Roles.SALES || roleId === Roles.OPERATIONS || roleId === Roles.CONTROL;
-
 // ComboboxSelect component for searchable dropdowns
 function ComboboxSelect({
   value,
@@ -428,9 +425,7 @@ export default function UsersPage() {
       return { error: "Телефон должен быть в международном формате: +77001234567." };
     }
     if (!roleId) return { error: "Выберите роль." };
-    if (roleRequiresBranch(roleId) && !branchId) {
-      return { error: "Выберите филиал для этой роли." };
-    }
+    if (!branchId) return { error: "Выберите филиал." };
     if (!editingUser && !String((userFormData as Models.CreateUserRequest).password || "").trim()) {
       return { error: "Укажите пароль." };
     }
@@ -736,7 +731,7 @@ export default function UsersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="branch_id">Филиал</Label>
+                <Label htmlFor="branch_id">Филиал *</Label>
                 <ComboboxSelect
                   value={userFormData.branch_id ? String(userFormData.branch_id) : ""}
                   onChange={(value) => setUserFormData(prev => ({ ...prev, branch_id: value ? Number(value) : undefined }))}
