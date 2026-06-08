@@ -125,9 +125,9 @@ const PHONE_COUNTRY_OPTIONS = [
     .sort((a, b) => a.country.localeCompare(b.country, "ru")),
 ].map((country) => ({
   value: country.key,
-  label: `${country.country} ${country.code}`,
+  label: `${country.key} ${country.code}`,
   country: country.country,
-  shortLabel: country.code === "+7" ? `${country.key} ${country.code}` : `${country.country} ${country.code}`,
+  shortLabel: `${country.key} ${country.code}`,
   code: country.code,
   flagUrl: country.flagUrl,
 }));
@@ -178,7 +178,7 @@ const renderPhoneCountryOption = (option: CustomSelectOption) => {
         className="h-4 w-6 shrink-0 rounded-[2px] object-cover"
         loading="lazy"
       />
-      <span className="min-w-0 flex-1 truncate">{country.country}</span>
+      <span className="min-w-0 flex-1 truncate">{country.value}</span>
       <span className="shrink-0 text-slate-500">{country.code}</span>
     </span>
   );
@@ -240,15 +240,16 @@ function PhoneInputWithCountry({
   };
 
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-[150px_minmax(0,1fr)]">
+    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-[120px_minmax(0,1fr)]">
       <div className="min-w-0">
         <CustomSelect
           value={countryKey}
           onChange={handleCountryChange}
           options={PHONE_COUNTRY_OPTIONS}
-          placeholder={`${selectedCountry.country} ${selectedCountry.code}`}
-          triggerClassName="h-11 rounded-2xl px-4 text-base"
-          dropdownWidth={320}
+          placeholder={`${selectedCountry.key} ${selectedCountry.code}`}
+          triggerClassName="h-11 rounded-2xl px-3 text-base"
+          dropdownWidth={220}
+          listClassName="max-h-72"
           renderValue={renderPhoneCountryValue}
           renderOption={renderPhoneCountryOption}
         />
@@ -626,7 +627,12 @@ export default function ClientsPage() {
   const [clientView, setClientView] = useState<"all" | "my">(() => {
     // Initialize with correct view based on user role
     const currentUser = getCurrentUser();
-    return (currentUser?.role?.code === 'sales' || currentUser?.role_id === 10) ? 'my' : 'all';
+    const role = currentUser?.role;
+    const isSales =
+      (role as any) === 'sales' ||
+      role?.code === 'sales' ||
+      Number(role?.id || currentUser?.role_id || 0) === 10;
+    return isSales ? 'my' : 'all';
   });
   
   // State for fresh user data from API
@@ -646,6 +652,16 @@ export default function ClientsPage() {
         10: 'sales'
       };
       return roleMap[user.role.id] || 'user';
+    }
+    if (user.role_id) {
+      const roleMap: Record<number, string> = {
+        50: 'system_admin',
+        40: 'leadership',
+        30: 'control',
+        20: 'operations',
+        10: 'sales'
+      };
+      return roleMap[Number(user.role_id)] || 'user';
     }
     return undefined;
   };
@@ -739,10 +755,11 @@ export default function ClientsPage() {
 
       // Prevent sales users from accessing full client list - AGGRESSIVE FIX
       const currentUser = getCurrentUser(); // Get fresh user data
-      let effectiveView = (currentUser?.role?.code === 'sales' || currentUser?.role_id === 10) ? 'my' : clientView;
+      const currentRoleCode = getRoleCode(currentUser) || getRoleCode(user);
+      let effectiveView = currentRoleCode === 'sales' ? 'my' : clientView;
 
       // DOUBLE SAFEGUARD: If user is sales, ALWAYS use 'my' view regardless of state
-      if (currentUser?.role?.code === 'sales' || currentUser?.role_id === 10) {
+      if (currentRoleCode === 'sales') {
         effectiveView = 'my';
         console.log('SAFEGUARD: Forced to my view for sales user');
       }
@@ -754,8 +771,7 @@ export default function ClientsPage() {
         effectiveView,
         endpoint: effectiveView === "all" ? '/clients' : '/clients/my',
         params,
-        'currentUser?.role?.code === "sales"': currentUser?.role?.code === 'sales',
-        'currentUser?.role_id === 10': currentUser?.role_id === 10,
+        currentRoleCode,
         'effectiveView === "all"': effectiveView === "all",
         'calling listClients?': effectiveView === "all"
       });
@@ -788,14 +804,14 @@ export default function ClientsPage() {
       // Use proper API based on user role
       console.log('Choosing API endpoint based on role:', {
         currentUserRole: currentUser?.role,
-        isSales: currentUser?.role?.code === 'sales',
-        willCall: currentUser?.role?.code === 'sales' ? 'listMyClients' : 'listClients'
+        isSales: currentRoleCode === 'sales',
+        willCall: currentRoleCode === 'sales' ? 'listMyClients' : 'listClients'
       });
 
       // More robust role check - handle different formats and undefined roles
       const userRole = currentUser?.role;
       const userId = currentUser?.role_id;
-      const isSalesRole = (!userRole && !userId) || userRole?.code === 'sales' || userId === 10;
+      const isSalesRole = currentRoleCode === 'sales';
 
       console.log('Final role check:', { isSalesRole, userRole: currentUser?.role, userId: currentUser?.role_id });
 
@@ -886,7 +902,7 @@ export default function ClientsPage() {
     }
     
     // Force correct view for sales users
-    if (user.role?.code === 'sales' && clientView === 'all') {
+    if (getRoleCode(user) === 'sales' && clientView === 'all') {
       console.log('Sales user with all view, switching to my view');
       setClientView('my');
       return; // Let the effect handle the fetch
@@ -907,7 +923,7 @@ export default function ClientsPage() {
     const currentUser = getCurrentUser();
     console.log('Initial user check:', currentUser);
     
-    if ((currentUser?.role?.code === 'sales' || currentUser?.role_id === 10) && clientView === 'all') {
+    if (getRoleCode(currentUser) === 'sales' && clientView === 'all') {
       console.log('Sales user detected - forcing my view');
       setClientView('my');
     }
@@ -917,7 +933,7 @@ useEffect(() => {
     console.log('=== USEEFFECT 1: User/Role Change ===');
     console.log('User:', user);
     console.log('Client view:', clientView);
-    if ((user?.role?.code === 'sales' || user?.role_id === 10) && clientView === 'all') {
+    if (getRoleCode(user) === 'sales' && clientView === 'all') {
       console.log('Sales user detected - forcing my view');
       setClientView('my');
     }
@@ -1273,7 +1289,7 @@ useEffect(() => {
     }
   };
 
-  const isAdmin = user?.role_id === 50;
+  const isAdmin = getRoleCode(user) === 'system_admin';
 
   const requiredClientFieldLabels: Record<string, string> = {
     client_type: "Тип лица",
@@ -1959,14 +1975,14 @@ useEffect(() => {
 
       {/* Modals */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-5xl max-h-[calc(100dvh-1rem)] overflow-hidden p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>{editingClient ? "Редактировать клиента" : "Создать нового клиента"}</DialogTitle>
             <DialogDescription>
               {editingClient ? "Внесите изменения в данные клиента." : "Заполните форму для создания нового клиента."}
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="max-h-[70vh] p-4">
+          <div className="max-h-[calc(100dvh-11rem)] overflow-y-auto overscroll-contain pr-2 sm:pr-4 touch-pan-y [-webkit-overflow-scrolling:touch]">
             <div className="space-y-8">
               {/* Client Type and Photo - Side by Side for Individual Clients */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2062,6 +2078,7 @@ useEffect(() => {
                             { value: "other", label: "Другая страна..." }
                           ]}
                           placeholder="Выберите страну..."
+                          listClassName="max-h-64"
                         />
                         {clientFormData.country === "other" && (
                           <Input
@@ -2156,6 +2173,7 @@ useEffect(() => {
                           onChange={(value) => setClientFormData(prev => ({ ...prev, citizenship: value }))}
                           options={CITIZENSHIP_COUNTRY_OPTIONS}
                           placeholder="Выберите гражданство..."
+                          listClassName="max-h-64"
                         />
                       </div>
                       <div className="space-y-2 md:col-span-3">
@@ -2242,7 +2260,10 @@ useEffect(() => {
                               { value: "Tm", label: "Tm" },
                               { value: "Tb", label: "Tb" }
                             ]}
-                            placeholder="Категория"
+                            placeholder="Кат."
+                            triggerClassName="px-2 text-xs"
+                            optionClassName="py-1 text-xs"
+                            listClassName="max-h-64"
                           />
                         </div>
                         <div className="space-y-2">
@@ -2385,12 +2406,16 @@ useEffect(() => {
                           <Input id="specialty" placeholder="Специальность" value={clientFormData.specialty || ""} onChange={handleFormChange} />
                         </div>
                         <div className="space-y-2 md:col-span-2">
-                          <Label htmlFor="education_institution_name">Название места работы</Label>
-                          <Input id="education_institution_name" placeholder="Название места работы" value={clientFormData.education_institution_name || ""} onChange={handleFormChange} />
+                          <Label htmlFor="education_institution_name">Название учебного заведения</Label>
+                          <Input id="education_institution_name" placeholder="Название учебного заведения" value={clientFormData.education_institution_name || ""} onChange={handleFormChange} />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="education_institution_address">Адрес учебного заведения</Label>
+                          <Textarea id="education_institution_address" placeholder="Адрес учебного заведения" value={clientFormData.education_institution_address || ""} onChange={handleFormChange} rows={2} className="min-h-[64px]" />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="job">Место работы</Label>
-                          <Input id="job" placeholder="Место работы" value={clientFormData.job || ""} onChange={handleFormChange} />
+                          <Label htmlFor="job">Название места работы</Label>
+                          <Input id="job" placeholder="Название места работы" value={clientFormData.job || ""} onChange={handleFormChange} />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="position">Должность</Label>
@@ -2399,7 +2424,7 @@ useEffect(() => {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="education">Адрес работы</Label>
-                        <Input id="education" placeholder="Адрес работы" value={clientFormData.education || ""} onChange={handleFormChange} />
+                        <Textarea id="education" placeholder="Адрес работы" value={clientFormData.education || ""} onChange={handleFormChange} rows={2} className="min-h-[64px]" />
                       </div>
                     </div>
                   </div>
@@ -2521,8 +2546,8 @@ useEffect(() => {
                 </div>
               )}
             </div>
-          </ScrollArea>
-          <DialogFooter>
+          </div>
+          <DialogFooter className="pt-3">
             <Button variant="outline" onClick={() => setIsFormOpen(false)}>Отмена</Button>
             <Button onClick={handleSubmit}>Сохранить</Button>
           </DialogFooter>

@@ -358,6 +358,9 @@ function getRoleCode(user: any) {
     if (user.role?.id) {
         return getRoleKey(user.role.id);
     }
+    if (user.role_id) {
+        return getRoleKey(Number(user.role_id));
+    }
     return undefined;
 }
 
@@ -560,7 +563,7 @@ export default function DocumentsPage() {
     const fetchDocuments = async () => {
         setLoading(true)
         try {
-            const userRole = getRoleKey(user?.role_id);
+            const userRole = getRoleCode(user);
             const isSales = userRole === 'sales';
 
             // Sales users can only access documents via deal endpoint
@@ -846,7 +849,7 @@ export default function DocumentsPage() {
         }
     };
 
-    const isAdmin = user?.role_id === 50;
+    const isAdmin = getRoleCode(user) === 'system_admin';
 
     // ─── Load data on mount and when filters change ───────────────
 
@@ -877,7 +880,7 @@ export default function DocumentsPage() {
             if (!user) return;
 
             try {
-                const userRole = getRoleKey(user.role?.id);
+                const userRole = getRoleCode(user);
                 
                 // Load deals
                 const dealsFetchFn = userRole === 'sales' ? DealsAPI.list_my_deals : DealsAPI.list_deals;
@@ -905,7 +908,7 @@ export default function DocumentsPage() {
             if (!isCreateOpen || !user) return
             
             try {
-                const userRole = getRoleKey(user.role?.id);
+                const userRole = getRoleCode(user);
                 const fetchFn = userRole === 'sales' ? ClientAPI.listMyClients : ClientAPI.listClients;
                 const res = await fetchFn({ page: 1, size: 1000 });
                 const data = Array.isArray(res) ? res : (res as any)?.data || [];
@@ -929,7 +932,7 @@ export default function DocumentsPage() {
 
         setLoadingDeals(true)
         try {
-            const userRole = getRoleKey(user.role?.id);
+            const userRole = getRoleCode(user);
             const fetchFn = userRole === 'sales' ? DealsAPI.list_my_deals : DealsAPI.list_deals;
             
             const params = { 
@@ -1330,7 +1333,7 @@ export default function DocumentsPage() {
             </div>
 
             {/* Deal Filter for Sales Users */}
-            {(currentUser?.role?.code === 'sales' || currentUser?.role_id === 10) && (
+            {getRoleCode(currentUser) === 'sales' && (
                 <div className="mx-6 mb-6">
                     <div className="flex items-center gap-4">
                         <div className="flex-1 max-w-sm">

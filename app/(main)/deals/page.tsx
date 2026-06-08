@@ -120,9 +120,8 @@ export default function DealsPage() {
 
   // Check if user has elevated role (leadership, control, system_admin)
   const isElevatedRole = () => {
-    if (!user?.role) return false;
-    const roleId = user.role?.id;
-    return roleId === 40 || roleId === 30 || roleId === 50; // leadership, control, system_admin
+    const roleCode = getRoleCode(user);
+    return roleCode === 'leadership' || roleCode === 'control' || roleCode === 'system_admin';
   };
   const [clients, setClients] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -182,7 +181,19 @@ export default function DealsPage() {
     if (user.role?.id) {
       return getRoleFromId(user.role.id);
     }
+    if (user.role_id) {
+      return getRoleFromId(Number(user.role_id));
+    }
     return undefined;
+  };
+
+  const extractList = (res: any): any[] => {
+    if (Array.isArray(res)) return res;
+    if (Array.isArray(res?.items)) return res.items;
+    if (Array.isArray(res?.data)) return res.data;
+    if (Array.isArray(res?.data?.items)) return res.data.items;
+    if (Array.isArray(res?.data?.data)) return res.data.data;
+    return [];
   };
 
   // Fetch branches for elevated roles
@@ -211,8 +222,7 @@ export default function DealsPage() {
         const userData = await getMe();
         setUser(userData);
         // Use role.id and map it to role name like the sidebar does
-        const roleId = (userData as any)?.role?.id || 0;
-        const userRole = getRoleFromId(roleId);
+        const userRole = getRoleCode(userData);
         const hasWriteAccess = userData && hasPermission(userRole, ["deals:write"]);
         setCanWrite(hasWriteAccess);
       } catch (error) {
@@ -220,8 +230,7 @@ export default function DealsPage() {
         // Fallback to localStorage
         const localUser = getCurrentUser();
         setUser(localUser);
-        const roleId = (localUser as any)?.role?.id || 0;
-        const userRole = localUser ? getRoleFromId(roleId) : undefined;
+        const userRole = getRoleCode(localUser);
         setCanWrite(!!(localUser && hasPermission(userRole, ["deals:write"])));
       }
     };
@@ -270,11 +279,15 @@ export default function DealsPage() {
 
   // Initialize filter states from URL
   useEffect(() => {
+    setStatusFilter(searchParams.get('status') || 'all');
     setStatusGroupFilter(searchParams.get('status_group') || 'all');
+    setArchiveFilter((searchParams.get('archive') as ArchiveFilterValue) || 'active');
     setAmountMin(searchParams.get('amount_min') || '');
     setAmountMax(searchParams.get('amount_max') || '');
     setCurrencyFilter(searchParams.get('currency') || '');
     setClientFilter(searchParams.get('client_id') || '');
+    const branchId = Number(searchParams.get('branch_id') || 0);
+    setBranchFilter(branchId > 0 ? branchId : undefined);
     setSortBy(searchParams.get('sort_by') || 'created_at');
     setSortOrder((searchParams.get('order') as 'asc' | 'desc') || 'desc');
   }, [searchParams]);
@@ -291,6 +304,7 @@ export default function DealsPage() {
     if (amountMax) params.set('amount_max', amountMax);
     if (currencyFilter) params.set('currency', currencyFilter);
     if (clientFilter) params.set('client_id', clientFilter);
+    if (branchFilter) params.set('branch_id', String(branchFilter));
     params.set('sort_by', sortBy);
     params.set('order', sortOrder);
     router.push(`${pathname}?${params.toString()}`);
@@ -304,6 +318,7 @@ export default function DealsPage() {
     setAmountMax('');
     setCurrencyFilter('');
     setClientFilter('');
+    setBranchFilter(undefined);
     setSortBy('created_at');
     setSortOrder('desc');
     setSearchTerm('');
@@ -339,24 +354,24 @@ export default function DealsPage() {
 
       // Get current user data directly to ensure we have the latest role
       const currentUser = getCurrentUser();
-      const userRole = currentUser?.role || user?.role;
+      const userRole = getRoleCode(currentUser) || getRoleCode(user);
 
       console.log('User role check:', {
         currentUser,
-        currentUserRole: currentUser?.role,
+        currentUserRole: getRoleCode(currentUser),
         currentUserRoleId: currentUser?.role_id,
-        stateUserRole: user?.role,
+        stateUserRole: getRoleCode(user),
         stateUserId: user?.role_id,
         userRole
       });
 
-      // Only allow 'all' view for system_admin, leadership, and management roles explicitly
-      const effectiveView = (userRole === 'system_admin' || userRole === 'leadership' || userRole === 'management') ? 'all' : 'my';
+      // Backend allows the full deals endpoint for every non-sales role; sales must use /deals/my.
+      const effectiveView = userRole === 'sales' ? 'my' : 'all';
 
       console.log('fetchDeals called:', {
         userRole,
-        currentUserRole: currentUser?.role,
-        stateUserRole: user?.role,
+        currentUserRole: getRoleCode(currentUser),
+        stateUserRole: getRoleCode(user),
         effectiveView,
         endpoint: effectiveView === "all" ? '/deals' : '/deals/my'
       });
@@ -429,10 +444,13 @@ export default function DealsPage() {
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <PopoverContent
+          className="w-[--radix-popover-trigger-width] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl bg-white p-0"
+          align="start"
+        >
           <Command>
             <CommandInput placeholder={searchPlaceholder} />
-            <CommandList>
+            <CommandList className="max-h-[min(18rem,calc(100vh-8rem))] touch-pan-y overscroll-contain [-webkit-overflow-scrolling:touch]">
               <CommandEmpty>{emptyText}</CommandEmpty>
               <CommandGroup>
                 {options.map((option) => (
@@ -513,17 +531,17 @@ export default function DealsPage() {
         // Load clients (for dropdown)
         try {
           // Apply same safety fix: default to listMyClients for sales users or undefined roles
-          const userRole = userData?.role;
-          const isSalesRole = !userRole || userRole?.code === 'sales' || userData?.role_id === 10;
+          const userRole = getRoleCode(userData);
+          const isSalesRole = userRole === 'sales';
           
           console.log('Loading clients for user:', { userRole, isSalesRole });
           
           const res = isSalesRole
-            ? await ClientAPI.listMyClients()
-            : await ClientAPI.listClients();
+            ? await ClientAPI.listMyClients({ page: 1, size: 1000 })
+            : await ClientAPI.listClients({ page: 1, size: 1000 });
           console.log('Clients API response:', res);
-          const clientsData = Array.isArray(res) ? res : (res as any)?.data || [];
-          setClients(Array.isArray(clientsData) ? clientsData : []);
+          const clientsData = extractList(res);
+          setClients(clientsData);
           console.log('Clients loaded:', clientsData.length);
         } catch (err: any) {
           console.error("Error loading clients:", err);
@@ -536,10 +554,10 @@ export default function DealsPage() {
           // Fallback to listMyClients if listClients fails
           try {
             console.log('Falling back to listMyClients');
-            const res = await ClientAPI.listMyClients();
+            const res = await ClientAPI.listMyClients({ page: 1, size: 1000 });
             console.log('Fallback clients API response:', res);
-            const clientsData = Array.isArray(res) ? res : (res as any)?.data || [];
-            setClients(Array.isArray(clientsData) ? clientsData : []);
+            const clientsData = extractList(res);
+            setClients(clientsData);
             console.log('Clients loaded via fallback:', clientsData.length);
           } catch (fallbackErr: any) {
             console.error("Fallback also failed:", fallbackErr);
@@ -564,15 +582,16 @@ export default function DealsPage() {
           
           // Use list_my_leads for non-system_admin/leadership users, with fallback for 403 errors
           let leadsRes;
-          if (currentUser?.role?.code === 'system_admin' || currentUser?.role?.code === 'leadership' || currentUser?.role_id === 50 || currentUser?.role_id === 40) {
+          const roleCode = getRoleCode(currentUser) || getRoleCode(userData);
+          if (roleCode === 'system_admin' || roleCode === 'leadership') {
             try {
               console.log('Attempting to use list_leads for system_admin/leadership user');
-              leadsRes = await list_leads();
+              leadsRes = await list_leads(undefined, { page: 1, size: 1000, status_group: "active" });
               console.log('list_leads response:', leadsRes);
             } catch (leadsError: any) {
               if (leadsError?.response?.status === 403) {
                 console.log('list_leads returned 403, falling back to list_my_leads for restricted user');
-                leadsRes = await list_my_leads();
+                leadsRes = await list_my_leads(undefined, { page: 1, size: 1000, status_group: "active" });
                 console.log('Fallback list_my_leads response:', leadsRes);
               } else {
                 throw leadsError;
@@ -580,16 +599,16 @@ export default function DealsPage() {
             }
           } else {
             console.log('Using list_my_leads for non-system_admin/leadership user (sales/restricted)');
-            leadsRes = await list_my_leads();
+            leadsRes = await list_my_leads(undefined, { page: 1, size: 1000, status_group: "active" });
             console.log('list_my_leads response:', leadsRes);
           }
             
-          const leadsData = leadsRes?.data || leadsRes || [];
+          const leadsData = extractList(leadsRes);
           console.log('Processed leads data:', leadsData);
           console.log('Leads data type:', Array.isArray(leadsData) ? 'array' : typeof leadsData);
           console.log('Leads data length:', leadsData.length);
           
-          setLeads(Array.isArray(leadsData) ? leadsData : []);
+          setLeads(leadsData);
           console.log('Leads loaded:', leadsData.length, 'leads');
           console.log('=== DEALS PAGE: Leads load completed ===');
         } catch (err) {
@@ -597,13 +616,14 @@ export default function DealsPage() {
         }
 
         // Load users (for responsible) - only for system_admin/leadership
-        if (userData && (userData.role?.code === "system_admin" || userData.role?.code === "leadership" || userData.role_id === 50 || userData.role_id === 40)) {
+        const metaRoleCode = getRoleCode(userData);
+        if (userData && (metaRoleCode === "system_admin" || metaRoleCode === "leadership")) {
           try {
             const { listUsers } = await import("@/src/api/users.api");
             const res = await listUsers();
             console.log('Users API response:', res);
-            const usersData = Array.isArray(res) ? res : (res as any)?.data || [];
-            setUsers(Array.isArray(usersData) ? usersData : []);
+            const usersData = extractList(res);
+            setUsers(usersData);
             console.log('Users loaded:', usersData.length);
           } catch (err: any) {
             console.error("Error loading users:", err);
@@ -661,12 +681,12 @@ export default function DealsPage() {
     if (user) {
       fetchDeals();
     }
-  }, [currentPage, statusFilter, statusGroupFilter, archiveFilter, amountMin, amountMax, currencyFilter, clientFilter, sortBy, sortOrder, user]);
+  }, [currentPage, statusFilter, statusGroupFilter, archiveFilter, amountMin, amountMax, currencyFilter, clientFilter, branchFilter, sortBy, sortOrder, user]);
 
   // Update URL when filters change
   useEffect(() => {
     updateURL();
-  }, [statusFilter, statusGroupFilter, archiveFilter, amountMin, amountMax, currencyFilter, clientFilter, sortBy, sortOrder]);
+  }, [statusFilter, statusGroupFilter, archiveFilter, amountMin, amountMax, currencyFilter, clientFilter, branchFilter, sortBy, sortOrder]);
 
   // Debug state changes
   useEffect(() => {
@@ -716,17 +736,18 @@ export default function DealsPage() {
       
       // Use list_my_leads for non-system_admin/leadership users to avoid 403 errors
       let leadsRes;
-      if (currentUser?.role?.code === 'system_admin' || currentUser?.role?.code === 'leadership' || currentUser?.role_id === 50 || currentUser?.role_id === 40) {
+      const roleCode = getRoleCode(currentUser) || getRoleCode(user);
+      if (roleCode === 'system_admin' || roleCode === 'leadership') {
         console.log('MANUAL REFRESH: Using list_leads for system_admin/leadership user');
-        leadsRes = await list_leads();
+        leadsRes = await list_leads(undefined, { page: 1, size: 1000, status_group: "active" });
       } else {
         console.log('MANUAL REFRESH: Using list_my_leads for non-system_admin/leadership user (sales/restricted)');
-        leadsRes = await list_my_leads();
+        leadsRes = await list_my_leads(undefined, { page: 1, size: 1000, status_group: "active" });
       }
         
-      const leadsData = leadsRes?.data || leadsRes || [];
+      const leadsData = extractList(leadsRes);
       console.log('Manual refresh - leads loaded:', leadsData.length);
-      setLeads(Array.isArray(leadsData) ? leadsData : []);
+      setLeads(leadsData);
     } catch (err) {
       console.error("Manual refresh error:", err);
     }
@@ -816,7 +837,7 @@ export default function DealsPage() {
     }
   };
 
-  const isAdmin = user?.role_id === 50;
+  const isAdmin = getRoleCode(user) === 'system_admin';
 
   // Get status badge
   const getStatusBadge = (status: string) => {
@@ -1026,11 +1047,12 @@ export default function DealsPage() {
     try {
       const userData = getCurrentUser();
       if (userData) {
-        const res = userData.role?.code === "system_admin" || userData.role?.code === "leadership" || userData.role_id === 50 || userData.role_id === 40
-          ? await ClientAPI.listClients()
-          : await ClientAPI.listMyClients();
-        const clientsData = Array.isArray(res) ? res : (res as any)?.data || [];
-        setClients(Array.isArray(clientsData) ? clientsData : []);
+        const roleCode = getRoleCode(userData);
+        const res = roleCode === "system_admin" || roleCode === "leadership"
+          ? await ClientAPI.listClients({ page: 1, size: 1000 })
+          : await ClientAPI.listMyClients({ page: 1, size: 1000 });
+        const clientsData = extractList(res);
+        setClients(clientsData);
       }
       toast.success("Данные обновлены");
     } catch (err) {
@@ -1632,14 +1654,14 @@ export default function DealsPage() {
 
       {/* Create Deal Dialog */}
       < Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-3xl max-h-[calc(100dvh-1rem)] overflow-y-auto touch-pan-y p-4 sm:p-6 [-webkit-overflow-scrolling:touch]">
           <DialogHeader>
             <DialogTitle>Создать новую сделку</DialogTitle>
             <DialogDescription>
               Заполните информацию о новой сделке
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="lead_id">Лид <span className="text-red-500">*</span></Label>
               <ComboboxSelect
@@ -1783,14 +1805,14 @@ export default function DealsPage() {
 
       {/* Edit Deal Dialog */}
       < Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen} >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-3xl max-h-[calc(100dvh-1rem)] overflow-y-auto touch-pan-y p-4 sm:p-6 [-webkit-overflow-scrolling:touch]">
           <DialogHeader>
             <DialogTitle>Редактировать сделку #{currentDeal?.id}</DialogTitle>
             <DialogDescription>
               Обновите информацию о сделке
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="edit_lead_id">Лид</Label>
               <ComboboxSelect

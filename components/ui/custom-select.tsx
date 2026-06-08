@@ -21,6 +21,8 @@ export interface CustomSelectProps {
   dropdownWidth?: number;
   renderValue?: (option: CustomSelectOption) => React.ReactNode;
   renderOption?: (option: CustomSelectOption) => React.ReactNode;
+  listClassName?: string;
+  optionClassName?: string;
 }
 
 export function CustomSelect({
@@ -34,6 +36,8 @@ export function CustomSelect({
   dropdownWidth,
   renderValue,
   renderOption,
+  listClassName,
+  optionClassName,
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [highlightedIndex, setHighlightedIndex] = React.useState(0);
@@ -45,18 +49,39 @@ export function CustomSelect({
 
   const selectedOption = options.find((opt) => opt.value === value);
 
-  // Calculate dropdown position when opening
-  React.useEffect(() => {
-    if (isOpen && triggerRef.current) {
+  const updateDropdownPosition = React.useCallback(() => {
+    if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
+      const width = dropdownWidth || rect.width;
+      const viewportLeft = window.scrollX + 8;
+      const viewportRight = window.scrollX + window.innerWidth - width - 8;
       setDropdownPosition({
         top: rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX,
+        left: Math.max(viewportLeft, Math.min(rect.left + window.scrollX, viewportRight)),
         width: rect.width,
       });
-    } else {
-      setDropdownPosition(null);
     }
+  }, [dropdownWidth]);
+
+  // Calculate dropdown position when opening and keep it attached while scrolling.
+  React.useEffect(() => {
+    if (!isOpen) {
+      setDropdownPosition(null);
+      return;
+    }
+
+    updateDropdownPosition();
+    window.addEventListener("resize", updateDropdownPosition);
+    window.addEventListener("scroll", updateDropdownPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateDropdownPosition);
+      window.removeEventListener("scroll", updateDropdownPosition, true);
+    };
+  }, [isOpen, updateDropdownPosition]);
+
+  React.useEffect(() => {
+    if (isOpen) updateDropdownPosition();
   }, [isOpen]);
 
   // Close dropdown when clicking outside
@@ -217,7 +242,13 @@ export function CustomSelect({
           onMouseDown={(e) => e.stopPropagation()}
           onWheelCapture={handleDropdownWheel}
         >
-          <div ref={listRef} className="max-h-96 overflow-y-auto overscroll-contain p-1">
+          <div
+            ref={listRef}
+            className={cn(
+              "max-h-[min(22rem,calc(100vh-8rem))] overflow-y-auto overscroll-contain p-1 touch-pan-y [-webkit-overflow-scrolling:touch]",
+              listClassName,
+            )}
+          >
             {options.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
                 Нет доступных опций
@@ -235,6 +266,7 @@ export function CustomSelect({
                     highlightedIndex === index &&
                       "bg-accent text-accent-foreground",
                     option.value === value && "font-medium",
+                    optionClassName,
                   )}
                   role="option"
                   aria-selected={option.value === value}

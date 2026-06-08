@@ -85,7 +85,6 @@ import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import { getMe } from "@/src/api/auth.api";
 import type { Lead } from "@/lib/types";
 import * as leadsApi from "@/src/api/leads.api";
-import * as dealsApi from "@/src/api/deals.api";
 import * as ClientAPI from "@/src/api/clients.api";
 import * as BranchesAPI from "@/src/api/branches.api";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -171,9 +170,8 @@ export default function LeadsPage() {
 
   // Check if user has elevated role (leadership, control, system_admin)
   const isElevatedRole = () => {
-    if (!user?.role) return false;
-    const roleId = user.role?.id;
-    return roleId === 40 || roleId === 30 || roleId === 50; // leadership, control, system_admin
+    const roleCode = getRoleCode(user);
+    return roleCode === 'leadership' || roleCode === 'control' || roleCode === 'system_admin';
   };
 
   // Helper function to map role_id to role name (same as sidebar)
@@ -193,8 +191,11 @@ export default function LeadsPage() {
     if (!user) return undefined;
     if (typeof user.role === 'string') return user.role;
     if (user.role?.code) return user.role.code;
+    if (user.role?.id) {
+      return getRoleFromId(Number(user.role.id));
+    }
     if (user.role_id) {
-      return getRoleFromId(user.role_id);
+      return getRoleFromId(Number(user.role_id));
     }
     return undefined;
   };
@@ -322,8 +323,7 @@ export default function LeadsPage() {
       try {
         const userData = await getMe();
         setUser(userData);
-        // Use role.id and map it to role name like the sidebar does
-        const userRole = getRoleFromId(userData.role.id);
+        const userRole = getRoleCode(userData);
         const hasWriteAccess = userData && hasPermission(userRole, ["leads:write"]);
         setCanWrite(hasWriteAccess);
       } catch (error) {
@@ -331,14 +331,7 @@ export default function LeadsPage() {
         // Fallback to localStorage
         const localUser = getCurrentUser();
         setUser(localUser);
-        // Handle role as either object with id or string
-        let roleId = 0;
-        if (localUser?.role) {
-          if (typeof localUser.role === 'object' && 'id' in localUser.role) {
-            roleId = (localUser.role as any).id;
-          }
-        }
-        const userRole = localUser ? getRoleFromId(roleId || 0) : undefined;
+        const userRole = getRoleCode(localUser);
         setCanWrite(!!(localUser && hasPermission(userRole, ["leads:write"])));
       }
     };
@@ -348,11 +341,7 @@ export default function LeadsPage() {
 
   // Force sales users to use "my" view - immediate check
   useEffect(() => {
-    let roleId = 0;
-    if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
-      roleId = (user.role as any).id;
-    }
-    const userRole = user ? getRoleFromId(roleId || 0) : undefined;
+    const userRole = getRoleCode(user);
     if (userRole === 'sales' && view === 'all') {
       setView('my');
     }
@@ -361,11 +350,7 @@ export default function LeadsPage() {
   // Additional safety check - force sales users immediately on mount
   useEffect(() => {
     const currentUser = getCurrentUser();
-    let roleId = 0;
-    if (currentUser?.role && typeof currentUser.role === 'object' && 'id' in currentUser.role) {
-      roleId = (currentUser.role as any).id;
-    }
-    const userRole = currentUser ? getRoleFromId(roleId || 0) : undefined;
+    const userRole = getRoleCode(currentUser);
     if (userRole === 'sales') {
       setView('my');
     }
@@ -384,6 +369,8 @@ export default function LeadsPage() {
   // Initialize filter states from URL
   useEffect(() => {
     setStatusGroupFilter(searchParams.get('status_group') || 'all');
+    const branchId = Number(searchParams.get('branch_id') || 0);
+    setBranchFilter(branchId > 0 ? branchId : undefined);
     setSortBy(searchParams.get('sort_by') || 'created_at');
     setSortOrder((searchParams.get('order') as 'asc' | 'desc') || 'desc');
   }, [searchParams]);
@@ -395,6 +382,7 @@ export default function LeadsPage() {
     if (searchTerm) params.set('q', searchTerm);
     if (statusGroupFilter !== 'all') params.set('status_group', statusGroupFilter);
     if (archiveFilter !== 'active') params.set('archive', archiveFilter);
+    if (branchFilter) params.set('branch_id', String(branchFilter));
     params.set('sort_by', sortBy);
     params.set('order', sortOrder);
     router.push(`${pathname}?${params.toString()}`);
@@ -406,6 +394,7 @@ export default function LeadsPage() {
     setSortBy('created_at');
     setSortOrder('desc');
     setSearchTerm('');
+    setBranchFilter(undefined);
     setArchiveFilter('active');
     router.push(pathname);
   };
@@ -424,11 +413,7 @@ export default function LeadsPage() {
     setIsLoading(true);
     try {
       // Default to "my" view only for sales users
-      let roleId = 0;
-      if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
-        roleId = (user.role as any).id;
-      }
-      const userRole = user ? getRoleFromId(roleId || 0) : undefined;
+      const userRole = getRoleCode(user);
       const shouldUseMyView = view === "my" || userRole === 'sales';
       const fetchFn = shouldUseMyView ? leadsApi.list_my_leads : leadsApi.list_leads;
       const params: any = { page: currentPage, size: limit };
@@ -460,7 +445,7 @@ export default function LeadsPage() {
     } catch (err: any) {
       console.log('Error in fetchLeads:', err);
       // If we get a 403 error, always switch to "my" view
-      if (err?.response?.status === 403) {
+      if (err?.response?.status === 403 && getRoleCode(user) === 'sales') {
         console.log('403 error detected, switching to "my" leads view...');
         setView('my');
         return; // The useEffect will trigger fetchLeads again with the new view
@@ -473,11 +458,7 @@ export default function LeadsPage() {
 
   const fetchUsers = async () => {
     // Sales users typically don't need to see all users for assignment
-    let roleId = 0;
-    if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
-      roleId = (user.role as any).id;
-    }
-    const userRole = user ? getRoleFromId(roleId || 0) : undefined;
+    const userRole = getRoleCode(user);
     if (userRole === 'sales') {
       setUsers([]);
       return;
@@ -501,11 +482,7 @@ export default function LeadsPage() {
 
   const fetchClients = async () => {
     try {
-      let roleId = 0;
-      if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
-        roleId = (user.role as any).id;
-      }
-      const userRole = user ? getRoleFromId(roleId || 0) : undefined;
+      const userRole = getRoleCode(user);
       const fetchFn = userRole === 'sales' ? ClientAPI.listMyClients : ClientAPI.listClients;
       const res = await fetchFn({ page: 1, size: 100 });
       const data = Array.isArray(res) ? res : (res as any)?.data || [];
@@ -712,33 +689,21 @@ export default function LeadsPage() {
         // Continue with default if fetch fails
       }
 
-      const dealPayload = {
-        lead_id: selectedLead.id,
-        owner_id: selectedLead.owner_id,
+      const amount = Number(convertLeadData.amount);
+      if (!amount || amount <= 0) {
+        alert("Введите сумму больше 0");
+        return;
+      }
+
+      await leadsApi.convert_lead_to_deal({
         client_id: clientId,
         client_type: clientType,
-        amount: Number(convertLeadData.amount) || 0,
+        amount,
         currency: convertLeadData.currency || "KZT",
-        status: 'new',
-      };
-      await dealsApi.create_deal(dealPayload);
-      
-      // Try to delete the lead, but don't fail if it doesn't work
-      let leadDeleted = false;
-      try {
-        await leadsApi.delete_lead(undefined, { id: selectedLead.id });
-        leadDeleted = true;
-      } catch (deleteErr: any) {
-        console.warn("Failed to delete lead after conversion:", deleteErr);
-        // Continue anyway - the deal was created successfully
-      }
-      
+      } as any, { id: selectedLead.id });
+
       fetchLeads();
-      if (leadDeleted) {
-        alert('Лид успешно конвертирован в сделку!');
-      } else {
-        alert('Сделка создана успешно! (Лид не был удален, но это не влияет на результат)');
-      }
+      alert('Лид успешно конвертирован в сделку!');
     } catch (err: any) {
       console.error("Ошибка конвертации лида:", err);
       alert(`Ошибка конвертации: ${err?.response?.data?.message || err?.message || 'Unknown error'}`);
@@ -867,7 +832,7 @@ export default function LeadsPage() {
                   Новый лид
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="w-[calc(100vw-1rem)] max-w-lg max-h-[calc(100dvh-1rem)] overflow-y-auto touch-pan-y p-4 sm:p-6 [-webkit-overflow-scrolling:touch]">
                 <DialogHeader>
                   <DialogTitle>Создать новый лид</DialogTitle>
                 </DialogHeader>
@@ -971,14 +936,7 @@ export default function LeadsPage() {
                   </div>
                 </div>
                 {/* View selector - only for non-sales users */}
-                {(() => {
-                  let roleId = 0;
-                  if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
-                    roleId = (user.role as any).id;
-                  }
-                  const userRole = getRoleFromId(roleId || 0);
-                  return user && userRole !== 'sales';
-                })() && (
+                {user && getRoleCode(user) !== 'sales' && (
                   <div className="w-full sm:w-48 overflow-visible">
                     <CustomSelect
                       value={view}

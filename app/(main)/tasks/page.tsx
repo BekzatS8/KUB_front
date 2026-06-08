@@ -137,6 +137,9 @@ function getRoleCode(user: any) {
   if (user.role?.id) {
     return getRoleFromId(user.role.id);
   }
+  if (user.role_id) {
+    return getRoleFromId(Number(user.role_id));
+  }
   return undefined;
 }
 
@@ -283,9 +286,8 @@ export default function TasksPage() {
 
   // Check if user has elevated role (leadership, control, system_admin)
   const isElevatedRole = () => {
-    if (!user?.role) return false;
-    const roleId = user.role?.id;
-    return roleId === 40 || roleId === 30 || roleId === 50; // leadership, control, system_admin
+    const roleCode = getRoleCode(user) || getRoleCode(currentUser);
+    return roleCode === 'leadership' || roleCode === 'control' || roleCode === 'system_admin';
   };
 
   // Dialog states
@@ -333,6 +335,8 @@ export default function TasksPage() {
     setCreatorIdFilter(searchParams.get('creator_id') || '');
     setEntityIdFilter(searchParams.get('entity_id') || '');
     setEntityTypeFilter(searchParams.get('entity_type') || '');
+    const branchId = Number(searchParams.get('branch_id') || 0);
+    setBranchFilter(branchId > 0 ? branchId : undefined);
     setSortBy(searchParams.get('sort_by') || 'created_at');
     setSortOrder((searchParams.get('order') as 'asc' | 'desc') || 'desc');
   }, [searchParams]);
@@ -349,6 +353,7 @@ export default function TasksPage() {
     if (entityIdFilter) params.set('entity_id', entityIdFilter);
     if (entityTypeFilter) params.set('entity_type', entityTypeFilter);
     if (archiveFilter !== 'active') params.set('archive', archiveFilter);
+    if (branchFilter) params.set('branch_id', String(branchFilter));
     params.set('sort_by', sortBy);
     params.set('order', sortOrder);
     router.push(`${pathname}?${params.toString()}`);
@@ -363,6 +368,7 @@ export default function TasksPage() {
     setCreatorIdFilter('');
     setEntityIdFilter('');
     setEntityTypeFilter('');
+    setBranchFilter(undefined);
     setSortBy('created_at');
     setSortOrder('desc');
     setArchiveFilter('active');
@@ -385,8 +391,7 @@ export default function TasksPage() {
         const userData = await getMe();
         setUser(userData);
         // Use role.id and map it to role name like the sidebar does
-        const roleId = (userData as any)?.role?.id || (userData as any)?.role_id || 0;
-        const userRole = getRoleFromId(roleId);
+        const userRole = getRoleCode(userData);
         const hasWriteAccess = userData && hasPermission(userRole, ["tasks:write"]);
         setCanWrite(hasWriteAccess);
       } catch (error) {
@@ -394,8 +399,7 @@ export default function TasksPage() {
         // Fallback to localStorage
         const localUser = getCurrentUser();
         setUser(localUser);
-        const roleId = (localUser as any)?.role?.id || (localUser as any)?.role_id || 0;
-        const userRole = localUser ? getRoleFromId(roleId) : undefined;
+        const userRole = getRoleCode(localUser);
         setCanWrite(!!(localUser && hasPermission(userRole, ["tasks:write"])));
       }
     };
@@ -442,10 +446,11 @@ export default function TasksPage() {
 
       // Prevent sales users from accessing full tasks list
       // Note: /tasks/my endpoint returns 400, so use /tasks with role-based filtering
-      const effectiveView = currentUser?.role?.code === 'sales' ? 'all' : 'all';
+      const roleCode = getRoleCode(currentUser) || getRoleCode(user);
+      const effectiveView = roleCode === 'sales' ? 'all' : 'all';
 
       console.log('fetchTasks called:', {
-        userRole: currentUser?.role,
+        userRole: roleCode,
         effectiveView,
         endpoint: '/tasks', // Always use /tasks for now since /tasks/my returns 400
         params
@@ -541,7 +546,7 @@ export default function TasksPage() {
     }
   };
 
-  const isAdmin = user?.role_id === 50;
+  const isAdmin = getRoleCode(user) === 'system_admin' || getRoleCode(currentUser) === 'system_admin';
 
   const stats = {
     total: tasks.length,
@@ -711,8 +716,8 @@ export default function TasksPage() {
             if (storedUser) {
               try {
                 const parsedUser = JSON.parse(storedUser);
-                userRole = parsedUser.role || userRole;
-                roleId = parsedUser.role_id || roleId;
+                userRole = getRoleCode(parsedUser) || userRole;
+                roleId = parsedUser.role?.id || parsedUser.role_id || roleId;
               } catch (e) {
                 console.log("Failed to parse stored user, using default role");
               }
@@ -782,7 +787,8 @@ export default function TasksPage() {
         try {
           console.log('Loading deals for user role:', userData?.role);
           const { list_deals, list_my_deals } = await import("@/src/api/deals.api")
-          const res = userData?.role?.code === 'sales' 
+          const roleCode = getRoleCode(userData);
+          const res = roleCode === 'sales'
             ? await list_my_deals() 
             : await list_deals();
           console.log('Deals API response:', res);
@@ -798,7 +804,8 @@ export default function TasksPage() {
         try {
           console.log('Loading leads for user role:', userData?.role);
           const { list_leads, list_my_leads } = await import("@/src/api/leads.api")
-          const res = userData?.role?.code === 'sales' 
+          const roleCode = getRoleCode(userData);
+          const res = roleCode === 'sales'
             ? await list_my_leads() 
             : await list_leads();
           console.log('Leads API response:', res);
