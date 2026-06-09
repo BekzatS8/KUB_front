@@ -91,7 +91,7 @@ import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { ru } from "date-fns/locale"
 import { toast } from "sonner"
-import { getCurrentUser, getCurrentCompany, hasPermission } from "@/lib/auth"
+import { getCurrentUser, getCurrentCompany, hasPermission, getRoleCode } from "@/lib/auth"
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
 import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import { getMe } from "@/src/api/auth.api"
@@ -116,32 +116,6 @@ import * as BranchesAPI from "@/src/api/branches.api"
 type TaskStatus = "new" | "in_progress" | "done" | "cancelled"
 type TaskPriority = "low" | "normal" | "high" | "urgent"
 type EntityType = "deal" | "lead"
-
-// Helper function to map role_id to role name (same as sidebar)
-function getRoleFromId(roleId: number): string {
-  const roleMapping: Record<number, string> = {
-    50: 'system_admin',
-    40: 'leadership',
-    30: 'control',
-    20: 'operations',
-    10: 'sales'
-  }
-  return roleMapping[roleId] || 'user'
-}
-
-// Helper function to get role code from user data
-function getRoleCode(user: any) {
-  if (!user) return undefined;
-  if (typeof user.role === 'string') return user.role;
-  if (user.role?.code) return user.role.code;
-  if (user.role?.id) {
-    return getRoleFromId(user.role.id);
-  }
-  if (user.role_id) {
-    return getRoleFromId(Number(user.role_id));
-  }
-  return undefined;
-}
 
 const statusTransitions: Record<TaskStatus, TaskStatus[]> = {
   new: ["in_progress", "cancelled"],
@@ -792,7 +766,7 @@ export default function TasksPage() {
             ? await list_my_deals() 
             : await list_deals();
           console.log('Deals API response:', res);
-          const dealsData = res?.data || (Array.isArray(res) ? res : [])
+          const dealsData = Array.isArray(res) ? res : (res?.items || res?.data || [])
           console.log('Processed dealsData:', dealsData);
           setDeals(Array.isArray(dealsData) ? dealsData : [])
         } catch (err) {
@@ -809,7 +783,7 @@ export default function TasksPage() {
             ? await list_my_leads() 
             : await list_leads();
           console.log('Leads API response:', res);
-          const leadsData = res?.data || (Array.isArray(res) ? res : [])
+          const leadsData = Array.isArray(res) ? res : (res?.items || res?.data || [])
           console.log('Processed leadsData:', leadsData);
           setLeads(Array.isArray(leadsData) ? leadsData : [])
         } catch (err) {

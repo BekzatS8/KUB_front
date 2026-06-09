@@ -68,7 +68,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
-import { getCurrentUser, getCurrentCompany, hasPermission } from "@/lib/auth";
+import { getCurrentUser, getCurrentCompany, hasPermission, getRoleCode } from "@/lib/auth";
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
 import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import { getMe } from "@/src/api/auth.api";
@@ -160,32 +160,6 @@ export default function DealsPage() {
     currency: "KZT",
     status: "new",
   });
-
-  // Helper function to map role_id to role name (same as sidebar)
-  function getRoleFromId(roleId: number): string {
-    const roleMapping: Record<number, string> = {
-      50: 'system_admin',
-      40: 'leadership',
-      30: 'control',
-      20: 'operations',
-      10: 'sales'
-    }
-    return roleMapping[roleId] || 'user'
-  }
-
-  // Helper function to get role code from user data
-  const getRoleCode = (user: any) => {
-    if (!user) return undefined;
-    if (typeof user.role === 'string') return user.role;
-    if (user.role?.code) return user.role.code;
-    if (user.role?.id) {
-      return getRoleFromId(user.role.id);
-    }
-    if (user.role_id) {
-      return getRoleFromId(Number(user.role_id));
-    }
-    return undefined;
-  };
 
   const extractList = (res: any): any[] => {
     if (Array.isArray(res)) return res;

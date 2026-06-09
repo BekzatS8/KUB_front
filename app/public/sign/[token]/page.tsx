@@ -10,7 +10,6 @@ import {
     Loader2,
     Eraser,
     AlertTriangle,
-    Bot,
     Download,
     Shield,
     Clock,
@@ -21,7 +20,6 @@ import {
     Mail,
     Info,
     ChevronDown,
-    Send,
     Sparkles,
     Lock,
     Eye,
@@ -539,24 +537,6 @@ export default function PublicSignPage() {
                                     Менеджер получит уведомление.
                                 </p>
 
-                                {docData?.has_telegram_bot && (
-                                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 max-w-md mx-auto mb-6">
-                                        <div className="flex items-start gap-3">
-                                            <Bot className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
-                                            <div className="text-left">
-                                                <p className="text-sm font-medium text-blue-900">
-                                                    Уведомление через Telegram
-                                                </p>
-                                                <p className="text-xs text-blue-700 mt-1 leading-relaxed">
-                                                    Менеджер получит уведомление о подписании в
-                                                    Telegram-бот. Если у вас подключен бот — вы тоже
-                                                    получите подтверждение.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
                                 <p className="text-xs text-gray-400">
                                     Вы можете закрыть эту страницу.
                                 </p>
@@ -912,18 +892,6 @@ export default function PublicSignPage() {
                                         )}
                                     </button>
 
-                                    {/* Telegram bot hint */}
-                                    {docData.has_telegram_bot && (
-                                        <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3.5">
-                                            <div className="flex items-start gap-2.5">
-                                                <Send className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
-                                                <p className="text-xs text-blue-600 leading-relaxed">
-                                                    После подписания уведомление будет автоматически
-                                                    отправлено менеджеру через Telegram-бот.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         )}
@@ -961,8 +929,7 @@ export default function PublicSignPage() {
                                                 Уведомления
                                             </h4>
                                             <p className="text-xs text-gray-600 leading-relaxed">
-                                                После подписания документа менеджер (и клиент, если подключен
-                                                Telegram-бот) получит мгновенное уведомление о статусе подписания.
+                                                После подписания документа менеджер получит мгновенное уведомление о статусе подписания.
                                             </p>
                                         </div>
                                     </div>

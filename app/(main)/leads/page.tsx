@@ -79,7 +79,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
-import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { getCurrentUser, hasPermission, getRoleCode } from "@/lib/auth";
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
 import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import { getMe } from "@/src/api/auth.api";
@@ -126,11 +126,7 @@ export default function LeadsPage() {
   const [view, setView] = useState<"all" | "my">(() => {
     // Default to "my" only for sales users, others get "all"
     const user = getCurrentUser();
-    let roleId = 0;
-    if (user?.role && typeof user.role === 'object' && 'id' in user.role) {
-      roleId = (user.role as any).id;
-    }
-    const userRole = user ? getRoleFromId(roleId || 0) : undefined;
+    const userRole = user ? getRoleCode(user) : undefined;
     return userRole === 'sales' ? 'my' : 'all';
   });
 
@@ -185,20 +181,6 @@ export default function LeadsPage() {
     }
     return roleMapping[roleId] || 'user'
   }
-
-  // Helper function to get role code from user data
-  const getRoleCode = (user: any) => {
-    if (!user) return undefined;
-    if (typeof user.role === 'string') return user.role;
-    if (user.role?.code) return user.role.code;
-    if (user.role?.id) {
-      return getRoleFromId(Number(user.role.id));
-    }
-    if (user.role_id) {
-      return getRoleFromId(Number(user.role_id));
-    }
-    return undefined;
-  };
 
   const getUserDisplayName = (profile: any, fallbackId?: number) => {
     if (!profile) return fallbackId ? `ID: ${fallbackId}` : "Не назначен";
@@ -485,7 +467,7 @@ export default function LeadsPage() {
       const userRole = getRoleCode(user);
       const fetchFn = userRole === 'sales' ? ClientAPI.listMyClients : ClientAPI.listClients;
       const res = await fetchFn({ page: 1, size: 100 });
-      const data = Array.isArray(res) ? res : (res as any)?.data || [];
+      const data = Array.isArray(res) ? res : ((res as any)?.items || (res as any)?.data || []);
       setClientsList(data);
     } catch (err: any) {
       console.error("Failed to fetch clients:", err);

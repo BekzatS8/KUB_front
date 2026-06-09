@@ -25,7 +25,6 @@ import {
   Building2,
   UserCheck,
   Database,
-  Shield,
   LogOut,
   Send,
   MessageCircle,
@@ -90,12 +89,6 @@ const sidebarItems: Record<string, SidebarItem[]> = {
       href: "/whatsapp",
       icon: MessageCircle,
       permissions: [],
-    },
-    {
-      title: "Роли",
-      href: "/roles",
-      icon: Shield,
-      permissions: ["users:write"],
     },
     {
       title: "Филиалы",
@@ -306,8 +299,11 @@ function getRoleFromId(roleId: number): string {
 }
 
 function normalizeRoleCode(roleCode: string): string {
+  roleCode = String(roleCode || '').trim().toLowerCase()
   // Map backend role codes to sidebar keys
   const codeMapping: Record<string, string> = {
+    'admin': 'system_admin',
+    'admin_staff': 'system_admin',
     'system_admin': 'system_admin',
     'leadership': 'leadership',
     'management': 'leadership', // legacy_name mapping

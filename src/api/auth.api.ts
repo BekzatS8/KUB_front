@@ -5,6 +5,12 @@ import type * as Models from '../models/Auth.model'
 
 // Функция для преобразования данных пользователя с сервера в формат приложения
 function transformUserFromServer(serverUser: any): any {
+  const role = serverUser.role || { id: 0, code: '', legacy_name: '' }
+  const normalizedRole = {
+    ...role,
+    code: normalizeRoleCode(role.code || getRoleFromId(role.id)),
+  }
+
   return {
     id: serverUser.id,
     first_name: serverUser.first_name,
@@ -14,14 +20,14 @@ function transformUserFromServer(serverUser: any): any {
     email: serverUser.email,
     phone: serverUser.phone,
     position: serverUser.position,
-    role: serverUser.role || { id: 0, code: '', legacy_name: '' },
+    role: normalizedRole,
     branch: serverUser.branch || null,
     is_active: serverUser.is_active,
     is_verified: serverUser.is_verified,
     telegram: serverUser.telegram || { chat_id: 0, notify_tasks: false },
     legacy: serverUser.legacy || { company_name: '', bin_iin: '' },
     // Legacy fields for backward compatibility
-    role_id: serverUser.role?.id,
+    role_id: normalizedRole.id,
     company_name: serverUser.legacy?.company_name,
     bin_iin: serverUser.legacy?.bin_iin,
     telegram_chat_id: serverUser.telegram?.chat_id,
@@ -44,7 +50,10 @@ function getRoleFromId(roleId: number): string {
 
 // Функция для нормализации role codes
 function normalizeRoleCode(roleCode: string): string {
+  roleCode = String(roleCode || '').trim().toLowerCase()
   const codeMapping: Record<string, string> = {
+    'admin': 'system_admin',
+    'admin_staff': 'system_admin',
     'system_admin': 'system_admin',
     'leadership': 'leadership',
     'management': 'leadership',

@@ -101,7 +101,7 @@ import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { ru } from "date-fns/locale"
 import { toast } from "sonner"
-import { getCurrentUser, getCurrentCompany, setCurrentUser, hasPermission } from "@/lib/auth"
+import { getCurrentUser, getCurrentCompany, setCurrentUser, hasPermission, getRoleCode } from "@/lib/auth"
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
 import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import * as AuthAPI from "@/src/api/auth.api"
@@ -269,6 +269,23 @@ function isDateField(key: string): boolean {
     return dateFields.includes(key)
 }
 
+function extractList<T = any>(response: any): T[] {
+    if (Array.isArray(response)) return response
+    if (Array.isArray(response?.items)) return response.items
+    if (Array.isArray(response?.data)) return response.data
+    if (Array.isArray(response?.data?.items)) return response.data.items
+    if (Array.isArray(response?.data?.data)) return response.data.data
+    return []
+}
+
+function getTotalFromResponse(response: any, fallbackLength: number): number {
+    return response?.pagination?.total ?? response?.total ?? response?.data?.pagination?.total ?? response?.data?.total ?? fallbackLength
+}
+
+function getTotalPagesFromResponse(response: any, total: number, pageSize: number): number {
+    return response?.pagination?.total_pages ?? response?.data?.pagination?.total_pages ?? Math.ceil(total / pageSize)
+}
+
 // ─── Combobox Component ──────────────────────────────────────────
 
 function ComboboxSelect({
@@ -344,25 +361,6 @@ function ComboboxSelect({
 }
 
 // ─── Role helper ─────────────────────────────────────────────────
-
-function getRoleKey(roleId?: number): string {
-    const map: Record<number, string> = { 50: "system_admin", 40: "leadership", 30: "control", 20: "operations", 10: "sales" }
-    return map[roleId || 0] || "user"
-}
-
-// Helper function to get role code from user data
-function getRoleCode(user: any) {
-    if (!user) return undefined;
-    if (typeof user.role === 'string') return user.role;
-    if (user.role?.code) return user.role.code;
-    if (user.role?.id) {
-        return getRoleKey(user.role.id);
-    }
-    if (user.role_id) {
-        return getRoleKey(Number(user.role_id));
-    }
-    return undefined;
-}
 
 // ─── Main Page ───────────────────────────────────────────────────
 
@@ -574,18 +572,9 @@ export default function DocumentsPage() {
                     if (searchTerm) params.q = searchTerm
 
                     const res = await getDocumentsByDeal(selectedDealId, params)
-                    let data;
-                    if ((res as any)?.items && Array.isArray((res as any).items)) {
-                        data = (res as any).items;
-                    } else if (Array.isArray(res)) {
-                        data = res;
-                    } else if ((res as any)?.data && Array.isArray((res as any).data)) {
-                        data = (res as any).data;
-                    } else {
-                        data = [];
-                    }
-                    const total = (res as any)?.pagination?.total || (res as any)?.total || data.length
-                    const totalPagesFromBackend = (res as any)?.pagination?.total_pages || Math.ceil(total / size)
+                    let data = extractList<any>(res)
+                    const total = getTotalFromResponse(res, data.length)
+                    const totalPagesFromBackend = getTotalPagesFromResponse(res, total, size)
 
                     // Client-side filtering as fallback if backend doesn't support search
                     if (searchTerm) {
@@ -611,7 +600,7 @@ export default function DocumentsPage() {
                 } else {
                     // Sales user without selected deal - fetch their deals first, then documents
                     const dealsRes = await DealsAPI.list_my_deals(undefined, {})
-                    const userDeals = Array.isArray(dealsRes) ? dealsRes : (dealsRes as any)?.data || []
+                    const userDeals = extractList<any>(dealsRes)
                     
                     // Filter out archived deals
                     const nonArchivedDeals = userDeals.filter((d: any) => !d.is_archived)
@@ -627,7 +616,7 @@ export default function DocumentsPage() {
                     for (const deal of nonArchivedDeals) {
                         try {
                             const dealDocs = await getDocumentsByDeal(deal.id, {})
-                            const docs = Array.isArray(dealDocs) ? dealDocs : (dealDocs as any)?.data || []
+                            const docs = extractList<any>(dealDocs)
                             allDocs.push(...docs)
                         } catch (err) {
                             console.error(`Error fetching documents for deal ${deal.id}:`, err)
@@ -672,18 +661,9 @@ export default function DocumentsPage() {
                 params.order = sortOrder
 
                 const res = await getDocuments(params)
-                let data;
-                if ((res as any)?.items && Array.isArray((res as any).items)) {
-                    data = (res as any).items;
-                } else if (Array.isArray(res)) {
-                    data = res;
-                } else if ((res as any)?.data && Array.isArray((res as any).data)) {
-                    data = (res as any).data;
-                } else {
-                    data = [];
-                }
-                let total = (res as any)?.pagination?.total || (res as any)?.total || data.length
-                const totalPagesFromBackend = (res as any)?.pagination?.total_pages || Math.ceil(total / size)
+                let data = extractList<any>(res)
+                let total = getTotalFromResponse(res, data.length)
+                const totalPagesFromBackend = getTotalPagesFromResponse(res, total, size)
 
                 setDocuments(data)
                 setTotalDocuments(total)
@@ -885,13 +865,13 @@ export default function DocumentsPage() {
                 // Load deals
                 const dealsFetchFn = userRole === 'sales' ? DealsAPI.list_my_deals : DealsAPI.list_deals;
                 const dealsRes = await dealsFetchFn(undefined, { page: 1, size: 1000 });
-                const dealsData = Array.isArray(dealsRes) ? dealsRes : (dealsRes as any)?.data || [];
+                const dealsData = extractList<any>(dealsRes);
                 setDeals(dealsData);
 
                 // Load clients
                 const clientsFetchFn = userRole === 'sales' ? ClientAPI.listMyClients : ClientAPI.listClients;
                 const clientsRes = await clientsFetchFn({ page: 1, size: 1000 });
-                const clientsData = Array.isArray(clientsRes) ? clientsRes : (clientsRes as any)?.data || [];
+                const clientsData = extractList<any>(clientsRes);
                 setClients(clientsData);
             } catch (err: any) {
                 console.error("Error loading deals and clients:", err);
@@ -911,7 +891,7 @@ export default function DocumentsPage() {
                 const userRole = getRoleCode(user);
                 const fetchFn = userRole === 'sales' ? ClientAPI.listMyClients : ClientAPI.listClients;
                 const res = await fetchFn({ page: 1, size: 1000 });
-                const data = Array.isArray(res) ? res : (res as any)?.data || [];
+                const data = extractList<any>(res);
                 setClients(data);
             } catch (err: any) {
                 console.error("Error loading clients for create dialog:", err);
@@ -938,11 +918,11 @@ export default function DocumentsPage() {
             const params = { 
                 client_id: Number(clientId), 
                 client_type: clientType,
-                status_group: 'active'
+                status_group: 'all'
             };
             
             const res = await fetchFn(undefined, params);
-            const data = Array.isArray(res) ? res : (res as any)?.data || [];
+            const data = extractList<any>(res);
             
             setFilteredDeals(data);
         } catch (err: any) {

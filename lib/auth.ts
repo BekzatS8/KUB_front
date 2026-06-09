@@ -91,8 +91,52 @@ export function initializeTokenRefresh(): void {
   tokenManager.initializeTokenRefresh()
 }
 
+export function normalizeRoleCode(roleCode?: string | null): string | undefined {
+  const normalized = String(roleCode || '').trim().toLowerCase()
+  if (!normalized) return undefined
+
+  const codeMapping: Record<string, string> = {
+    admin: 'system_admin',
+    admin_staff: 'system_admin',
+    system_admin: 'system_admin',
+    systemadmin: 'system_admin',
+    management: 'leadership',
+    manager: 'leadership',
+    leadership: 'leadership',
+    control: 'control',
+    operations: 'operations',
+    operation: 'operations',
+    sales: 'sales',
+    seller: 'sales',
+  }
+
+  return codeMapping[normalized] || normalized
+}
+
+export function getRoleKeyFromId(roleId?: number | string | null): string {
+  const roleMapping: Record<number, string> = {
+    50: 'system_admin',
+    40: 'leadership',
+    30: 'control',
+    20: 'operations',
+    10: 'sales',
+  }
+  return roleMapping[Number(roleId || 0)] || 'user'
+}
+
+export function getRoleCode(user: any): string | undefined {
+  if (!user) return undefined
+  if (typeof user.role === 'string') return normalizeRoleCode(user.role)
+  if (user.role?.code) return normalizeRoleCode(user.role.code)
+  if (user.role?.id) return getRoleKeyFromId(user.role.id)
+  if (user.role_id) return getRoleKeyFromId(user.role_id)
+  return undefined
+}
+
 // Функция для проверки прав доступа
 export function hasPermission(userRole: string | undefined, requiredPermissions: string[]): boolean {
+  userRole = normalizeRoleCode(userRole)
+
   // Если пользователь не авторизован или нет роли
   if (!userRole) {
     return false;
@@ -188,12 +232,14 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
 
 // Функция для проверки роли
 export function hasRole(userRole: string | undefined, requiredRoles: string[]): boolean {
+  userRole = normalizeRoleCode(userRole)
   if (!userRole) return false;
-  return requiredRoles.includes(userRole);
+  return requiredRoles.map((role) => normalizeRoleCode(role)).includes(userRole);
 }
 
 // Функция для получения роли пользователя в текстовом формате
 export function getUserRoleText(role: string | undefined): string {
+  role = normalizeRoleCode(role)
   const roleMap: Record<string, string> = {
     system_admin: 'Системный администратор',
     leadership: 'Руководство',

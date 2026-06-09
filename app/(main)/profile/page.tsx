@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { getMe } from "@/src/api/auth.api";
 import * as RolesAPI from "@/src/api/roles.api";
-import { Building2, Mail, Phone, Shield, CheckCircle, XCircle, Clock, Bell, User as UserIcon } from "lucide-react";
+import { Building2, Mail, Phone, Shield, CheckCircle, XCircle, Clock, User as UserIcon } from "lucide-react";
 
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
@@ -192,33 +192,6 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Telegram Settings */}
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center">
-              <Bell className="w-5 h-5 mr-2 text-blue-600" />
-              Настройки Telegram
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-slate-50 rounded-xl p-4">
-                <p className="text-sm text-slate-600 mb-1">Chat ID</p>
-                <p className="font-semibold text-slate-900">
-                  {user.telegram?.chat_id ? user.telegram.chat_id : 'Не подключен'}
-                </p>
-              </div>
-              <div className="bg-slate-50 rounded-xl p-4">
-                <p className="text-sm text-slate-600 mb-1">Уведомления о задачах</p>
-                <p className="font-semibold text-slate-900">
-                  {user.telegram?.notify_tasks ? 'Включены' : 'Выключены'}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* User ID */}
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-600 mb-1">ID пользователя</p>
-            <p className="font-semibold text-slate-900 font-mono">{user.id}</p>
-          </div>
         </div>
       </div>
     </div>

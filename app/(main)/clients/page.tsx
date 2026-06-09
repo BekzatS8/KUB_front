@@ -70,7 +70,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
-import { getCurrentUser, setCurrentUser, hasPermission } from "@/lib/auth";
+import { getCurrentUser, setCurrentUser, hasPermission, getRoleCode } from "@/lib/auth";
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
 import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import * as ClientAPI from "@/src/api/clients.api";
@@ -638,34 +638,6 @@ export default function ClientsPage() {
   
   // State for fresh user data from API
   const [freshUserData, setFreshUserData] = useState<any>(null);
-
-  // Helper function to get role code from user data
-  const getRoleCode = (user: any) => {
-    if (!user) return undefined;
-    if (typeof user.role === 'string') return user.role;
-    if (user.role?.code) return user.role.code;
-    if (user.role?.id) {
-      const roleMap: Record<number, string> = {
-        50: 'system_admin',
-        40: 'leadership',
-        30: 'control',
-        20: 'operations',
-        10: 'sales'
-      };
-      return roleMap[user.role.id] || 'user';
-    }
-    if (user.role_id) {
-      const roleMap: Record<number, string> = {
-        50: 'system_admin',
-        40: 'leadership',
-        30: 'control',
-        20: 'operations',
-        10: 'sales'
-      };
-      return roleMap[Number(user.role_id)] || 'user';
-    }
-    return undefined;
-  };
 
   // Get fresh user data for each render
   const user = freshUserData || getCurrentUser();
@@ -1670,7 +1642,7 @@ useEffect(() => {
         </div>
         <div className="flex items-center gap-2">
             {/* View toggle - only show for non-sales users */}
-            {user?.role !== 'sales' && (
+            {getRoleCode(user) !== 'sales' && (
               <CustomSelect
                 value={clientView}
                 onChange={(value) => setClientView(value as "all" | "my")}
@@ -1781,7 +1753,7 @@ useEffect(() => {
                     ]}
                   />
                 </div>
-                {user?.role !== 'sales' && (
+                {getRoleCode(user) !== 'sales' && (
                   <Button
                     variant={clientView === "all" ? "secondary" : "outline"}
                     onClick={() => setClientView("all")}

@@ -81,8 +81,6 @@ const EMPTY_USER: Models.CreateUserRequest = {
   // Legacy fields
   company_name: "",
   bin_iin: "",
-  notify_tasks_telegram: false,
-  telegram_chat_id: undefined,
 };
 
 const DetailItem = ({ label, value }: { label: string; value?: string | number | null | boolean }) => (
@@ -228,6 +226,7 @@ export default function UsersPage() {
   const router = useRouter();
   const currentPage = Number(searchParams.get('page')) || 1;
   const limit = 20;
+  const selectedRoleIsSystemAdmin = Number((userFormData as any).role_id || 0) === Roles.SYSTEM_ADMIN;
 
   const fetchUsersAndStats = async () => {
     setIsLoading(true);
@@ -361,8 +360,6 @@ export default function UsersPage() {
       // Legacy fields
       company_name: user.company_name,
       bin_iin: user.bin_iin,
-      notify_tasks_telegram: user.telegram?.notify_tasks,
-      telegram_chat_id: user.telegram?.chat_id,
     });
     setIsFormOpen(true);
   };
@@ -425,7 +422,7 @@ export default function UsersPage() {
       return { error: "Телефон должен быть в международном формате: +77001234567." };
     }
     if (!roleId) return { error: "Выберите роль." };
-    if (!branchId) return { error: "Выберите филиал." };
+    if (!selectedRoleIsSystemAdmin && !branchId) return { error: "Выберите филиал." };
     if (!editingUser && !String((userFormData as Models.CreateUserRequest).password || "").trim()) {
       return { error: "Укажите пароль." };
     }
@@ -439,7 +436,7 @@ export default function UsersPage() {
         email,
         phone,
         role_id: roleId,
-        branch_id: branchId,
+        branch_id: selectedRoleIsSystemAdmin && !branchId ? undefined : branchId,
         position: String((userFormData as any).position || "").trim(),
       },
     };
@@ -753,7 +750,7 @@ export default function UsersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="branch_id">Филиал *</Label>
+                <Label htmlFor="branch_id">Филиал{selectedRoleIsSystemAdmin ? "" : " *"}</Label>
                 <ComboboxSelect
                   value={userFormData.branch_id ? String(userFormData.branch_id) : ""}
                   onChange={(value) => setUserFormData(prev => ({ ...prev, branch_id: value ? Number(value) : undefined }))}
@@ -766,6 +763,11 @@ export default function UsersPage() {
                     label: branch.name
                   }))}
                 />
+                {selectedRoleIsSystemAdmin && (
+                  <p className="text-xs text-muted-foreground">
+                    Для системного администратора филиал не обязателен: доступ глобальный.
+                  </p>
+                )}
               </div>
 
               {/* Verification Switch: Visible for editing, or for Leadership/System Admin when creating (disabled/checked) */}
@@ -785,18 +787,6 @@ export default function UsersPage() {
                 </div>
               )}
 
-              {editingUser && (
-                <>
-                  <div className="flex items-center space-x-2">
-                    <Label htmlFor="notify_tasks_telegram" className="cursor-pointer">Уведомления в Telegram</Label>
-                    <Switch id="notify_tasks_telegram" checked={(userFormData as Models.UpdateUserRequest).notify_tasks_telegram} onCheckedChange={(c) => handleSwitchChange('notify_tasks_telegram', c)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="telegram_chat_id">Telegram Chat ID</Label>
-                    <Input id="telegram_chat_id" placeholder="Введите Telegram Chat ID..." value={(userFormData as Models.UpdateUserRequest).telegram_chat_id || ''} onChange={handleFormChange} />
-                  </div>
-                </>
-              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Отмена</Button>
@@ -842,8 +832,6 @@ export default function UsersPage() {
               <DetailItem label="БИН/ИИН" value={viewingUser?.bin_iin} />
               <DetailItem label="Верифицирован" value={viewingUser?.is_verified ? 'Да' : 'Нет'} />
               <DetailItem label="Активен" value={viewingUser?.is_active ? 'Да' : 'Нет'} />
-              <DetailItem label="Уведомления в TG" value={viewingUser?.telegram?.notify_tasks ? 'Да' : 'Нет'} />
-              <DetailItem label="TG Chat ID" value={viewingUser?.telegram?.chat_id} />
               <DetailItem label="Дата создания" value={viewingUser?.created_at ? new Date(viewingUser.created_at).toLocaleString() : '-'} />
             </div>
           )}

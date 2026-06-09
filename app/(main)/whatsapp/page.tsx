@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   CheckCircle2,
-  ExternalLink,
   Instagram,
   MessageCircle,
   RefreshCw,
@@ -24,7 +22,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getCurrentUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { getWazzupIframe, setupWazzup } from "@/src/api/integrations_wazzup.api";
 
@@ -53,9 +50,6 @@ const getWidgetErrorMessage = (error: any) => {
 };
 
 export default function MessengerPage() {
-  const router = useRouter();
-  const currentUser = getCurrentUser();
-
   const [activeChannel, setActiveChannel] = useState<ChannelId>("whatsapp");
   const [iframeUrl, setIframeUrl] = useState("");
   const [widgetState, setWidgetState] = useState<WidgetState>("loading");
@@ -71,9 +65,6 @@ export default function MessengerPage() {
     enabled: true,
   });
 
-  const telegramChatId =
-    currentUser?.telegram?.chat_id || currentUser?.telegram_chat_id || 0;
-  const telegramConnected = Boolean(telegramChatId);
   const wazzupConnected = widgetState === "ready";
 
   const loadWidget = useCallback(async () => {
@@ -136,9 +127,9 @@ export default function MessengerPage() {
       {
         id: "telegram" as const,
         title: "Telegram",
-        description: "Уведомления, задачи и бот CRM",
-        status: telegramConnected ? "Подключено" : "Нужно привязать",
-        statusClassName: telegramConnected
+        description: "Сообщения через канал Wazzup",
+        status: wazzupConnected ? "Готово" : "Нужен Wazzup",
+        statusClassName: wazzupConnected
           ? "bg-sky-50 text-sky-700"
           : "bg-slate-100 text-slate-600",
         icon: Send,
@@ -156,7 +147,7 @@ export default function MessengerPage() {
         iconClassName: "bg-pink-500 text-white",
       },
     ],
-    [telegramConnected, wazzupConnected],
+    [wazzupConnected],
   );
 
   const handleSetup = async () => {
@@ -237,24 +228,25 @@ export default function MessengerPage() {
         <div>
           <h3 className="text-lg font-semibold text-slate-900">Telegram</h3>
           <p className="text-sm text-slate-600">
-            {telegramConnected
-              ? `Аккаунт привязан, Chat ID: ${telegramChatId}`
-              : "Привяжите Telegram, чтобы получать уведомления и работать с задачами"}
+            Канал подключается через Wazzup. После настройки диалоги Telegram будут доступны в общем виджете.
           </p>
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        {["Уведомления по задачам", "Статусы документов", "Команды через бота"].map((item) => (
+        {["Сообщения Telegram", "История диалогов", "Работа менеджеров"].map((item) => (
           <div key={item} className="rounded-lg border bg-slate-50 p-4 text-sm text-slate-700">
             <CheckCircle2 className="mb-2 h-4 w-4 text-sky-600" />
             {item}
           </div>
         ))}
       </div>
-      <div className="mt-6">
-        <Button onClick={() => router.push("/telegram")}>
-          Открыть подключение Telegram
-          <ExternalLink className="ml-2 h-4 w-4" />
+      <div className="mt-6 flex flex-wrap gap-2">
+        <Button onClick={() => setIsSetupModalOpen(true)}>
+          Настроить Wazzup
+          <Settings className="ml-2 h-4 w-4" />
+        </Button>
+        <Button variant="outline" onClick={() => setActiveChannel("whatsapp")}>
+          Открыть общий виджет
         </Button>
       </div>
     </div>
@@ -358,7 +350,7 @@ export default function MessengerPage() {
           <DialogHeader>
             <DialogTitle>Настройка Wazzup</DialogTitle>
             <DialogDescription>
-              Подключение используется для WhatsApp и Instagram Direct.
+              Подключение используется для WhatsApp, Telegram и Instagram. Сами каналы добавляются в личном кабинете Wazzup.
             </DialogDescription>
           </DialogHeader>
 

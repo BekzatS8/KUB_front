@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton"
 
-export default function TelegramBotLoading() {
+export default function TelegramRedirectLoading() {
     return (
         <>
             <Skeleton className="h-8 w-48 mb-4 m-6" />
