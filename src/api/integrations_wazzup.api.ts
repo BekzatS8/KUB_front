@@ -13,12 +13,17 @@ export interface WazzupSetupResponse {
 }
 
 export interface WazzupIframeRequest {
-  // Empty body as per technical specification
+  transport?: 'whatsapp' | 'telegram' | 'instagram' | string;
+  channel_id?: string;
 }
 
 export interface WazzupIframeResponse {
   iframe_url: string;
   url: string;
+  channel_specific?: boolean;
+  transport?: string;
+  channel_id?: string;
+  message?: string;
 }
 
 export interface CRMUser {
@@ -96,10 +101,11 @@ export const setupWazzup = async (data: WazzupSetupRequest): Promise<WazzupSetup
   return response.data;
 };
 
-// Get Wazzup iframe URL for chat
-// Sends empty JSON body {} as per technical specification
-export const getWazzupIframe = async (): Promise<WazzupIframeResponse> => {
-  const response = await api.post('/integrations/wazzup/iframe', {});
+// Get Wazzup iframe URL for selected Wazzup transport/channel.
+export const getWazzupIframe = async (
+  data: WazzupIframeRequest = {},
+): Promise<WazzupIframeResponse> => {
+  const response = await api.post('/integrations/wazzup/iframe', data);
   return response.data;
 };
 
