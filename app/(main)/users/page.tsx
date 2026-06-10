@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import * as Models from "@/src/models/users.model";
@@ -97,11 +97,11 @@ const DetailItem = ({ label, value }: { label: string; value?: string | number |
 );
 
 const ROLE_LABELS: Record<number, string> = {
-  [Roles.SALES]: "РћС‚РґРµР» РїСЂРѕРґР°Р¶",
-  [Roles.OPERATIONS]: "РћРїРµСЂР°С†РёРѕРЅРЅС‹Р№ РѕС‚РґРµР»",
-  [Roles.CONTROL]: "РћС‚РґРµР» РєРѕРЅС‚СЂРѕР»СЏ",
-  [Roles.MANAGEMENT]: "Р СѓРєРѕРІРѕРґСЃС‚РІРѕ",
-  [Roles.SYSTEM_ADMIN]: "РЎРёСЃС‚РµРјРЅС‹Р№ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ",
+  [Roles.SALES]: "Отдел продаж",
+  [Roles.OPERATIONS]: "Операционный отдел",
+  [Roles.CONTROL]: "Отдел контроля",
+  [Roles.MANAGEMENT]: "Руководство",
+  [Roles.SYSTEM_ADMIN]: "Системный администратор",
 };
 
 const E164_PHONE_PATTERN = /^\+[1-9]\d{10,14}$/;
@@ -147,9 +147,9 @@ function ComboboxSelect({
   value,
   onChange,
   options,
-  placeholder = "Р’С‹Р±РµСЂРёС‚Рµ...",
-  searchPlaceholder = "РџРѕРёСЃРє...",
-  emptyText = "РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ",
+  placeholder = "Выберите...",
+  searchPlaceholder = "Поиск...",
+  emptyText = "Ничего не найдено",
   disabled = false,
 }: {
   value: string | number
@@ -266,11 +266,11 @@ export default function UsersPage() {
         user: sales.count
       });
     } catch (err: any) {
-      const errorMessage = err?.message || "РћС€РёР±РєР° РїСЂРё Р·Р°РіСЂСѓР·РєРµ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№";
+      const errorMessage = err?.message || "Ошибка при загрузке пользователей";
       setError(errorMessage);
       toast({
         variant: "destructive",
-        title: "РћС€РёР±РєР°",
+        title: "Ошибка",
         description: errorMessage,
       });
     } finally {
@@ -301,8 +301,8 @@ export default function UsersPage() {
         console.error("Failed to load roles", e);
         toast({
           variant: "destructive",
-          title: "РћС€РёР±РєР°",
-          description: "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРїРёСЃРѕРє СЂРѕР»РµР№",
+          title: "Ошибка",
+          description: "Не удалось загрузить список ролей",
         });
       } finally {
         setRolesLoading(false);
@@ -329,7 +329,7 @@ export default function UsersPage() {
 
   const getRoleLabel = (id?: number) => {
     if (!id) return "-";
-    return ROLE_LABELS[id] || "РќРµРёР·РІРµСЃС‚РЅР°СЏ СЂРѕР»СЊ";
+    return ROLE_LABELS[id] || "Неизвестная роль";
   };
 
   const handlePageChange = (page: number) => {
@@ -390,8 +390,8 @@ export default function UsersPage() {
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "РћС€РёР±РєР°",
-        description: err?.message || "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ РїРѕР»СЊР·РѕРІР°С‚РµР»Рµ.",
+        title: "Ошибка",
+        description: err?.message || "Не удалось загрузить информацию о пользователе.",
       });
     } finally {
       setIsLoading(false);
@@ -406,13 +406,13 @@ export default function UsersPage() {
     if (!userToDelete) return;
     try {
       await UserAPI.deleteUser(String(userToDelete.id));
-      toast({ title: "РЈСЃРїРµС…", description: "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ СѓСЃРїРµС€РЅРѕ СѓРґР°Р»РµРЅ." });
+      toast({ title: "Успех", description: "Пользователь успешно удален." });
       void fetchUsersAndStats();
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "РћС€РёР±РєР°",
-        description: err?.message || "РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.",
+        title: "Ошибка",
+        description: err?.message || "Не удалось удалить пользователя.",
       });
     } finally {
       setUserToDelete(null);
@@ -470,8 +470,8 @@ export default function UsersPage() {
     if (!payload) {
       toast({
         variant: "destructive",
-        title: "РџСЂРѕРІРµСЂСЊС‚Рµ РґР°РЅРЅС‹Рµ",
-        description: validationError || "Р—Р°РїРѕР»РЅРёС‚Рµ РѕР±СЏР·Р°С‚РµР»СЊРЅС‹Рµ РїРѕР»СЏ.",
+        title: "Проверьте данные",
+        description: validationError || "Заполните обязательные поля.",
       });
       return;
     }
@@ -479,7 +479,7 @@ export default function UsersPage() {
     try {
       if (editingUser) {
         await UserAPI.updateUser(String(editingUser.id), payload as Models.UpdateUserRequest);
-        toast({ title: "РЈСЃРїРµС…", description: "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ СѓСЃРїРµС€РЅРѕ РѕР±РЅРѕРІР»РµРЅ." });
+        toast({ title: "Успех", description: "Пользователь успешно обновлен." });
       } else {
         const createPayload = { ...payload } as Models.CreateUserRequest;
         // Auto-verify if created by Leadership or System Admin only
@@ -487,15 +487,15 @@ export default function UsersPage() {
           createPayload.is_verified = true;
         }
         await UserAPI.createUser(createPayload);
-        toast({ title: "РЈСЃРїРµС…", description: "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ СѓСЃРїРµС€РЅРѕ СЃРѕР·РґР°РЅ." });
+        toast({ title: "Успех", description: "Пользователь успешно создан." });
       }
       void fetchUsersAndStats();
       setIsFormOpen(false);
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "РћС€РёР±РєР°",
-        description: err?.response?.data?.message || err?.message || "РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.",
+        title: "Ошибка",
+        description: err?.response?.data?.message || err?.message || "Не удалось сохранить пользователя.",
       });
     }
   };
@@ -522,21 +522,21 @@ export default function UsersPage() {
       <div className="flex flex-wrap items-center justify-between gap-4 m-6">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
-            РџРѕР»СЊР·РѕРІР°С‚РµР»Рё
+            Пользователи
           </h1>
           <p className="text-sm text-gray-600">
-            РЈРїСЂР°РІР»РµРЅРёРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏРјРё СЃРёСЃС‚РµРјС‹
+            Управление пользователями системы
           </p>
         </div>
         <div className="flex items-center space-x-2">
           <Button onClick={fetchUsersAndStats} variant="outline" disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            РћР±РЅРѕРІРёС‚СЊ
+            Обновить
           </Button>
           {canCreate && (
             <Button onClick={handleCreateClick}>
               <Plus className="h-4 w-4 mr-2" />
-              Р”РѕР±Р°РІРёС‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
+              Добавить пользователя
             </Button>
           )}
         </div>
@@ -545,28 +545,28 @@ export default function UsersPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 px-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Р’СЃРµРіРѕ</CardTitle>
+            <CardTitle className="text-sm font-medium">Всего</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent><div className="text-2xl font-bold">{stats.total}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂС‹</CardTitle>
+            <CardTitle className="text-sm font-medium">Администраторы</CardTitle>
             <Shield className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent><div className="text-2xl font-bold">{stats.admin}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">РњРµРЅРµРґР¶РµСЂС‹</CardTitle>
+            <CardTitle className="text-sm font-medium">Менеджеры</CardTitle>
             <UserCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent><div className="text-2xl font-bold">{stats.manager}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">РџРѕР»СЊР·РѕРІР°С‚РµР»Рё</CardTitle>
+            <CardTitle className="text-sm font-medium">Пользователи</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent><div className="text-2xl font-bold">{stats.user}</div></CardContent>
@@ -577,16 +577,16 @@ export default function UsersPage() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <div>
-              <CardTitle>РЎРїРёСЃРѕРє РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№</CardTitle>
+              <CardTitle>Список пользователей</CardTitle>
               <CardDescription>
-                {users?.length ? `РќР°Р№РґРµРЅРѕ ${filteredUsers?.length || 0} РёР· ${users.length} РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№` : "РџРѕР»СЊР·РѕРІР°С‚РµР»Рё РЅРµ РЅР°Р№РґРµРЅС‹"}
+                {users?.length ? `Найдено ${filteredUsers?.length || 0} из ${users.length} пользователей` : "Пользователи не найдены"}
               </CardDescription>
             </div>
             <div className="w-1/3">
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Р’РІРµРґРёС‚Рµ РґР°РЅРЅС‹Рµ РґР»СЏ РїРѕРёСЃРєР°..."
+                  placeholder="Введите данные для поиска..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -608,12 +608,12 @@ export default function UsersPage() {
               </colgroup>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="px-4">Р¤РРћ</TableHead>
+                  <TableHead className="px-4">ФИО</TableHead>
                   <TableHead className="px-4">Email</TableHead>
-                  <TableHead className="px-4">РўРµР»РµС„РѕРЅ</TableHead>
-                  <TableHead className="px-4">Р РѕР»СЊ</TableHead>
-                  <TableHead className="px-4">РЎС‚Р°С‚СѓСЃ</TableHead>
-                  <TableHead className="px-4 text-right">Р”РµР№СЃС‚РІРёСЏ</TableHead>
+                  <TableHead className="px-4">Телефон</TableHead>
+                  <TableHead className="px-4">Роль</TableHead>
+                  <TableHead className="px-4">Статус</TableHead>
+                  <TableHead className="px-4 text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -626,7 +626,7 @@ export default function UsersPage() {
                 ) : (!filteredUsers || filteredUsers.length === 0) ? (
                   <TableRow>
                     <TableCell colSpan={6} className="h-24 text-center">
-                      РџРѕР»СЊР·РѕРІР°С‚РµР»Рё РЅРµ РЅР°Р№РґРµРЅС‹.
+                      Пользователи не найдены.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -660,7 +660,7 @@ export default function UsersPage() {
                       </TableCell>
                       <TableCell className="px-4 align-top">
                         <Badge variant={user.is_verified ? "default" : "outline"}>
-                          {user.is_verified ? "РџРѕРґС‚РІРµСЂР¶РґРµРЅ" : "РќРµ РїРѕРґС‚РІРµСЂР¶РґРµРЅ"}
+                          {user.is_verified ? "Подтвержден" : "Не подтвержден"}
                         </Badge>
                       </TableCell>
                       <TableCell className="px-4 align-top text-right">
@@ -669,7 +669,7 @@ export default function UsersPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            title="РџСЂРѕСЃРјРѕС‚СЂ"
+                            title="Просмотр"
                             onClick={() => handleViewClick(user)}
                           >
                             <Eye className="h-4 w-4" />
@@ -679,7 +679,7 @@ export default function UsersPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              title="Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ"
+                              title="Редактировать"
                               onClick={() => handleEditClick(user)}
                             >
                               <Edit className="h-4 w-4" />
@@ -690,7 +690,7 @@ export default function UsersPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-red-600 hover:text-red-700"
-                              title="РЈРґР°Р»РёС‚СЊ"
+                              title="Удалить"
                               onClick={() => handleDeleteClick(user)}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -720,59 +720,59 @@ export default function UsersPage() {
       < Dialog open={isFormOpen} onOpenChange={setIsFormOpen} >
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingUser ? "Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ" : "РЎРѕР·РґР°С‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ"}</DialogTitle>
+            <DialogTitle>{editingUser ? "Редактировать пользователя" : "Создать пользователя"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="space-y-4 py-4">
               {/* Personal Information */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="last_name">Р¤Р°РјРёР»РёСЏ</Label>
-                  <Input id="last_name" placeholder="Р¤Р°РјРёР»РёСЏ..." value={(userFormData as any).last_name || ''} onChange={handleFormChange} />
+                  <Label htmlFor="last_name">Фамилия</Label>
+                  <Input id="last_name" placeholder="Фамилия..." value={(userFormData as any).last_name || ''} onChange={handleFormChange} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="first_name">РРјСЏ</Label>
-                  <Input id="first_name" placeholder="РРјСЏ..." value={(userFormData as any).first_name || ''} onChange={handleFormChange} />
+                  <Label htmlFor="first_name">Имя</Label>
+                  <Input id="first_name" placeholder="Имя..." value={(userFormData as any).first_name || ''} onChange={handleFormChange} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="middle_name">РћС‚С‡РµСЃС‚РІРѕ</Label>
-                  <Input id="middle_name" placeholder="РћС‚С‡РµСЃС‚РІРѕ..." value={(userFormData as any).middle_name || ''} onChange={handleFormChange} />
+                  <Label htmlFor="middle_name">Отчество</Label>
+                  <Input id="middle_name" placeholder="Отчество..." value={(userFormData as any).middle_name || ''} onChange={handleFormChange} />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="position">Р”РѕР»Р¶РЅРѕСЃС‚СЊ *</Label>
-                <Input id="position" placeholder="Р”РѕР»Р¶РЅРѕСЃС‚СЊ..." value={(userFormData as any).position || ''} onChange={handleFormChange} required />
+                <Label htmlFor="position">Должность *</Label>
+                <Input id="position" placeholder="Должность..." value={(userFormData as any).position || ''} onChange={handleFormChange} required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email *</Label>
-                <Input id="email" type="email" placeholder="Р’РІРµРґРёС‚Рµ Email..." value={userFormData.email} onChange={handleFormChange} required />
+                <Input id="email" type="email" placeholder="Введите Email..." value={userFormData.email} onChange={handleFormChange} required />
               </div>
               {!editingUser && (
                 <div className="space-y-2">
-                  <Label htmlFor="password">РџР°СЂРѕР»СЊ *</Label>
-                  <Input id="password" type="password" placeholder="Р’РІРµРґРёС‚Рµ РїР°СЂРѕР»СЊ..." value={(userFormData as Models.CreateUserRequest).password} onChange={handleFormChange} required={!editingUser} />
+                  <Label htmlFor="password">Пароль *</Label>
+                  <Input id="password" type="password" placeholder="Введите пароль..." value={(userFormData as Models.CreateUserRequest).password} onChange={handleFormChange} required={!editingUser} />
                 </div>
               )}
               <div className="space-y-2">
-                <Label htmlFor="phone">РўРµР»РµС„РѕРЅ</Label>
+                <Label htmlFor="phone">Телефон</Label>
                 <Input
                   id="phone"
                   type="tel"
                   inputMode="tel"
                   placeholder="+77001234567"
                   pattern="\+[1-9][0-9]{10,14}"
-                  title="РўРµР»РµС„РѕРЅ РІ РјРµР¶РґСѓРЅР°СЂРѕРґРЅРѕРј С„РѕСЂРјР°С‚Рµ, РЅР°РїСЂРёРјРµСЂ +77001234567"
+                  title="Телефон в международном формате, например +77001234567"
                   value={userFormData.phone}
                   onChange={handleFormChange}
                 />
-                <p className="text-xs text-muted-foreground">Р¤РѕСЂРјР°С‚: +77001234567</p>
+                <p className="text-xs text-muted-foreground">Формат: +77001234567</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="role_id">Р РѕР»СЊ *</Label>
+                <Label htmlFor="role_id">Роль *</Label>
                 <CustomSelect
                   value={String(userFormData.role_id)}
                   onChange={handleRoleChange}
-                  placeholder={rolesLoading ? "Р—Р°РіСЂСѓР·РєР° СЂРѕР»РµР№..." : "Р’С‹Р±РµСЂРёС‚Рµ СЂРѕР»СЊ..."}
+                  placeholder={rolesLoading ? "Загрузка ролей..." : "Выберите роль..."}
                   disabled={rolesLoading}
                   options={availableRoles.map(role => ({
                     value: String(role.id),
@@ -781,13 +781,13 @@ export default function UsersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="branch_id">Р¤РёР»РёР°Р» *</Label>
+                <Label htmlFor="branch_id">Филиал *</Label>
                 <ComboboxSelect
                   value={userFormData.branch_id ? String(userFormData.branch_id) : ""}
                   onChange={(value) => setUserFormData(prev => ({ ...prev, branch_id: value ? Number(value) : undefined }))}
-                  placeholder={branchesLoading ? "Р—Р°РіСЂСѓР·РєР° С„РёР»РёР°Р»РѕРІ..." : "Р’С‹Р±РµСЂРёС‚Рµ С„РёР»РёР°Р»..."}
-                  searchPlaceholder="РџРѕРёСЃРє С„РёР»РёР°Р»Р°..."
-                  emptyText="Р¤РёР»РёР°Р» РЅРµ РЅР°Р№РґРµРЅ"
+                  placeholder={branchesLoading ? "Загрузка филиалов..." : "Выберите филиал..."}
+                  searchPlaceholder="Поиск филиала..."
+                  emptyText="Филиал не найден"
                   disabled={branchesLoading}
                   options={availableBranches.map(branch => ({
                     value: String(branch.id),
@@ -814,7 +814,7 @@ export default function UsersPage() {
               {/* Verification Switch: Visible for editing, or for Leadership/System Admin when creating (disabled/checked) */}
               {(editingUser || currentUser?.role?.id === Roles.MANAGEMENT || currentUser?.role?.id === Roles.SYSTEM_ADMIN) && (
                 <div className="flex items-center space-x-2">
-                  <Label htmlFor="is_verified" className="cursor-pointer">Р’РµСЂРёС„РёС†РёСЂРѕРІР°РЅ</Label>
+                  <Label htmlFor="is_verified" className="cursor-pointer">Верифицирован</Label>
                   <Switch
                     id="is_verified"
                     checked={
@@ -830,8 +830,8 @@ export default function UsersPage() {
 
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>РћС‚РјРµРЅР°</Button>
-              <Button type="submit">РЎРѕС…СЂР°РЅРёС‚СЊ</Button>
+              <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Отмена</Button>
+              <Button type="submit">Сохранить</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -842,14 +842,14 @@ export default function UsersPage() {
       } onOpenChange={() => setUserToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Р’С‹ СѓРІРµСЂРµРЅС‹?</AlertDialogTitle>
+            <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
             <AlertDialogDescription>
-              Р’С‹ СѓРІРµСЂРµРЅС‹, С‡С‚Рѕ С…РѕС‚РёС‚Рµ СѓРґР°Р»РёС‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ "{getUserFullName(userToDelete)}"? Р­С‚Рѕ РґРµР№СЃС‚РІРёРµ РЅРµР»СЊР·СЏ Р±СѓРґРµС‚ РѕС‚РјРµРЅРёС‚СЊ.
+              Вы уверены, что хотите удалить пользователя "{getUserFullName(userToDelete)}"? Это действие нельзя будет отменить.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>РћС‚РјРµРЅР°</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm}>РЈРґР°Р»РёС‚СЊ</AlertDialogAction>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm}>Удалить</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog >
@@ -858,7 +858,7 @@ export default function UsersPage() {
       < Dialog open={!!viewingUser} onOpenChange={() => setViewingUser(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Р”РµС‚Р°Р»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ</DialogTitle>
+            <DialogTitle>Детали пользователя</DialogTitle>
             <DialogDescription>{getUserFullName(viewingUser)}</DialogDescription>
           </DialogHeader>
           {isLoading ? <Spinner /> : (
@@ -874,22 +874,22 @@ export default function UsersPage() {
                 </div>
               </div>
               <DetailItem label="ID" value={viewingUser?.id} />
-              <DetailItem label="Р¤РРћ" value={viewingUser?.full_name} />
-              <DetailItem label="Р РѕР»СЊ" value={getRoleLabel(viewingUser?.role?.id)} />
+              <DetailItem label="ФИО" value={viewingUser?.full_name} />
+              <DetailItem label="Роль" value={getRoleLabel(viewingUser?.role?.id)} />
               <DetailItem label="Email" value={viewingUser?.email} />
-              <DetailItem label="РўРµР»РµС„РѕРЅ" value={viewingUser?.phone} />
-              <DetailItem label="Р”РѕР»Р¶РЅРѕСЃС‚СЊ" value={viewingUser?.position} />
-              <DetailItem label="Р¤РёР»РёР°Р»" value={viewingUser?.branch?.name} />
-              <DetailItem label="Р‘РРќ/РРРќ" value={viewingUser?.iin || viewingUser?.bin_iin} />
+              <DetailItem label="Телефон" value={viewingUser?.phone} />
+              <DetailItem label="Должность" value={viewingUser?.position} />
+              <DetailItem label="Филиал" value={viewingUser?.branch?.name} />
+              <DetailItem label="БИН/ИИН" value={viewingUser?.iin || viewingUser?.bin_iin} />
               <DetailItem label="Адрес" value={viewingUser?.address} />
               <DetailItem label="Доп. информация" value={viewingUser?.extra_info} />
-              <DetailItem label="Р’РµСЂРёС„РёС†РёСЂРѕРІР°РЅ" value={viewingUser?.is_verified ? 'Р”Р°' : 'РќРµС‚'} />
-              <DetailItem label="РђРєС‚РёРІРµРЅ" value={viewingUser?.is_active ? 'Р”Р°' : 'РќРµС‚'} />
-              <DetailItem label="Р”Р°С‚Р° СЃРѕР·РґР°РЅРёСЏ" value={viewingUser?.created_at ? new Date(viewingUser.created_at).toLocaleString() : '-'} />
+              <DetailItem label="Верифицирован" value={viewingUser?.is_verified ? 'Да' : 'Нет'} />
+              <DetailItem label="Активен" value={viewingUser?.is_active ? 'Да' : 'Нет'} />
+              <DetailItem label="Дата создания" value={viewingUser?.created_at ? new Date(viewingUser.created_at).toLocaleString() : '-'} />
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setViewingUser(null)}>Р—Р°РєСЂС‹С‚СЊ</Button>
+            <Button variant="outline" onClick={() => setViewingUser(null)}>Закрыть</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog >

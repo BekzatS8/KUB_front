@@ -1,4 +1,4 @@
-﻿import api from './index';
+import api from './index';
 import type * as Models from '@/src/models/users.model';
 
 function translateUserError(error: any, fallback: string) {
@@ -30,7 +30,7 @@ export async function createUser(payload: Models.CreateUserRequest): Promise<Mod
     const res = await api.post('/users', payload);
     return res.data;
   } catch (error: any) {
-    throw new Error(translateUserError(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.'));
+    throw new Error(translateUserError(error, 'Не удалось создать пользователя.'));
   }
 }
 
@@ -62,7 +62,7 @@ export async function updateUser(id: string, payload: Models.UpdateUserRequest):
     const res = await api.put(`/users/${id}`, payload);
     return res.data;
   } catch (error: any) {
-    throw new Error(translateUserError(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.'));
+    throw new Error(translateUserError(error, 'Не удалось обновить пользователя.'));
   }
 }
 
@@ -71,6 +71,6 @@ export async function deleteUser(id: string): Promise<void> {
     const res = await api.delete(`/users/${id}`);
     return res.data;
   } catch (error: any) {
-    throw new Error(translateUserError(error, 'РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.'));
+    throw new Error(translateUserError(error, 'Не удалось удалить пользователя.'));
   }
 }
