@@ -8,7 +8,19 @@ export type Auth_Login_Response = {
     id: number
     full_name: string
     email: string
-    phone: string
+    phone?: string
+    iin?: string
+    address?: string
+    extra_info?: string
+    avatar_url?: string
+    avatar?: {
+      url?: string
+      crop_x?: number | null
+      crop_y?: number | null
+      crop_scale?: number | null
+      crop_size?: number | null
+      has_original_image?: boolean
+    }
     is_active: boolean
     is_verified: true
     branch: {

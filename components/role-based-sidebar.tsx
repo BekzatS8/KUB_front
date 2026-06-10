@@ -8,6 +8,8 @@ import { hasPermission } from "@/lib/auth";
 import { getMe } from "@/src/api/auth.api";
 import * as RolesAPI from "@/src/api/roles.api";
 import * as UserAPI from "@/src/api/users.api";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AuthenticatedAvatarImage } from "@/components/authenticated-avatar-image";
 import {
   LayoutDashboard,
   Users,
@@ -326,6 +328,12 @@ function getRoleDisplayName(roleKey: string): string {
   return roleDisplayNames[roleKey] || roleKey
 }
 
+function getUserInitials(user: Auth_Login_Response['user'] | null) {
+  const source = user?.full_name || user?.legacy?.company_name || user?.email || "U";
+  const parts = source.split(/\s+/).filter(Boolean);
+  return (parts[0]?.[0] || "U") + (parts[1]?.[0] || "");
+}
+
 export function RoleBasedSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
@@ -467,9 +475,10 @@ export function RoleBasedSidebar() {
         <div className="p-4 border-b border-slate-200/60">
           <Link href="/profile" className="block">
             <div className="flex items-center space-x-3 mb-3 hover:bg-slate-50 rounded-lg p-2 transition-all duration-200 cursor-pointer">
-              <div className="w-10 h-10 gradient-primary rounded-full flex items-center justify-center text-white text-sm font-bold shadow-md">
-                {user.legacy?.company_name?.[0] || user.full_name?.[0] || user.email?.[0] || 'U'}
-              </div>
+              <Avatar className="w-10 h-10 shadow-md">
+                <AuthenticatedAvatarImage src={(user as any).avatar_url || (user as any).avatar?.url} alt={user.full_name || user.email} className="h-full w-full object-cover" />
+                <AvatarFallback className="gradient-primary text-white text-sm font-bold">{getUserInitials(user)}</AvatarFallback>
+              </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-slate-900 truncate">
                   {user?.full_name || user?.legacy?.company_name}

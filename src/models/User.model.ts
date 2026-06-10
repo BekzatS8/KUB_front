@@ -6,6 +6,18 @@ export interface User {
   full_name?: string
   email: string
   phone?: string
+  iin?: string
+  address?: string
+  extra_info?: string
+  avatar_url?: string
+  avatar?: {
+    url?: string
+    crop_x?: number | null
+    crop_y?: number | null
+    crop_scale?: number | null
+    crop_size?: number | null
+    has_original_image?: boolean
+  }
   position?: string
   role: {
     id: number

@@ -5,7 +5,19 @@ export interface User {
   middle_name?: string;
   full_name?: string;
   email: string;
-  phone: string;
+  phone?: string;
+  iin?: string;
+  address?: string;
+  extra_info?: string;
+  avatar_url?: string;
+  avatar?: {
+    url?: string;
+    crop_x?: number | null;
+    crop_y?: number | null;
+    crop_scale?: number | null;
+    crop_size?: number | null;
+    has_original_image?: boolean;
+  };
   position?: string;
   role: {
     id: number;
@@ -39,12 +51,16 @@ export interface User {
 }
 
 export interface CreateUserRequest {
-  first_name: string;
-  last_name: string;
-  middle_name: string;
+  first_name?: string;
+  last_name?: string;
+  middle_name?: string;
   email: string;
   password?: string;
-  phone: string;
+  phone?: string;
+  iin?: string;
+  address?: string;
+  extra_info?: string;
+  avatar_url?: string;
   role_id: number;
   branch_id?: number;
   position?: string;
@@ -63,6 +79,10 @@ export interface UpdateUserRequest {
   middle_name?: string;
   email?: string;
   phone?: string;
+  iin?: string;
+  address?: string;
+  extra_info?: string;
+  avatar_url?: string;
   role_id?: number;
   branch_id?: number;
   position?: string;
