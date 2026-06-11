@@ -45,10 +45,14 @@ function transformUserFromServer(serverUser: any): any {
 function getRoleFromId(roleId: number): string {
   const roleMapping: Record<number, string> = {
     50: 'system_admin',
-    40: 'leadership',
-    30: 'control',
-    20: 'operations',
+    40: 'management',
+    30: 'quality_control',
+    // 20 is reserved legacy operations ID — not an active role
     10: 'sales',
+    60: 'visa',
+    70: 'partner',
+    80: 'hr',
+    90: 'legal',
   }
   return roleMapping[roleId] || 'user'
 }
@@ -60,11 +64,17 @@ function normalizeRoleCode(roleCode: string): string {
     'admin': 'system_admin',
     'admin_staff': 'system_admin',
     'system_admin': 'system_admin',
-    'leadership': 'leadership',
-    'management': 'leadership',
-    'control': 'control',
-    'operations': 'operations',
+    'leadership': 'management',
+    'management': 'management',
+    'control': 'quality_control',
+    'audit': 'quality_control',
+    'quality_control': 'quality_control',
+    // 'operations' intentionally omitted — legacy role_id=20, no active permissions
     'sales': 'sales',
+    'visa': 'visa',
+    'partner': 'partner',
+    'hr': 'hr',
+    'legal': 'legal',
   }
   return codeMapping[roleCode] || roleCode
 }

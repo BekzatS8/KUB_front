@@ -64,11 +64,12 @@ export default function RegisterPage() {
         setRoles(publicRoles);
       } catch (error) {
         console.error("Failed to fetch roles:", error);
-        // Fallback to default roles if API fails
+        // Fallback to default active roles if API fails
         setRoles([
           { id: 10, name: "sales", description: "Менеджер по продажам", created_at: "", updated_at: "" },
-          { id: 20, name: "operations", description: "Операционный отдел", created_at: "", updated_at: "" },
-          { id: 30, name: "control", description: "Отдел контроля", created_at: "", updated_at: "" },
+          { id: 30, name: "quality_control", description: "Отдел контроля", created_at: "", updated_at: "" },
+          { id: 60, name: "visa", description: "Визовый отдел", created_at: "", updated_at: "" },
+          { id: 70, name: "partner", description: "Партнерский отдел", created_at: "", updated_at: "" },
         ]);
       } finally {
         setRolesLoading(false);
@@ -81,22 +82,24 @@ export default function RegisterPage() {
   const getRoleIcon = (roleName: string) => {
     const name = roleName.toLowerCase();
     if (name.includes('sales') || name.includes('продаж')) return Target;
-    if (name.includes('operation') || name.includes('операци')) return Settings;
-    if (name.includes('control') || name.includes('контроль')) return Shield;
+    if (name.includes('control') || name.includes('контроль') || name.includes('quality')) return Shield;
     if (name.includes('management') || name.includes('менедж')) return Crown;
+    if (name.includes('visa') || name.includes('виза')) return Settings;
     return Users;
   };
 
   const getRoleLabel = (role: Role) => {
-    // Map role names to user-friendly labels
     const labelMap: Record<string, string> = {
       'sales': 'Менеджер по продажам',
-      'operations': 'Операционный менеджер', 
-      'control': 'Контроль качества',
+      'quality_control': 'Контроль качества',
       'management': 'Руководитель',
       'admin': 'Администратор',
+      'visa': 'Визовый отдел',
+      'partner': 'Партнерский отдел',
+      'hr': 'Отдел кадров',
+      'legal': 'Юридический отдел',
     };
-    
+
     return labelMap[role.name.toLowerCase()] || role.description || role.name;
   };
 

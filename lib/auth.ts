@@ -100,14 +100,20 @@ export function normalizeRoleCode(roleCode?: string | null): string | undefined 
     admin_staff: 'system_admin',
     system_admin: 'system_admin',
     systemadmin: 'system_admin',
-    management: 'leadership',
-    manager: 'leadership',
-    leadership: 'leadership',
-    control: 'control',
-    operations: 'operations',
-    operation: 'operations',
+    administrator: 'system_admin',
+    management: 'management',
+    manager: 'management',
+    leadership: 'management',
+    control: 'quality_control',
+    audit: 'quality_control',
+    quality_control: 'quality_control',
+    // 'operations' / 'operation' intentionally omitted — legacy role_id=20, no active permissions
     sales: 'sales',
     seller: 'sales',
+    visa: 'visa',
+    partner: 'partner',
+    hr: 'hr',
+    legal: 'legal',
   }
 
   return codeMapping[normalized] || normalized
@@ -116,10 +122,14 @@ export function normalizeRoleCode(roleCode?: string | null): string | undefined 
 export function getRoleKeyFromId(roleId?: number | string | null): string {
   const roleMapping: Record<number, string> = {
     50: 'system_admin',
-    40: 'leadership',
-    30: 'control',
-    20: 'operations',
+    40: 'management',
+    30: 'quality_control',
+    // 20 is reserved legacy operations ID — not an active role
     10: 'sales',
+    60: 'visa',
+    70: 'partner',
+    80: 'hr',
+    90: 'legal',
   }
   return roleMapping[Number(roleId || 0)] || 'user'
 }
@@ -193,8 +203,9 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'documents:read',
       'analytics:read',
     ],
-    operations: [
-      // Операционный отдел: CanViewAllBusinessData, CanProcessDocuments, CanWorkWithLeads
+    // operations (role_id=20) is a legacy reserved role — no active permissions granted
+    sales: [
+      // Отдел продаж: CanWorkWithLeads
       'leads:read',
       'leads:write',
       'deals:read',
@@ -206,14 +217,35 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'documents:read',
       'documents:write',
     ],
-    sales: [
-      // Отдел продаж: CanWorkWithLeads
+    visa: [
       'leads:read',
       'leads:write',
       'deals:read',
-      'deals:write',
       'clients:read',
       'clients:write',
+      'tasks:read',
+      'tasks:write',
+      'documents:read',
+      'documents:write',
+    ],
+    partner: [
+      'leads:read',
+      'leads:write',
+      'deals:read',
+      'clients:read',
+      'clients:write',
+      'tasks:read',
+      'tasks:write',
+      'documents:read',
+      'documents:write',
+    ],
+    hr: [
+      'tasks:read',
+      'tasks:write',
+      'documents:read',
+      'documents:write',
+    ],
+    legal: [
       'tasks:read',
       'tasks:write',
       'documents:read',
@@ -242,12 +274,15 @@ export function getUserRoleText(role: string | undefined): string {
   role = normalizeRoleCode(role)
   const roleMap: Record<string, string> = {
     system_admin: 'Системный администратор',
-    leadership: 'Руководство',
-    control: 'Отдел контроля',
-    operations: 'Операционный отдел',
+    management: 'Руководство',
+    quality_control: 'Отдел контроля',
     sales: 'Отдел продаж',
+    visa: 'Визовый отдел',
+    partner: 'Партнерский отдел',
+    hr: 'Отдел кадров',
+    legal: 'Юридический отдел',
   };
-  
+
   return roleMap[role ?? ''] ?? role ?? 'Пользователь';
 }
 
@@ -278,10 +313,13 @@ export function switchTestRole(roleCode: string): void {
     // Map role code to role object
     const roleMapping: Record<string, { id: number; code: string; legacy_name: string }> = {
       'system_admin': { id: 50, code: 'system_admin', legacy_name: 'Системный администратор' },
-      'leadership': { id: 40, code: 'leadership', legacy_name: 'Руководство' },
-      'control': { id: 30, code: 'control', legacy_name: 'Отдел контроля' },
-      'operations': { id: 20, code: 'operations', legacy_name: 'Операционный отдел' },
+      'management': { id: 40, code: 'management', legacy_name: 'Руководство' },
+      'quality_control': { id: 30, code: 'quality_control', legacy_name: 'Отдел контроля' },
       'sales': { id: 10, code: 'sales', legacy_name: 'Отдел продаж' },
+      'visa': { id: 60, code: 'visa', legacy_name: 'Визовый отдел' },
+      'partner': { id: 70, code: 'partner', legacy_name: 'Партнерский отдел' },
+      'hr': { id: 80, code: 'hr', legacy_name: 'Отдел кадров' },
+      'legal': { id: 90, code: 'legal', legacy_name: 'Юридический отдел' },
     };
     
     const updatedUser = { ...currentUser, role: roleMapping[roleCode] || currentUser.role, role_id: roleMapping[roleCode]?.id };

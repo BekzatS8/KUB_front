@@ -174,10 +174,13 @@ export default function LeadsPage() {
   function getRoleFromId(roleId: number): string {
     const roleMapping: Record<number, string> = {
       50: 'system_admin',
-      40: 'leadership',
-      30: 'control',
-      20: 'operations',
-      10: 'sales'
+      40: 'management',
+      30: 'quality_control',
+      10: 'sales',
+      60: 'visa',
+      70: 'partner',
+      80: 'hr',
+      90: 'legal',
     }
     return roleMapping[roleId] || 'user'
   }

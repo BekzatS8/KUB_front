@@ -2,6 +2,7 @@ export type Leads_Create_lead_Request = {
   title: string
   description: string
   owner_id: number
+  funnel_id?: number | null
   status: string
 }
 
@@ -38,6 +39,7 @@ export interface Lead {
   title: string
   description: string
   owner_id: number
+  funnel_id?: number | null
   status: string
   created_at?: string
   updated_at?: string

@@ -58,11 +58,12 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Check, ChevronsUpDown, Search, Plus, Edit, Trash2, Users, UserCheck, Shield, RefreshCw, Eye } from "lucide-react";
-import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import * as UserAPI from "@/src/api/users.api";
 import * as RolesAPI from "@/src/api/roles.api";
 import * as BranchesAPI from "@/src/api/branches.api";
+import { getMyPermissions } from "@/src/api/permissions.api";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
@@ -98,10 +99,13 @@ const DetailItem = ({ label, value }: { label: string; value?: string | number |
 
 const ROLE_LABELS: Record<number, string> = {
   [Roles.SALES]: "Отдел продаж",
-  [Roles.OPERATIONS]: "Операционный отдел",
-  [Roles.CONTROL]: "Отдел контроля",
+  [Roles.QUALITY_CONTROL]: "Отдел контроля качества",
   [Roles.MANAGEMENT]: "Руководство",
   [Roles.SYSTEM_ADMIN]: "Системный администратор",
+  [Roles.VISA]: "Визовый отдел",
+  [Roles.PARTNER]: "Партнерский отдел",
+  [Roles.HR]: "Отдел кадров",
+  [Roles.LEGAL]: "Юридический отдел",
 };
 
 const E164_PHONE_PATTERN = /^\+[1-9]\d{10,14}$/;
@@ -229,13 +233,13 @@ export default function UsersPage() {
   const [rolesLoading, setRolesLoading] = useState(false);
   const [availableBranches, setAvailableBranches] = useState<{ id: number, name: string }[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
+  const [permissionScopes, setPermissionScopes] = useState<Record<string, string>>({});
 
   const { toast } = useToast();
   const currentUser = useMemo(() => getCurrentUser(), []);
-  // TODO: Replace with actual permissions
-  const canCreate = true; // user && hasPermission(user.role, ["users:write"]);
-  const canEdit = true; // user && hasPermission(user.role, ["users:write"]);
-  const canDelete = true; // user && hasPermission(user.role, ["users:write"]);
+  const canCreate = Boolean(permissionScopes["users.create"]);
+  const canEdit = Boolean(permissionScopes["users.update"]);
+  const canDelete = Boolean(permissionScopes["users.delete"]);
 
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -283,6 +287,12 @@ export default function UsersPage() {
   }, [currentPage]);
 
   useEffect(() => {
+    getMyPermissions()
+      .then((data) => setPermissionScopes(data.scopes || {}))
+      .catch(() => setPermissionScopes({}));
+  }, []);
+
+  useEffect(() => {
     const fetchRoles = async () => {
       setRolesLoading(true);
       try {
@@ -292,7 +302,7 @@ export default function UsersPage() {
         // Filter out invalid roles and only keep valid ones
         const validRoles = rolesData.filter(role => {
           const roleId = Number(role.id);
-          return [10, 20, 30, 40, 50].includes(roleId); // Only valid role IDs
+          return [10, 30, 40, 50, 60, 70, 80, 90].includes(roleId); // Only active role IDs
         });
         
         console.log('Filtered roles:', validRoles);

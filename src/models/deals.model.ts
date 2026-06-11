@@ -3,6 +3,7 @@ export type Deals_Create_deal_Request = {
   client_id?: number
   client_type?: string
   owner_id?: number
+  funnel_id?: number | null
   amount: number
   currency: string
   status: string
@@ -32,6 +33,7 @@ export interface Deal {
   client_id?: number
   client_type?: string
   owner_id?: number
+  funnel_id?: number | null
   amount: number
   currency: string
   status: string
