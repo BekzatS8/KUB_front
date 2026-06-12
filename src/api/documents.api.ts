@@ -167,6 +167,22 @@ export async function getSignStatus(id: number): Promise<any> {
   return res.data
 }
 
+export async function getSignHistory(id: number): Promise<{ document: { id: number; status: string }; events: SignHistoryEvent[] }> {
+  const res = await api.get(`/documents/${id}/sign/history`)
+  return res.data
+}
+
+export interface SignHistoryEvent {
+  type: string
+  at: string
+  channel?: string
+  by?: string
+  method?: string
+  ip?: string
+  user_agent?: string
+  status?: string
+}
+
 export async function finalSign(signSessionId: string, token: string): Promise<any> {
   const res = await api.post(`/api/v1/sign/sessions/id/${signSessionId}/sign`, { token, agree: true })
   return res.data

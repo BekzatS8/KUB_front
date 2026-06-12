@@ -69,11 +69,14 @@ import {
   ArchiveRestore,
   ArrowUp,
   ArrowDown,
+  PlayCircle,
 } from "lucide-react";
 import { getCurrentUser, setCurrentUser, hasPermission, getRoleCode } from "@/lib/auth";
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
 import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import * as ClientAPI from "@/src/api/clients.api";
+import { getClientCalls } from "@/src/api/telephony.api";
+import type { TelephonyCall } from "@/src/models/telephony.model";
 import * as AuthAPI from "@/src/api/auth.api";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
@@ -302,6 +305,7 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
     middle_name: "",
     iin: "",
     id_number: "",
+    passport_identity: "",
     passport_series: "",
     passport_number: "",
     registration_address: "",
@@ -349,6 +353,7 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
   id_number: "",
   id_issue_date: "",
   id_expire_date: "",
+  passport_identity: "",
   passport_series: "",
   passport_number: "",
   passport_issue_date: "",
@@ -402,6 +407,53 @@ const DetailItem = ({ label, value }: { label: string; value?: string | null }) 
   </div>
 );
 
+const CALL_STATUS_LABELS: Record<string, string> = {
+  incoming: "Входящий",
+  outgoing: "Исходящий",
+  missed: "Пропущенный",
+  answered: "Отвечен",
+  completed: "Завершён",
+  failed: "Ошибка",
+  unknown: "Неизвестно",
+};
+
+const CALL_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  answered: "default",
+  completed: "default",
+  incoming: "secondary",
+  outgoing: "secondary",
+  missed: "destructive",
+  failed: "destructive",
+  unknown: "outline",
+};
+
+const CALL_DIRECTION_LABELS: Record<string, string> = {
+  inbound: "⬇ Входящий",
+  outbound: "⬆ Исходящий",
+};
+
+function formatCallDuration(seconds?: number): string {
+  if (seconds == null) return "—";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function formatCallDateTime(iso?: string): string {
+  if (!iso) return "—";
+  try {
+    return new Intl.DateTimeFormat("ru-KZ", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [clientTypeFilter, setClientTypeFilter] = useState("");
@@ -431,6 +483,7 @@ export default function ClientsPage() {
           id_number: "",
           id_issue_date: "",
           id_expire_date: "",
+          passport_identity: "",
           passport_series: "",
           passport_number: "",
           passport_issue_date: "",
@@ -482,6 +535,7 @@ export default function ClientsPage() {
             middle_name: "",
             iin: "",
             id_number: "",
+            passport_identity: "",
             passport_series: "",
             passport_number: "",
             registration_address: "",
@@ -567,6 +621,9 @@ export default function ClientsPage() {
   const [clientProfile, setClientProfile] = useState<any>(null);
   const [clientPhotoUrl, setClientPhotoUrl] = useState<string | null>(null);
   const [clientPhotoError, setClientPhotoError] = useState(false);
+  const [clientCalls, setClientCalls] = useState<TelephonyCall[]>([]);
+  const [clientCallsLoading, setClientCallsLoading] = useState(false);
+  const [clientCallsError, setClientCallsError] = useState<string | null>(null);
 
   const [clients, setClients] = useState<Models.Client[]>([]);
   const [totalClients, setTotalClients] = useState(0);
@@ -975,6 +1032,8 @@ useEffect(() => {
   };
 
   const getPassportIdentityValue = () => {
+    // Use the unified field; fall back to legacy series+number for old data.
+    if (clientFormData.passport_identity) return clientFormData.passport_identity;
     return [clientFormData.passport_series, clientFormData.passport_number]
       .map((part) => String(part || "").trim())
       .filter(Boolean)
@@ -982,30 +1041,12 @@ useEffect(() => {
   };
 
   const handlePassportIdentityChange = (value: string) => {
-    const normalized = value.replace(/\s+/g, " ").trimStart();
-    const trimmed = normalized.trim();
-    let passportSeries = "";
-    let passportNumber = "";
-
-    if (trimmed) {
-      const withSeparator = trimmed.match(/^(.+?)[\s\-\/]+(.+)$/);
-      const compactWithPrefix = trimmed.match(/^([A-Za-zА-Яа-я]{1,4})(\d.*)$/);
-
-      if (withSeparator) {
-        passportSeries = withSeparator[1].trim();
-        passportNumber = withSeparator[2].replace(/[\s\-\/]+/g, "");
-      } else if (compactWithPrefix) {
-        passportSeries = compactWithPrefix[1].trim();
-        passportNumber = compactWithPrefix[2].replace(/\s+/g, "");
-      } else {
-        passportNumber = trimmed;
-      }
-    }
-
     setClientFormData((prev) => ({
       ...prev,
-      passport_series: passportSeries,
-      passport_number: passportNumber,
+      passport_identity: value,
+      // Keep legacy fields in sync so old server paths also work.
+      passport_series: "",
+      passport_number: "",
     }));
   };
 
@@ -1074,6 +1115,7 @@ useEffect(() => {
         middle_name: client.individual_profile?.middle_name || "",
         iin: client.individual_profile?.iin || "",
         id_number: client.individual_profile?.id_number || "",
+        passport_identity: client.individual_profile?.passport_identity || "",
         passport_series: client.individual_profile?.passport_series || "",
         passport_number: client.individual_profile?.passport_number || "",
         registration_address: client.individual_profile?.registration_address || "",
@@ -1129,6 +1171,7 @@ useEffect(() => {
       marital_status: hasIndividualProfile ? client.individual_profile?.marital_status || "" : client.marital_status || "",
       iin: hasIndividualProfile ? client.individual_profile?.iin || "" : client.iin || "",
       id_number: hasIndividualProfile ? client.individual_profile?.id_number || "" : client.id_number || "",
+      passport_identity: hasIndividualProfile ? client.individual_profile?.passport_identity || "" : client.passport_identity || "",
       passport_series: hasIndividualProfile ? client.individual_profile?.passport_series || "" : client.passport_series || "",
       passport_number: hasIndividualProfile ? client.individual_profile?.passport_number || "" : client.passport_number || "",
       passport_issue_date: hasIndividualProfile ? client.individual_profile?.passport_issue_date || "" : client.passport_issue_date || "",
@@ -1196,6 +1239,29 @@ useEffect(() => {
       setClientPhotoUrl(null);
     }
   };
+
+  useEffect(() => {
+    if (!viewingClient) {
+      setClientCalls([]);
+      setClientCallsError(null);
+      return;
+    }
+    const id = Number(viewingClient.id);
+    setClientCalls([]);
+    setClientCallsLoading(true);
+    setClientCallsError(null);
+    getClientCalls(id)
+      .then((data) => setClientCalls(data.items ?? []))
+      .catch((e: any) => {
+        if (e?.response?.status === 403) {
+          setClientCalls([]);
+        } else {
+          setClientCallsError("Не удалось загрузить историю звонков");
+        }
+      })
+      .finally(() => setClientCallsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewingClient?.id]);
 
   const handleDeleteConfirm = async () => {
     if (!clientToDelete) return;
@@ -1462,6 +1528,7 @@ useEffect(() => {
       payload.middle_name = clientFormData.middle_name || "";
       payload.iin = clientFormData.iin || "";
       payload.id_number = clientFormData.id_number || "";
+      payload.passport_identity = clientFormData.passport_identity || "";
       payload.passport_series = clientFormData.passport_series || "";
       payload.passport_number = clientFormData.passport_number || "";
       payload.passport_issue_date = clientFormData.passport_issue_date ? clientFormData.passport_issue_date.split('T')[0] : "";
@@ -1519,6 +1586,7 @@ useEffect(() => {
           middle_name: clientFormData.middle_name || "",
           iin: clientFormData.iin || "",
           id_number: clientFormData.id_number || "",
+          passport_identity: clientFormData.passport_identity || "",
           passport_series: clientFormData.passport_series || "",
           passport_number: clientFormData.passport_number || "",
           registration_address: clientFormData.registration_address || "",
@@ -2607,10 +2675,14 @@ useEffect(() => {
                         <DetailItem label="Номер удостоверения" value={viewingClient.id_number} />
                         <DetailItem
                           label="Серия и номер паспорта"
-                          value={[
-                            viewingClient.individual_profile?.passport_series || viewingClient.passport_series,
-                            viewingClient.individual_profile?.passport_number || viewingClient.passport_number,
-                          ].filter(Boolean).join(" ")}
+                          value={
+                            viewingClient.individual_profile?.passport_identity ||
+                            viewingClient.passport_identity ||
+                            [
+                              viewingClient.individual_profile?.passport_series || viewingClient.passport_series,
+                              viewingClient.individual_profile?.passport_number || viewingClient.passport_number,
+                            ].filter(Boolean).join(" ")
+                          }
                         />
                         <DetailItem label="Дата выдачи паспорта" value={viewingClient.passport_issue_date} />
                         <DetailItem label="Дата окончания паспорта" value={viewingClient.passport_expire_date} />
@@ -2735,6 +2807,76 @@ useEffect(() => {
                     </div>
                   </>
                 )}
+
+                {/* Call History */}
+                <div className="space-y-4 border-t pt-4">
+                  <h3 className="font-semibold text-lg">ИСТОРИЯ ЗВОНКОВ</h3>
+                  <Separator />
+                  {clientCallsLoading && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                      <Spinner className="h-4 w-4" />
+                      Загрузка...
+                    </div>
+                  )}
+                  {!clientCallsLoading && clientCallsError && (
+                    <p className="text-sm text-muted-foreground py-2">{clientCallsError}</p>
+                  )}
+                  {!clientCallsLoading && !clientCallsError && clientCalls.length === 0 && (
+                    <p className="text-sm text-muted-foreground py-2">Звонков нет</p>
+                  )}
+                  {!clientCallsLoading && !clientCallsError && clientCalls.length > 0 && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Дата и время</TableHead>
+                          <TableHead>Направление</TableHead>
+                          <TableHead>Статус</TableHead>
+                          <TableHead>Номер</TableHead>
+                          <TableHead>Менеджер</TableHead>
+                          <TableHead>Длительность</TableHead>
+                          <TableHead>Запись</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {clientCalls.map((call) => (
+                          <TableRow key={call.id}>
+                            <TableCell className="whitespace-nowrap text-sm">
+                              {formatCallDateTime(call.started_at || call.created_at)}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {CALL_DIRECTION_LABELS[call.direction] ?? call.direction}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={CALL_STATUS_VARIANTS[call.status] ?? "outline"}>
+                                {CALL_STATUS_LABELS[call.status] ?? call.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">{call.phone}</TableCell>
+                            <TableCell className="text-sm">{call.manager_name ?? "—"}</TableCell>
+                            <TableCell className="text-sm">
+                              {formatCallDuration(call.duration_seconds)}
+                            </TableCell>
+                            <TableCell>
+                              {call.recording_url ? (
+                                <a
+                                  href={call.recording_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                                >
+                                  <PlayCircle className="h-4 w-4" />
+                                  Слушать
+                                </a>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
               </div>
             </ScrollArea>
           )}

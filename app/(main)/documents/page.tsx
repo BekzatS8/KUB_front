@@ -96,6 +96,7 @@ import {
     ArchiveRestore,
     ArrowUp,
     ArrowDown,
+    History,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
@@ -120,7 +121,9 @@ import {
     reviewDocument,
     generateSignLink,
     startSign,
+    getSignHistory,
 } from "@/src/api/documents.api"
+import type { SignHistoryEvent } from "@/src/api/documents.api"
 import type { Document, DocType, DocStatus, SignStatus } from "@/src/models/documents.model"
 import { PdfViewer } from "@/components/ui/pdf-viewer-simple"
 import { SendForSignatureModal } from "@/components/send-for-signature-modal"
@@ -363,6 +366,22 @@ function ComboboxSelect({
 
 // ─── Role helper ─────────────────────────────────────────────────
 
+// ─── Sign-history helpers ─────────────────────────────────────────
+
+const SIGN_HISTORY_EVENT_LABELS: Record<string, string> = {
+    session_created:        "Сессия подписания открыта",
+    session_verified:       "Идентификация подтверждена",
+    session_signed:         "Подписано через сессию",
+    confirmation_sent:      "Код подтверждения отправлен",
+    confirmation_approved:  "Код подтверждён",
+    confirmation_rejected:  "Код отклонён",
+    document_signed:        "Документ подписан",
+}
+
+function signHistoryEventLabel(type: string): string {
+    return SIGN_HISTORY_EVENT_LABELS[type] ?? type
+}
+
 // ─── Main Page ───────────────────────────────────────────────────
 
 export default function DocumentsPage() {
@@ -480,6 +499,9 @@ export default function DocumentsPage() {
 
     const [isDetailsOpen, setIsDetailsOpen] = useState(false)
     const [selectedDoc, setSelectedDoc] = useState<Document | null>(null)
+    const [signHistory, setSignHistory] = useState<SignHistoryEvent[]>([])
+    const [signHistoryLoading, setSignHistoryLoading] = useState(false)
+    const [signHistoryError, setSignHistoryError] = useState<string | null>(null)
 
     // ─── Delete ─────────────────────────────────────────────────
 
@@ -711,6 +733,30 @@ export default function DocumentsPage() {
         setCreateError(null)
         setIsCreateOpen(true)
     }
+
+    // Lazy-load sign history when details dialog opens for a document
+    useEffect(() => {
+        if (!isDetailsOpen || !selectedDoc) {
+            setSignHistory([])
+            setSignHistoryError(null)
+            return
+        }
+        const id = selectedDoc.id
+        setSignHistory([])
+        setSignHistoryLoading(true)
+        setSignHistoryError(null)
+        getSignHistory(id)
+            .then((data) => setSignHistory(data.events ?? []))
+            .catch((e: any) => {
+                if (e?.response?.status === 403) {
+                    setSignHistory([]) // silently swallow — no access
+                } else {
+                    setSignHistoryError("Не удалось загрузить историю подписания")
+                }
+            })
+            .finally(() => setSignHistoryLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isDetailsOpen, selectedDoc?.id])
 
     const handleViewFile = async (doc: Document) => {
         setSelectedPdfDoc(doc)
@@ -1815,6 +1861,55 @@ export default function DocumentsPage() {
                             )}
                         </div>
                     )}
+
+                    {/* ── История подписания ─────────────────────────── */}
+                    <div className="mt-4 border-t pt-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <History className="h-4 w-4 text-gray-500" />
+                            <span className="text-sm font-semibold text-gray-700">История подписания</span>
+                        </div>
+                        {signHistoryLoading && (
+                            <p className="text-sm text-muted-foreground flex items-center gap-2">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Загрузка...
+                            </p>
+                        )}
+                        {!signHistoryLoading && signHistoryError && (
+                            <p className="text-sm text-muted-foreground">{signHistoryError}</p>
+                        )}
+                        {!signHistoryLoading && !signHistoryError && signHistory.length === 0 && (
+                            <p className="text-sm text-muted-foreground">Документ ещё не отправлялся на подписание</p>
+                        )}
+                        {!signHistoryLoading && !signHistoryError && signHistory.length > 0 && (
+                            <ol className="space-y-2">
+                                {signHistory.map((evt, idx) => (
+                                    <li key={idx} className="flex gap-3 text-sm">
+                                        <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-blue-400 mt-1.5" />
+                                        <div className="min-w-0">
+                                            <span className="font-medium text-gray-800">
+                                                {signHistoryEventLabel(evt.type)}
+                                            </span>
+                                            {evt.channel && (
+                                                <span className="ml-1 text-gray-500">· {evt.channel.toUpperCase()}</span>
+                                            )}
+                                            {evt.by && (
+                                                <span className="ml-1 text-gray-500">· {evt.by}</span>
+                                            )}
+                                            {evt.method && (
+                                                <span className="ml-1 text-gray-500">· {evt.method}</span>
+                                            )}
+                                            <p className="text-xs text-gray-400">
+                                                {format(new Date(evt.at), "dd.MM.yyyy HH:mm:ss", { locale: ru })}
+                                                {evt.ip && <span> · IP: {evt.ip}</span>}
+                                                {evt.status && <span> · {evt.status}</span>}
+                                            </p>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ol>
+                        )}
+                    </div>
+
                     <DialogFooter className="flex gap-2">
                         {selectedDoc && (
                             <>

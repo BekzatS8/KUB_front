@@ -56,8 +56,9 @@ export interface Client {
     middle_name?: string;
     iin?: string;
     id_number?: string;
-    passport_series?: string;
-    passport_number?: string;
+    passport_identity?: string;  // unified field (migration 043)
+    passport_series?: string;    // deprecated
+    passport_number?: string;    // deprecated
     registration_address?: string;
     actual_address?: string;
     country?: string;
@@ -105,8 +106,9 @@ export interface Client {
   id_number?: string | null;
   id_issue_date?: string | null;
   id_expire_date?: string | null;
-  passport_series?: string | null;
-  passport_number?: string | null;
+  passport_identity?: string | null; // unified field (migration 043)
+  passport_series?: string | null;   // deprecated
+  passport_number?: string | null;   // deprecated
   passport_issue_date?: string | null;
   passport_expire_date?: string | null;
   registration_address?: string | null;
@@ -180,8 +182,9 @@ export type CreateClientRequest = Omit<Client, "id" | "created_at" | "updated_at
     middle_name?: string;
     iin?: string;
     id_number?: string;
-    passport_series?: string;
-    passport_number?: string;
+    passport_identity?: string;  // unified field (migration 043)
+    passport_series?: string;    // deprecated
+    passport_number?: string;    // deprecated
     registration_address?: string;
     actual_address?: string;
     country?: string;
