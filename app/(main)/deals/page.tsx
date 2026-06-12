@@ -482,7 +482,7 @@ export default function DealsPage() {
               full_name: companyData.name,
               email: companyData.email || '',
               phone: companyData.phone || '',
-              role: { id: 10, code: 'sales', legacy_name: 'Отдел продаж' },
+              role: { id: 10, code: 'sales', legacy_name: 'sales' },
               company_name: companyData.name,
               role_id: 10,
               is_verified: true,

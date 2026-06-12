@@ -560,7 +560,7 @@ export default function LeadsPage() {
       console.log('Still no user found, creating mock user for testing...');
       user = {
         id: '1',
-        role: { id: 50, code: 'system_admin', legacy_name: 'Системный администратор' },
+        role: { id: 50, code: 'system_admin', legacy_name: 'admin' },
         full_name: 'Test User',
         email: 'test@example.com'
       };

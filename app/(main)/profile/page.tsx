@@ -12,17 +12,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { AuthenticatedAvatarImage } from "@/components/authenticated-avatar-image";
 import * as ProfileAPI from "@/src/api/profile.api";
 import type { User } from "@/src/models/users.model";
-
-const ROLE_LABELS: Record<number, string> = {
-  10: "Отдел продаж",
-  30: "Отдел контроля",
-  40: "Руководство",
-  50: "Системный администратор",
-  60: "Визовый отдел",
-  70: "Партнерский отдел",
-  80: "Отдел кадров",
-  90: "Юридический отдел",
-};
+import { getRoleName } from "@/src/models/roles.enum";
 
 type ProfileForm = {
   first_name: string;
@@ -72,7 +62,7 @@ export default function ProfilePage() {
 
   const roleName = useMemo(() => {
     const id = user?.role?.id || 0;
-    return user?.role?.legacy_name || ROLE_LABELS[id] || "Пользователь";
+    return getRoleName(id) || "Пользователь";
   }, [user]);
 
   useEffect(() => {

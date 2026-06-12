@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import * as Models from "@/src/models/users.model";
-import { Roles } from "@/src/models/roles.enum";
+import { Roles, getRoleName } from "@/src/models/roles.enum";
 import {
   Card,
   CardContent,
@@ -97,16 +97,6 @@ const DetailItem = ({ label, value }: { label: string; value?: string | number |
   </div>
 );
 
-const ROLE_LABELS: Record<number, string> = {
-  [Roles.SALES]: "Отдел продаж",
-  [Roles.QUALITY_CONTROL]: "Отдел контроля качества",
-  [Roles.MANAGEMENT]: "Руководство",
-  [Roles.SYSTEM_ADMIN]: "Системный администратор",
-  [Roles.VISA]: "Визовый отдел",
-  [Roles.PARTNER]: "Партнерский отдел",
-  [Roles.HR]: "Отдел кадров",
-  [Roles.LEGAL]: "Юридический отдел",
-};
 
 const E164_PHONE_PATTERN = /^\+[1-9]\d{10,14}$/;
 
@@ -339,7 +329,7 @@ export default function UsersPage() {
 
   const getRoleLabel = (id?: number) => {
     if (!id) return "-";
-    return ROLE_LABELS[id] || "Неизвестная роль";
+    return getRoleName(id);
   };
 
   const handlePageChange = (page: number) => {

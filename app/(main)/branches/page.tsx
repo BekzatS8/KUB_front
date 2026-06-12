@@ -53,12 +53,18 @@ export default function BranchesPage() {
   const [createForm, setCreateForm] = useState({
     name: "",
     code: "",
+    address: "",
+    phone: "",
+    email: "",
     is_active: true
   })
-  
+
   const [editForm, setEditForm] = useState({
     name: "",
     code: "",
+    address: "",
+    phone: "",
+    email: "",
     is_active: true
   })
 
@@ -90,7 +96,7 @@ export default function BranchesPage() {
       await BranchesAPI.createBranch(createForm)
       toast.success("Филиал успешно создан")
       setIsCreateDialogOpen(false)
-      setCreateForm({ name: "", code: "", is_active: true })
+      setCreateForm({ name: "", code: "", address: "", phone: "", email: "", is_active: true })
       fetchBranches()
     } catch (err: any) {
       console.error("Error creating branch:", err)
@@ -137,6 +143,9 @@ export default function BranchesPage() {
     setEditForm({
       name: branch.name,
       code: branch.code,
+      address: branch.address ?? "",
+      phone: branch.phone ?? "",
+      email: branch.email ?? "",
       is_active: branch.is_active
     })
     setIsEditDialogOpen(true)
@@ -167,7 +176,7 @@ export default function BranchesPage() {
             Филиалы
           </h1>
           <p className="text-gray-600">
-            Управление филиалами компании
+            Офисы и представительства организации
           </p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -200,6 +209,34 @@ export default function BranchesPage() {
                   onChange={(e) => setCreateForm({ ...createForm, code: e.target.value })}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="address">Адрес</Label>
+                <Input
+                  id="address"
+                  placeholder="г. Алматы, ул. ..."
+                  value={createForm.address}
+                  onChange={(e) => setCreateForm({ ...createForm, address: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Телефон</Label>
+                <Input
+                  id="phone"
+                  placeholder="+7 (700) 000-00-00"
+                  value={createForm.phone}
+                  onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="branch@company.kz"
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                />
+              </div>
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
@@ -230,17 +267,21 @@ export default function BranchesPage() {
           <div className="overflow-hidden rounded-md border">
             <Table className="w-full table-fixed">
               <colgroup>
-                <col className="w-[8%]" />
-                <col className="w-[42%]" />
-                <col className="w-[20%]" />
-                <col className="w-[15%]" />
-                <col className="w-[15%]" />
+                <col className="w-[6%]" />
+                <col className="w-[24%]" />
+                <col className="w-[14%]" />
+                <col className="w-[18%]" />
+                <col className="w-[16%]" />
+                <col className="w-[12%]" />
+                <col className="w-[10%]" />
               </colgroup>
               <TableHeader>
                 <TableRow>
                   <TableHead className="px-4">ID</TableHead>
                   <TableHead className="px-4">Название</TableHead>
                   <TableHead className="px-4">Код</TableHead>
+                  <TableHead className="px-4">Адрес</TableHead>
+                  <TableHead className="px-4">Телефон / Email</TableHead>
                   <TableHead className="px-4">Статус</TableHead>
                   <TableHead className="px-4 text-right">Действия</TableHead>
                 </TableRow>
@@ -258,6 +299,12 @@ export default function BranchesPage() {
                       </div>
                     </TableCell>
                     <TableCell className="px-4 align-top break-words">{branch.code}</TableCell>
+                    <TableCell className="px-4 align-top text-sm text-gray-600">{branch.address || "—"}</TableCell>
+                    <TableCell className="px-4 align-top text-sm text-gray-600">
+                      {branch.phone && <div>{branch.phone}</div>}
+                      {branch.email && <div>{branch.email}</div>}
+                      {!branch.phone && !branch.email && "—"}
+                    </TableCell>
                     <TableCell className="px-4 align-top">
                       <Badge variant={branch.is_active ? "default" : "secondary"}>
                         {branch.is_active ? "Активен" : "Неактивен"}
@@ -319,6 +366,34 @@ export default function BranchesPage() {
                 id="edit-code"
                 value={editForm.code}
                 onChange={(e) => setEditForm({ ...editForm, code: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-address">Адрес</Label>
+              <Input
+                id="edit-address"
+                placeholder="г. Алматы, ул. ..."
+                value={editForm.address}
+                onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">Телефон</Label>
+              <Input
+                id="edit-phone"
+                placeholder="+7 (700) 000-00-00"
+                value={editForm.phone}
+                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Email</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                placeholder="branch@company.kz"
+                value={editForm.email}
+                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
               />
             </div>
             <div className="flex items-center space-x-2">

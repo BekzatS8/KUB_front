@@ -195,12 +195,14 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'analytics:write',
     ],
     control: [
-      // Отдел контроля: CanViewAllBusinessData (read-only)
+      // Отдел контроля: read-only for leads/deals/clients + document writes for own dept
       'leads:read',
       'deals:read',
       'clients:read',
       'tasks:read',
+      'tasks:write',
       'documents:read',
+      'documents:write',
       'analytics:read',
     ],
     // operations (role_id=20) is a legacy reserved role — no active permissions granted
@@ -273,14 +275,14 @@ export function hasRole(userRole: string | undefined, requiredRoles: string[]): 
 export function getUserRoleText(role: string | undefined): string {
   role = normalizeRoleCode(role)
   const roleMap: Record<string, string> = {
-    system_admin: 'Системный администратор',
+    system_admin: 'Администратор',
     management: 'Руководство',
-    quality_control: 'Отдел контроля',
-    sales: 'Отдел продаж',
+    quality_control: 'Отдел контроля качества',
+    sales: 'Менеджер по продажам (МОП)',
     visa: 'Визовый отдел',
-    partner: 'Партнерский отдел',
+    partner: 'Менеджер по партнёрам',
     hr: 'Отдел кадров',
-    legal: 'Юридический отдел',
+    legal: 'Юрист',
   };
 
   return roleMap[role ?? ''] ?? role ?? 'Пользователь';
@@ -312,14 +314,14 @@ export function switchTestRole(roleCode: string): void {
     
     // Map role code to role object
     const roleMapping: Record<string, { id: number; code: string; legacy_name: string }> = {
-      'system_admin': { id: 50, code: 'system_admin', legacy_name: 'Системный администратор' },
-      'management': { id: 40, code: 'management', legacy_name: 'Руководство' },
-      'quality_control': { id: 30, code: 'quality_control', legacy_name: 'Отдел контроля' },
-      'sales': { id: 10, code: 'sales', legacy_name: 'Отдел продаж' },
-      'visa': { id: 60, code: 'visa', legacy_name: 'Визовый отдел' },
-      'partner': { id: 70, code: 'partner', legacy_name: 'Партнерский отдел' },
-      'hr': { id: 80, code: 'hr', legacy_name: 'Отдел кадров' },
-      'legal': { id: 90, code: 'legal', legacy_name: 'Юридический отдел' },
+      'system_admin': { id: 50, code: 'system_admin', legacy_name: 'admin' },
+      'management': { id: 40, code: 'management', legacy_name: 'management' },
+      'quality_control': { id: 30, code: 'quality_control', legacy_name: 'audit' },
+      'sales': { id: 10, code: 'sales', legacy_name: 'sales' },
+      'visa': { id: 60, code: 'visa', legacy_name: 'visa' },
+      'partner': { id: 70, code: 'partner', legacy_name: 'partner' },
+      'hr': { id: 80, code: 'hr', legacy_name: 'hr' },
+      'legal': { id: 90, code: 'legal', legacy_name: 'legal' },
     };
     
     const updatedUser = { ...currentUser, role: roleMapping[roleCode] || currentUser.role, role_id: roleMapping[roleCode]?.id };
@@ -345,7 +347,7 @@ export function resetTestRole(): void {
       }
     } else if (currentUser) {
       // Fallback if original role not found, reset to system_admin
-      const updatedUser = { ...currentUser, role: { id: 50, code: 'system_admin', legacy_name: 'Системный администратор' }, role_id: 50 };
+      const updatedUser = { ...currentUser, role: { id: 50, code: 'system_admin', legacy_name: 'admin' }, role_id: 50 };
       setCurrentUser(updatedUser);
       window.location.reload();
     }

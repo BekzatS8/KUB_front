@@ -90,14 +90,14 @@ export default function RegisterPage() {
 
   const getRoleLabel = (role: Role) => {
     const labelMap: Record<string, string> = {
-      'sales': 'Менеджер по продажам',
-      'quality_control': 'Контроль качества',
-      'management': 'Руководитель',
+      'sales': 'Менеджер по продажам (МОП)',
+      'quality_control': 'Отдел контроля качества',
+      'management': 'Руководство',
       'admin': 'Администратор',
       'visa': 'Визовый отдел',
-      'partner': 'Партнерский отдел',
+      'partner': 'Менеджер по партнёрам',
       'hr': 'Отдел кадров',
-      'legal': 'Юридический отдел',
+      'legal': 'Юрист',
     };
 
     return labelMap[role.name.toLowerCase()] || role.description || role.name;

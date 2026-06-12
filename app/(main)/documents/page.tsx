@@ -101,7 +101,8 @@ import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { ru } from "date-fns/locale"
 import { toast } from "sonner"
-import { getCurrentUser, getCurrentCompany, setCurrentUser, hasPermission, getRoleCode } from "@/lib/auth"
+import { getCurrentUser, getCurrentCompany, setCurrentUser, getRoleCode } from "@/lib/auth"
+import { getMyPermissions } from "@/src/api/permissions.api"
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
 import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import * as AuthAPI from "@/src/api/auth.api"
@@ -389,21 +390,40 @@ export default function DocumentsPage() {
     const [currentUser, setCurrentUserState] = useState<any>(null)
     const [freshUserData, setFreshUserData] = useState<any>(null)
     const [isReadOnly, setIsReadOnly] = useState(false)
-    const [canWriteDocuments, setCanWriteDocuments] = useState(false)
+    const [myPermissions, setMyPermissions] = useState<Set<string>>(new Set())
     const [selectedDealId, setSelectedDealId] = useState<number | null>(null)
     
     // Get fresh user data or fallback to state
     const user = freshUserData || currentUser;
+
+    // Role-based fallback when permissions API hasn't loaded yet
+    const docPermFallback: Record<string, string[]> = {
+        system_admin: ['documents.view','documents.create','documents.update','documents.delete','documents.send','documents.download'],
+        management: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
+        quality_control: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
+        sales: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
+        visa: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
+        partner: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
+        hr: ['documents.view','documents.create','documents.update','documents.download'],
+        legal: ['documents.view','documents.create','documents.update','documents.download'],
+    }
+    const docPermSet: Set<string> = myPermissions.size > 0
+        ? myPermissions
+        : new Set(docPermFallback[getRoleCode(user) || ''] || [])
+    const canCreateDocs = docPermSet.has('documents.create')
+    const canDownloadDocs = docPermSet.has('documents.download')
+    const canSendDocs = docPermSet.has('documents.send')
+    const canUpdateDocs = docPermSet.has('documents.update')
     
     // Fetch fresh user data on mount
     useEffect(() => {
         const fetchFreshUserData = async () => {
             try {
-                console.log('Fetching fresh user data for documents page...');
-                const userData = await AuthAPI.getMe();
-                console.log('Fresh user data received in documents:', userData);
-                
-                // Transform API response to match User interface
+                const [userData, permData] = await Promise.all([
+                    AuthAPI.getMe(),
+                    getMyPermissions().catch(() => null),
+                ]);
+
                 const transformedUser = {
                     id: String(userData.id),
                     full_name: userData.full_name,
@@ -415,12 +435,10 @@ export default function DocumentsPage() {
                     is_verified: userData.is_verified,
                     telegram: userData.telegram || { chat_id: 0, notify_tasks: false },
                     legacy: userData.legacy || { company_name: '', bin_iin: '' },
-                    // Optional fields that may not exist in current backend response
                     first_name: (userData as any).first_name,
                     last_name: (userData as any).last_name,
                     middle_name: (userData as any).middle_name,
                     position: (userData as any).position,
-                    // Legacy fields for backward compatibility
                     role_id: userData.role?.id,
                     company_name: userData.legacy?.company_name,
                     bin_iin: userData.legacy?.bin_iin,
@@ -428,24 +446,19 @@ export default function DocumentsPage() {
                     notify_tasks_telegram: userData.telegram?.notify_tasks,
                     status: 'active'
                 };
-                
-                console.log('Transformed user data in documents:', transformedUser);
-                setFreshUserData(transformedUser);
 
-                // Set document write permissions
-                const userRole = getRoleCode(transformedUser);
-                const hasDocumentWriteAccess = hasPermission(userRole, ["documents:write"]);
-                setCanWriteDocuments(hasDocumentWriteAccess);
-                console.log('Document write permissions:', { userRole, hasDocumentWriteAccess });
-                
-                // Update localStorage with fresh data
+                setFreshUserData(transformedUser);
                 setCurrentUser(transformedUser);
                 setCurrentUserState(transformedUser);
+
+                if (permData?.permissions?.length) {
+                    setMyPermissions(new Set(permData.permissions.map((p) => p.action)));
+                }
             } catch (error) {
                 console.error('Failed to fetch fresh user data in documents:', error);
             }
         };
-        
+
         fetchFreshUserData();
     }, []); // Run once on mount
 
@@ -829,7 +842,8 @@ export default function DocumentsPage() {
         }
     };
 
-    const isAdmin = getRoleCode(user) === 'system_admin';
+    // admin role code from backend is 'admin'; normalizeRoleCode maps it to 'system_admin'
+    const isAdmin = getRoleCode(user) === 'system_admin' || docPermSet.has('documents.delete');
 
     // ─── Load data on mount and when filters change ───────────────
 
@@ -1183,7 +1197,7 @@ export default function DocumentsPage() {
                     <Button variant="outline" size="icon" onClick={fetchDocuments} disabled={loading}>
                         <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                     </Button>
-                    {canWriteDocuments && (
+                    {canCreateDocs && (
                         <Button onClick={openCreate}>
                             <Plus className="h-4 w-4 mr-2" />
                             Создать документ
@@ -1448,7 +1462,7 @@ export default function DocumentsPage() {
                                         const canSubmit = doc.status === "draft"
                                         const canReview = doc.status === "under_review"
                                         const canSign = doc.status === "approved"
-                                        const canDelete = !isReadOnly
+                                        const canArchive = canUpdateDocs
                                         const isArchived = doc.is_archived
 
                                         return (
@@ -1515,11 +1529,11 @@ export default function DocumentsPage() {
                                                                 <Eye className="h-4 w-4 mr-2" />
                                                                 Просмотр
                                                             </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => handleDownload(doc)}>
+                                                            <DropdownMenuItem onClick={() => handleDownload(doc)} disabled={!canDownloadDocs}>
                                                                 <Download className="h-4 w-4 mr-2" />
                                                                 Скачать PDF
                                                             </DropdownMenuItem>
-                                                            {!isReadOnly && (
+                                                            {canUpdateDocs && (
                                                                 <DropdownMenuItem onClick={() => triggerUploadForDoc(doc)}>
                                                                     <Upload className="h-4 w-4 mr-2" />
                                                                     Загрузить файл
@@ -1528,26 +1542,26 @@ export default function DocumentsPage() {
                                                             <DropdownMenuSeparator />
 
                                                             {/* Lifecycle actions */}
-                                                            {!isReadOnly && canSubmit && (
+                                                            {canUpdateDocs && canSubmit && (
                                                                 <DropdownMenuItem onClick={() => handleSubmit(doc)}>
                                                                     <Send className="h-4 w-4 mr-2" />
                                                                     Отправить на проверку
                                                                 </DropdownMenuItem>
                                                             )}
-                                                            {!isReadOnly && canReview && (
+                                                            {canUpdateDocs && canReview && (
                                                                 <DropdownMenuItem onClick={() => { setReviewDoc(doc); setIsReviewOpen(true) }}>
                                                                     <ShieldCheck className="h-4 w-4 mr-2" />
                                                                     Ревью
                                                                 </DropdownMenuItem>
                                                             )}
-                                                            {!isReadOnly && canSign && (
+                                                            {canSendDocs && canSign && (
                                                                 <DropdownMenuItem onClick={() => handleNewSendForSign(doc)}>
                                                                     <Send className="h-4 w-4 mr-2" />
                                                                     Отправить на подпись
                                                                 </DropdownMenuItem>
                                                             )}
 
-                                                            {canDelete && (
+                                                            {canArchive && (
                                                                 <>
                                                                     <DropdownMenuSeparator />
                                                                     {isArchived ? (

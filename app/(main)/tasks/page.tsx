@@ -703,7 +703,7 @@ export default function TasksPage() {
               full_name: companyData.name,
               email: companyData.email || '',
               phone: companyData.phone || '',
-              role: { id: roleId || 50, code: userRole || 'system_admin', legacy_name: userRole === 'system_admin' ? 'Системный администратор' : 'Пользователь' },
+              role: { id: roleId || 50, code: userRole || 'system_admin', legacy_name: userRole || 'admin' },
               company_name: companyData.name,
               role_id: roleId || 50,
               is_verified: true,
