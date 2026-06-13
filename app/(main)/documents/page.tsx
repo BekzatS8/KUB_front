@@ -422,7 +422,7 @@ export default function DocumentsPage() {
         quality_control: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
         sales: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
         visa: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
-        partner: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
+        partner: ['documents.view','documents.create','documents.update','documents.download'],
         hr: ['documents.view','documents.create','documents.update','documents.download'],
         legal: ['documents.view','documents.create','documents.update','documents.download'],
     }
@@ -1544,6 +1544,9 @@ export default function DocumentsPage() {
                                                         </Badge>
                                                         {isArchived && (
                                                             <Badge className="bg-gray-100 text-gray-800 text-xs">Архив</Badge>
+                                                        )}
+                                                        {isAdmin && doc.is_hidden && (
+                                                            <Badge className="bg-slate-700 text-white text-xs">Скрытый</Badge>
                                                         )}
                                                     </div>
                                                 </TableCell>

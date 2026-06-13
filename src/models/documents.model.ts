@@ -33,6 +33,8 @@ export interface Document {
   file_path_pdf: string;
   created_at: string;
   updated_at?: string;
+  is_hidden?: boolean;
+  created_by?: number;
 }
 
 export type Documents_Create_from_client_Request = {
