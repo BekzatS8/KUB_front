@@ -438,9 +438,10 @@ export default function UsersPage() {
 
     if (!email) return { error: "Заполните email." };
     if (!editingUser && !password) return { error: "Введите пароль." };
+    if (!firstName) return { error: "Укажите имя." };
     if (!roleId) return { error: "Выберите роль." };
     if (!position) return { error: "Укажите должность." };
-    if (!branchId) return { error: "Выберите филиал." };
+    if (roleId !== Roles.SYSTEM_ADMIN && !branchId) return { error: "Выберите филиал." };
     if (phone && !E164_PHONE_PATTERN.test(phone)) {
       return { error: "Телефон должен быть в международном формате: +77001234567." };
     }

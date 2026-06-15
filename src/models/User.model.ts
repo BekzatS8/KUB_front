@@ -49,7 +49,6 @@ export interface User {
   status?: string
   lastLogin?: string
   createdAt?: string
-  avatar?: string
   firstName?: string
   lastName?: string
 }

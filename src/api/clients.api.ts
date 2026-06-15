@@ -287,10 +287,11 @@ export async function unarchiveClient(id: string): Promise<any> {
 // File upload functions
 export async function uploadClientPhoto(clientId: string, file: File): Promise<any> {
   try {
-    const res = await api.postForm(`/clients/${clientId}/files`, {
-      file,
-      category: 'photo35x45',
-    }, {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('category', 'photo35x45')
+    const res = await api.post(`/clients/${clientId}/files`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000,
     });
     return res.data;
@@ -319,17 +320,78 @@ export async function updateClientWithPhoto(id: string, payload: Models.UpdateCl
   if (photoFile) {
     // First update client data
     const updatedClient = await updateClient(id, payload);
-    
+
     // Then upload photo
     try {
       await uploadClientPhoto(id, photoFile);
     } catch (error) {
       throw new Error(`Клиент обновлен, но фото не загрузилось: ${(error as Error)?.message || 'неизвестная ошибка'}`);
     }
-    
+
     return updatedClient;
   } else {
     // Regular client update without photo
     return updateClient(id, payload);
+  }
+}
+
+// ─── Client Avatar ─────────────────────────────────────────────────
+
+export async function uploadClientAvatar(clientId: string, file: File): Promise<any> {
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await api.post(`/clients/${clientId}/avatar`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return res.data
+  } catch (error: any) {
+    throw new Error(extractClientErrorMessage(error, 'Не удалось загрузить аватар.'))
+  }
+}
+
+export async function updateClientAvatarCrop(clientId: string, crop: { crop_x?: number; crop_y?: number; crop_scale?: number; crop_size?: number }): Promise<any> {
+  try {
+    const res = await api.patch(`/clients/${clientId}/avatar/crop`, crop)
+    return res.data
+  } catch (error: any) {
+    throw new Error(extractClientErrorMessage(error, 'Не удалось обновить кроп аватара.'))
+  }
+}
+
+export async function deleteClientAvatar(clientId: string): Promise<void> {
+  try {
+    await api.delete(`/clients/${clientId}/avatar`)
+  } catch (error: any) {
+    throw new Error(extractClientErrorMessage(error, 'Не удалось удалить аватар.'))
+  }
+}
+
+export async function loadClientAvatar(clientId: string): Promise<string | null> {
+  try {
+    const res = await api.get(`/clients/${clientId}/avatar/content`, { responseType: 'blob' })
+    return URL.createObjectURL(res.data)
+  } catch {
+    return null
+  }
+}
+
+// ─── Client Documents ──────────────────────────────────────────────
+
+export async function getClientDocuments(clientId: string, params?: { page?: number; size?: number; status?: string; doc_type?: string; q?: string }): Promise<{ items: any[]; total: number }> {
+  try {
+    const res = await api.get(`/clients/${clientId}/documents`, { params })
+    return res.data
+  } catch (error: any) {
+    throw new Error(extractClientErrorMessage(error, 'Не удалось загрузить документы клиента.'))
+  }
+}
+
+export async function createClientDocument(clientId: string, payload: { deal_id?: number; doc_type: string }): Promise<any> {
+  try {
+    const res = await api.post(`/clients/${clientId}/documents`, payload)
+    return res.data
+  } catch (error: any) {
+    throw new Error(extractClientErrorMessage(error, 'Не удалось создать документ.'))
   }
 }

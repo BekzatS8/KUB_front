@@ -1,0 +1,984 @@
+"use client"
+
+import { useState, useEffect, useCallback, useRef } from "react"
+import { useParams, useRouter } from "next/navigation"
+import {
+  ArrowLeft, User, FileText, Phone, Activity, Building2, MapPin,
+  CreditCard, Briefcase, Heart,
+  Edit, MoreHorizontal, Eye,
+  Download, RefreshCw, Upload, AlertCircle, History, RotateCcw, Camera, X,
+  Search, PlayCircle,
+} from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useToast } from "@/components/ui/use-toast"
+
+import * as ClientAPI from "@/src/api/clients.api"
+import { getClientCalls } from "@/src/api/telephony.api"
+import * as DocAPI from "@/src/api/documents.api"
+import {
+  getDocumentVersions, uploadDocumentVersion, downloadDocumentVersion,
+  restoreDocumentVersion, type DocumentVersion,
+} from "@/src/api/document-versions.api"
+import { getCurrentUser, hasPermission, getRoleCode } from "@/lib/auth"
+import type { Client } from "@/src/models/clients.model"
+import type { Document, DocType, DocStatus } from "@/src/models/documents.model"
+import type { TelephonyCall } from "@/src/models/telephony.model"
+
+// ─── Helpers ────────────────────────────────────────────────────────
+
+const DOC_TYPE_LABELS: Record<DocType, string> = {
+  contract_paid_full_ru: "Договор (100% оплата)",
+  contract_paid_50_50_ru: "Договор (50/50)",
+  contract_free_ru: "Договор (бесплатный)",
+  refund_application: "Заявление на возврат",
+  pause_application: "Заявление на паузу",
+  avr_kub_group: "АВР (KUB Group)",
+  receipt_refund_full: "Чек возврата (полный)",
+  receipt_refund_partial: "Чек возврата (частичный)",
+  cancel_appointment: "Отмена записи",
+  documents_handover_act: "Акт передачи документов",
+  visa_questionnaire: "Визовая анкета",
+  termination_transfer: "Расторжение (перевод)",
+  termination_waiver: "Расторжение (отказ)",
+  contract_language_courses: "Договор (языковые курсы)",
+  addendum_korea: "Доп. соглашение (Корея)",
+}
+
+const DOC_STATUS_LABELS: Record<DocStatus, string> = {
+  draft: "Черновик",
+  under_review: "На проверке",
+  approved: "Одобрен",
+  returned: "Возвращён",
+  signed: "Подписан",
+}
+
+const DOC_STATUS_COLORS: Record<string, string> = {
+  draft: "bg-slate-100 text-slate-700",
+  under_review: "bg-amber-100 text-amber-700",
+  approved: "bg-emerald-100 text-emerald-700",
+  returned: "bg-rose-100 text-rose-700",
+  signed: "bg-blue-100 text-blue-700",
+}
+
+const SIGN_STATUS_LABELS: Record<string, string> = {
+  pending: "Ожидает подписи",
+  approved: "Подписан",
+  expired: "Просрочен",
+}
+
+const AVATAR_COLORS = [
+  "bg-blue-500", "bg-emerald-500", "bg-violet-500", "bg-rose-500",
+  "bg-amber-500", "bg-cyan-500", "bg-pink-500", "bg-indigo-500",
+]
+
+function getInitials(client: Client): string {
+  const name = client.display_name || client.name || ""
+  if (!name) return "?"
+  const parts = name.trim().split(/\s+/)
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return name[0].toUpperCase()
+}
+
+function getAvatarColor(id: string | number): string {
+  const numId = typeof id === "string" ? parseInt(id, 10) || 0 : id
+  return AVATAR_COLORS[numId % AVATAR_COLORS.length]
+}
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return "—"
+  try {
+    return new Date(dateStr).toLocaleDateString("ru-RU", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+    })
+  } catch {
+    return dateStr
+  }
+}
+
+function formatDateTime(dateStr?: string): string {
+  if (!dateStr) return "—"
+  try {
+    return new Date(dateStr).toLocaleString("ru-RU", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    })
+  } catch {
+    return dateStr
+  }
+}
+
+function formatFileSize(bytes?: number): string {
+  if (!bytes) return "—"
+  if (bytes < 1024) return `${bytes} Б`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`
+}
+
+type SectionKey = "overview" | "documents" | "calls"
+
+const NAV_ITEMS: { key: SectionKey; label: string; icon: React.ReactNode; permission?: string }[] = [
+  { key: "overview", label: "Обзор", icon: <User className="w-4 h-4" /> },
+  { key: "documents", label: "Документы", icon: <FileText className="w-4 h-4" />, permission: "documents.view" },
+  { key: "calls", label: "Звонки", icon: <Phone className="w-4 h-4" /> },
+]
+
+// ─── Detail Item ────────────────────────────────────────────────────
+
+function DetailItem({ label, value, className }: { label: string; value?: React.ReactNode; className?: string }) {
+  if (!value || value === "—") return null
+  return (
+    <div className={`grid grid-cols-[140px_1fr] gap-2 py-1.5 ${className || ""}`}>
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium">{value}</span>
+    </div>
+  )
+}
+
+// ─── Client Avatar Component ────────────────────────────────────────
+
+function ClientAvatar({
+  client, avatarUrl, onUpload, onDelete, canEdit,
+}: {
+  client: Client
+  avatarUrl: string | null
+  onUpload: (file: File) => void
+  onDelete: () => void
+  canEdit: boolean
+}) {
+  const [error, setError] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const initials = getInitials(client)
+  const color = getAvatarColor(client.id)
+  const isLegal = client.client_type === "legal"
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) onUpload(file)
+    e.target.value = ""
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative group">
+        <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-border bg-muted">
+          {avatarUrl && !error ? (
+            <img
+              src={avatarUrl}
+              alt={client.display_name || client.name || ""}
+              className="w-full h-full object-cover"
+              onError={() => setError(true)}
+            />
+          ) : (
+            <div className={`w-full h-full flex items-center justify-center text-white text-xl font-bold ${color}`}>
+              {isLegal ? <Building2 className="w-8 h-8" /> : initials}
+            </div>
+          )}
+        </div>
+        {canEdit && (
+          <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="p-1.5 rounded-full bg-white/90 hover:bg-white text-slate-700"
+              title="Загрузить фото"
+            >
+              <Camera className="w-4 h-4" />
+            </button>
+            {avatarUrl && (
+              <button
+                onClick={onDelete}
+                className="p-1.5 rounded-full bg-white/90 hover:bg-white text-rose-600"
+                title="Удалить фото"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ─── Overview Section ───────────────────────────────────────────────
+
+function OverviewSection({ client, profile }: { client: Client; profile: any }) {
+  const isIndividual = client.client_type === "individual"
+  const p = client.individual_profile || client
+  const lp = client.legal_profile
+
+  if (isIndividual) {
+    return (
+      <div className="space-y-6">
+        {/* Country & Trip */}
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-muted-foreground" /> Поездка
+          </h3>
+          <div className="grid grid-cols-2 gap-x-8">
+            <DetailItem label="Страна" value={p.country} />
+            <DetailItem label="Цель" value={p.trip_purpose} />
+          </div>
+        </Card>
+
+        {/* Personal */}
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <User className="w-4 h-4 text-muted-foreground" /> Личные данные
+          </h3>
+          <div className="grid grid-cols-2 gap-x-8">
+            <DetailItem label="ФИО" value={[p.last_name, p.first_name, p.middle_name].filter(Boolean).join(" ") || "—"} />
+            <DetailItem label="ИИН" value={p.iin} />
+            <DetailItem label="Удостоверение" value={p.id_number} />
+            <DetailItem label="Паспорт" value={p.passport_identity} />
+            <DetailItem label="Дата рожд." value={p.birth_date ? formatDate(p.birth_date) : undefined} />
+            <DetailItem label="Место рожд." value={p.birth_place} />
+            <DetailItem label="Гражданство" value={p.citizenship} />
+            <DetailItem label="Пол" value={p.sex} />
+          </div>
+        </Card>
+
+        {/* Contacts */}
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <Phone className="w-4 h-4 text-muted-foreground" /> Контакты и адрес
+          </h3>
+          <div className="grid grid-cols-2 gap-x-8">
+            <DetailItem label="Телефон" value={client.primary_phone || client.phone} />
+            <DetailItem label="Email" value={client.primary_email || client.email} />
+            <DetailItem label="Рег. адрес" value={p.registration_address} />
+            <DetailItem label="Факт. адрес" value={p.actual_address || client.actual_address} />
+          </div>
+        </Card>
+
+        {/* Passport dates */}
+        {(p.passport_issue_date || p.passport_expire_date) && (
+          <Card className="p-4">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-muted-foreground" /> Паспорт
+            </h3>
+            <div className="grid grid-cols-2 gap-x-8">
+              <DetailItem label="Выдан" value={p.passport_issue_date ? formatDate(p.passport_issue_date) : undefined} />
+              <DetailItem label="Действует до" value={p.passport_expire_date ? formatDate(p.passport_expire_date) : undefined} />
+            </div>
+          </Card>
+        )}
+
+        {/* Work & Education */}
+        {(p.job || p.education || p.education_level || p.specialty) && (
+          <Card className="p-4">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-muted-foreground" /> Работа и образование
+            </h3>
+            <div className="grid grid-cols-2 gap-x-8">
+              <DetailItem label="Работа" value={p.job} />
+              <DetailItem label="Должность" value={p.position} />
+              <DetailItem label="Образование" value={p.education_level} />
+              <DetailItem label="Специальность" value={p.specialty} />
+              <DetailItem label="Уч. заведение" value={p.education_institution_name} />
+            </div>
+          </Card>
+        )}
+
+        {/* Family */}
+        {(p.marital_status || p.has_children || p.spouse_name) && (
+          <Card className="p-4">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Heart className="w-4 h-4 text-muted-foreground" /> Семья
+            </h3>
+            <div className="grid grid-cols-2 gap-x-8">
+              <DetailItem label="Сем. положение" value={p.marital_status} />
+              <DetailItem label="Дети" value={p.has_children ? "Да" : p.has_children === false ? "Нет" : undefined} />
+              <DetailItem label="Супруг(а)" value={p.spouse_name} />
+              <DetailItem label="Контакты" value={p.spouse_contacts} />
+            </div>
+          </Card>
+        )}
+
+        {/* Medical */}
+        {(p.therapist_name || p.clinic_name || p.diseases_last3_years) && (
+          <Card className="p-4">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-muted-foreground" /> Медицина
+            </h3>
+            <div className="grid grid-cols-2 gap-x-8">
+              <DetailItem label="Терапевт" value={p.therapist_name} />
+              <DetailItem label="Клиника" value={p.clinic_name} />
+              <DetailItem label="Заболевания" value={p.diseases_last3_years} />
+            </div>
+          </Card>
+        )}
+
+        {/* Additional */}
+        {p.additional_info && (
+          <Card className="p-4">
+            <h3 className="text-sm font-semibold mb-2">Дополнительно</h3>
+            <p className="text-sm text-muted-foreground">{p.additional_info}</p>
+          </Card>
+        )}
+      </div>
+    )
+  }
+
+  // Legal entity
+  return (
+    <div className="space-y-6">
+      <Card className="p-4">
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-muted-foreground" /> Компания
+        </h3>
+        <div className="grid grid-cols-2 gap-x-8">
+          <DetailItem label="Название" value={lp?.company_name || client.name} />
+          <DetailItem label="БИН" value={lp?.bin || client.bin_iin} />
+          <DetailItem label="Форма" value={lp?.legal_form} />
+          <DetailItem label="Директор" value={lp?.director_full_name} />
+          <DetailItem label="Юр. адрес" value={lp?.legal_address || client.address} />
+          <DetailItem label="Факт. адрес" value={lp?.actual_address || client.actual_address} />
+          <DetailItem label="Сайт" value={lp?.website} />
+          <DetailItem label="Отрасль" value={lp?.industry} />
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" /> Контактное лицо
+        </h3>
+        <div className="grid grid-cols-2 gap-x-8">
+          <DetailItem label="Имя" value={lp?.contact_person_name} />
+          <DetailItem label="Должность" value={lp?.contact_person_position || client.contact_person_position} />
+          <DetailItem label="Телефон" value={lp?.contact_person_phone || client.primary_phone || client.phone} />
+          <DetailItem label="Email" value={lp?.contact_person_email || client.primary_email || client.email} />
+        </div>
+      </Card>
+
+      {(lp?.bank_name || lp?.iban) && (
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-muted-foreground" /> Банковские данные
+          </h3>
+          <div className="grid grid-cols-2 gap-x-8">
+            <DetailItem label="Банк" value={lp?.bank_name || client.bank_name} />
+            <DetailItem label="IBAN" value={lp?.iban || client.iban} />
+            <DetailItem label="БИК" value={lp?.bik || client.bik} />
+            <DetailItem label="Кбе" value={lp?.kbe || client.kbe} />
+          </div>
+        </Card>
+      )}
+
+      {lp?.additional_info && (
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold mb-2">Дополнительно</h3>
+          <p className="text-sm text-muted-foreground">{lp.additional_info}</p>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ─── Documents Section ──────────────────────────────────────────────
+
+function DocumentsSection({ client }: { client: Client }) {
+  const { toast } = useToast()
+  const [docs, setDocs] = useState<Document[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState("")
+  const [typeFilter, setTypeFilter] = useState("")
+
+  // Version dialog state
+  const [versionDoc, setVersionDoc] = useState<Document | null>(null)
+  const [versions, setVersions] = useState<DocumentVersion[]>([])
+  const [versionsLoading, setVersionsLoading] = useState(false)
+  const [uploadingVersion, setUploadingVersion] = useState(false)
+  const [versionComment, setVersionComment] = useState("")
+  const versionFileRef = useRef<HTMLInputElement>(null)
+
+  const loadDocs = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await ClientAPI.getClientDocuments(client.id, {
+        page, size: 20,
+        q: search || undefined,
+        status: statusFilter || undefined,
+        doc_type: typeFilter || undefined,
+      })
+      setDocs(res.items || [])
+      setTotal(res.total || 0)
+    } catch (err: any) {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }, [client.id, page, search, statusFilter, typeFilter, toast])
+
+  useEffect(() => { loadDocs() }, [loadDocs])
+
+  const loadVersions = async (doc: Document) => {
+    setVersionDoc(doc)
+    setVersionsLoading(true)
+    try {
+      const v = await getDocumentVersions(doc.id)
+      setVersions(v)
+    } catch {
+      setVersions([])
+    } finally {
+      setVersionsLoading(false)
+    }
+  }
+
+  const handleUploadVersion = async () => {
+    if (!versionDoc || !versionFileRef.current?.files?.[0]) return
+    setUploadingVersion(true)
+    try {
+      await uploadDocumentVersion(versionDoc.id, versionFileRef.current.files[0], versionComment || undefined)
+      toast({ title: "Версия загружена" })
+      setVersionComment("")
+      versionFileRef.current.value = ""
+      const v = await getDocumentVersions(versionDoc.id)
+      setVersions(v)
+      loadDocs()
+    } catch (err: any) {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" })
+    } finally {
+      setUploadingVersion(false)
+    }
+  }
+
+  const handleDownloadVersion = async (docId: number, versionId: number) => {
+    try {
+      const blob = await downloadDocumentVersion(docId, versionId)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `version_${versionId}`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" })
+    }
+  }
+
+  const handleRestoreVersion = async (docId: number, versionId: number) => {
+    try {
+      await restoreDocumentVersion(docId, versionId)
+      toast({ title: "Версия восстановлена" })
+      const v = await getDocumentVersions(docId)
+      setVersions(v)
+      loadDocs()
+    } catch (err: any) {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" })
+    }
+  }
+
+  const handleViewDocument = async (doc: Document) => {
+    try {
+      const blob = await DocAPI.viewDocumentFile(doc.id)
+      const url = URL.createObjectURL(blob)
+      window.open(url, "_blank")
+    } catch (err: any) {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" })
+    }
+  }
+
+  const handleDownloadDocument = async (doc: Document) => {
+    try {
+      const blob = await DocAPI.downloadDocument(doc.id, "pdf")
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `document_${doc.id}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" })
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            placeholder="Поиск..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+            className="w-full pl-8 pr-3 py-2 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+          className="px-3 py-2 text-sm rounded-md border border-input bg-background"
+        >
+          <option value="">Все статусы</option>
+          {Object.entries(DOC_STATUS_LABELS).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
+        <select
+          value={typeFilter}
+          onChange={(e) => { setTypeFilter(e.target.value); setPage(1) }}
+          className="px-3 py-2 text-sm rounded-md border border-input bg-background"
+        >
+          <option value="">Все типы</option>
+          {Object.entries(DOC_TYPE_LABELS).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
+        <Button variant="outline" size="sm" onClick={loadDocs}>
+          <RefreshCw className="w-4 h-4" />
+        </Button>
+        <span className="text-sm text-muted-foreground ml-auto">
+          {total} {total === 1 ? "документ" : total < 5 ? "документа" : "документов"}
+        </span>
+      </div>
+
+      {/* Document list */}
+      {loading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : docs.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p className="text-sm">Нет документов</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {docs.map((doc) => (
+            <Card key={doc.id} className="p-3 hover:shadow-sm transition-shadow">
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm truncate">
+                      {DOC_TYPE_LABELS[doc.doc_type as DocType] || doc.doc_type}
+                    </span>
+                    <Badge variant="outline" className={`text-xs ${DOC_STATUS_COLORS[doc.status] || ""}`}>
+                      {DOC_STATUS_LABELS[doc.status as DocStatus] || doc.status}
+                    </Badge>
+                    {doc.sign_status && doc.sign_status !== "pending" && (
+                      <Badge variant="outline" className="text-xs">
+                        {SIGN_STATUS_LABELS[doc.sign_status] || doc.sign_status}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                    <span>ID: {doc.id}</span>
+                    <span>{formatDate(doc.created_at)}</span>
+                    {doc.deal_id && <span>Сделка #{doc.deal_id}</span>}
+                  </div>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleViewDocument(doc)}>
+                      <Eye className="w-4 h-4 mr-2" /> Просмотр
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDownloadDocument(doc)}>
+                      <Download className="w-4 h-4 mr-2" /> Скачать
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => loadVersions(doc)}>
+                      <History className="w-4 h-4 mr-2" /> История версий
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Version dialog */}
+      <Dialog open={!!versionDoc} onOpenChange={(isOpen: boolean) => { if (!isOpen) setVersionDoc(null) }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>История версий</DialogTitle>
+            <DialogDescription>
+              {versionDoc ? DOC_TYPE_LABELS[versionDoc.doc_type as DocType] || versionDoc.doc_type : ""} (ID: {versionDoc?.id})
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Upload new version */}
+          <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+            <input
+              ref={versionFileRef}
+              type="file"
+              accept=".pdf,.docx,.xlsx"
+              className="text-sm flex-1"
+            />
+            <input
+              placeholder="Комментарий"
+              value={versionComment}
+              onChange={(e) => setVersionComment(e.target.value)}
+              className="flex-1 px-3 py-1.5 text-sm rounded-md border border-input bg-background"
+            />
+            <Button size="sm" onClick={handleUploadVersion} disabled={uploadingVersion}>
+              <Upload className="w-4 h-4 mr-1" />
+              {uploadingVersion ? "Загрузка..." : "Загрузить"}
+            </Button>
+          </div>
+
+          {/* Versions list */}
+          {versionsLoading ? (
+            <div className="py-8 text-center"><RefreshCw className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></div>
+          ) : versions.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Версий нет — текущий файл является первой версией
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {versions.map((v, idx) => (
+                <div key={v.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
+                    v{v.version}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">Версия {v.version}</span>
+                      {idx === 0 && <Badge variant="outline" className="text-xs">текущая</Badge>}
+                    </div>
+                    <div className="text-xs text-muted-foreground flex gap-2 flex-wrap">
+                      <span>{formatDateTime(v.created_at)}</span>
+                      <span>{formatFileSize(v.file_size || 0)}</span>
+                      {v.comment && <span>— {v.comment}</span>}
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDownloadVersion(versionDoc!.id, v.id)}>
+                      <Download className="w-4 h-4" />
+                    </Button>
+                    {idx !== 0 && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleRestoreVersion(versionDoc!.id, v.id)}>
+                        <RotateCcw className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+// ─── Calls Section ──────────────────────────────────────────────────
+
+function CallsSection({ client }: { client: Client }) {
+  const [calls, setCalls] = useState<TelephonyCall[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      try {
+        const res = await getClientCalls(Number(client.id), 50)
+        setCalls(res.items || [])
+      } catch (err: any) {
+        setError(err.message || "Не удалось загрузить звонки")
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [client.id])
+
+  if (loading) return <div className="py-8 text-center"><RefreshCw className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></div>
+  if (error) return <p className="text-sm text-destructive text-center py-8">{error}</p>
+  if (calls.length === 0) return (
+    <div className="text-center py-12 text-muted-foreground">
+      <Phone className="w-10 h-10 mx-auto mb-3 opacity-40" />
+      <p className="text-sm">Нет звонков</p>
+    </div>
+  )
+
+  const directionIcon = (d?: string) => {
+    if (d === "inbound") return <Phone className="w-3.5 h-3.5 text-emerald-500" />
+    if (d === "outbound") return <Phone className="w-3.5 h-3.5 text-blue-500" />
+    return <Phone className="w-3.5 h-3.5 text-muted-foreground" />
+  }
+
+  const statusBadge = (s?: string) => {
+    const map: Record<string, string> = {
+      answered: "bg-emerald-100 text-emerald-700",
+      completed: "bg-emerald-100 text-emerald-700",
+      missed: "bg-rose-100 text-rose-700",
+      failed: "bg-rose-100 text-rose-700",
+    }
+    return map[s || ""] || "bg-slate-100 text-slate-600"
+  }
+
+  return (
+    <div className="space-y-2">
+      {calls.map((call) => (
+        <Card key={call.id} className="p-3">
+          <div className="flex items-center gap-3">
+            {directionIcon(call.direction)}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{call.phone || call.normalized_phone || "Неизвестный"}</span>
+                <Badge variant="outline" className={`text-xs ${statusBadge(call.status)}`}>
+                  {call.status}
+                </Badge>
+              </div>
+              <div className="text-xs text-muted-foreground flex gap-2">
+                <span>{formatDateTime(call.started_at)}</span>
+                {call.duration_seconds != null && <span>{call.duration_seconds}с</span>}
+                {call.manager_name && <span>{call.manager_name}</span>}
+              </div>
+            </div>
+            {call.recording_url && (
+              <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                <a href={call.recording_url} target="_blank" rel="noopener noreferrer">
+                  <PlayCircle className="w-4 h-4" />
+                </a>
+              </Button>
+            )}
+          </div>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+// ─── Main Page ──────────────────────────────────────────────────────
+
+export default function ClientProfilePage() {
+  const params = useParams()
+  const router = useRouter()
+  const { toast } = useToast()
+  const clientId = String(params.id)
+
+  const [client, setClient] = useState<Client | null>(null)
+  const [profile, setProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [activeSection, setActiveSection] = useState<SectionKey>("overview")
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+
+  // Permission check
+  const user = getCurrentUser()
+  const roleCode = getRoleCode(user)
+  const canEdit = user ? hasPermission(roleCode, ["clients.update"]) : false
+  const canViewDocs = user ? hasPermission(roleCode, ["documents.view"]) : false
+
+  // Load client
+  const loadClient = useCallback(async () => {
+    setLoading(true)
+    setError("")
+    try {
+      const [clientData, profileData] = await Promise.all([
+        ClientAPI.getClientById(clientId),
+        ClientAPI.getClientProfile(clientId),
+      ])
+      setClient(clientData)
+      setProfile(profileData)
+
+      // Load avatar
+      try {
+        const url = await ClientAPI.loadClientAvatar(clientId)
+        setAvatarUrl(url)
+      } catch {
+        setAvatarUrl(null)
+      }
+    } catch (err: any) {
+      setError(err.message || "Не удалось загрузить клиента")
+    } finally {
+      setLoading(false)
+    }
+  }, [clientId])
+
+  useEffect(() => { loadClient() }, [loadClient])
+
+  // Avatar handlers
+  const handleAvatarUpload = async (file: File) => {
+    try {
+      await ClientAPI.uploadClientAvatar(clientId, file)
+      const url = await ClientAPI.loadClientAvatar(clientId)
+      setAvatarUrl(url)
+      toast({ title: "Аватар обновлён" })
+    } catch (err: any) {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" })
+    }
+  }
+
+  const handleAvatarDelete = async () => {
+    try {
+      await ClientAPI.deleteClientAvatar(clientId)
+      setAvatarUrl(null)
+      toast({ title: "Аватар удалён" })
+    } catch (err: any) {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" })
+    }
+  }
+
+  // Edit redirect
+  const handleEdit = () => {
+    router.push(`/clients?edit=${clientId}`)
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto">
+        <div className="flex items-center gap-2 mb-6">
+          <Skeleton className="h-8 w-8 rounded" />
+          <Skeleton className="h-6 w-48" />
+        </div>
+        <div className="flex gap-6">
+          <div className="w-56 shrink-0 space-y-4">
+            <Skeleton className="w-24 h-24 rounded-full mx-auto" />
+            <Skeleton className="h-5 w-32 mx-auto" />
+            <Skeleton className="h-4 w-24 mx-auto" />
+          </div>
+          <div className="flex-1 space-y-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-40 w-full" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !client) {
+    return (
+      <div className="max-w-lg mx-auto text-center py-16">
+        <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+        <h2 className="text-lg font-semibold mb-2">Не удалось загрузить клиента</h2>
+        <p className="text-sm text-muted-foreground mb-4">{error}</p>
+        <Button variant="outline" onClick={() => router.push("/clients")}>
+          <ArrowLeft className="w-4 h-4 mr-2" /> К списку клиентов
+        </Button>
+      </div>
+    )
+  }
+
+  const clientName = client.display_name || client.name || "Без имени"
+  const clientType = client.client_type === "legal" ? "Юр. лицо" : "Физ. лицо"
+  const isArchived = client.is_archived || client.archived
+
+  const visibleNavItems = NAV_ITEMS.filter(item => {
+    if (item.permission && !user) return false
+    if (item.permission && !hasPermission(roleCode, [item.permission])) return false
+    return true
+  })
+
+  return (
+    <div className="max-w-5xl mx-auto">
+      {/* Back button */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="mb-4 -ml-2"
+        onClick={() => router.push("/clients")}
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" /> К списку клиентов
+      </Button>
+
+      <div className="flex gap-6">
+        {/* Left sidebar */}
+        <div className="w-56 shrink-0">
+          <Card className="p-4 sticky top-4">
+            {/* Avatar */}
+            <ClientAvatar
+              client={client}
+              avatarUrl={avatarUrl}
+              onUpload={handleAvatarUpload}
+              onDelete={handleAvatarDelete}
+              canEdit={canEdit}
+            />
+
+            {/* Client info */}
+            <div className="mt-3 text-center">
+              <h2 className="font-semibold text-sm truncate">{clientName}</h2>
+              <div className="flex items-center justify-center gap-1.5 mt-1">
+                <Badge variant="outline" className="text-xs">
+                  {clientType}
+                </Badge>
+                {isArchived && (
+                  <Badge variant="destructive" className="text-xs">Архив</Badge>
+                )}
+              </div>
+              {(client.primary_phone || client.phone) && (
+                <p className="text-xs text-muted-foreground mt-2 truncate">
+                  {client.primary_phone || client.phone}
+                </p>
+              )}
+            </div>
+
+            <Separator className="my-3" />
+
+            {/* Navigation */}
+            <nav className="space-y-0.5">
+              {visibleNavItems.map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => setActiveSection(item.key)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-md transition-colors ${
+                    activeSection === item.key
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {item.icon}
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+
+            {canEdit && (
+              <>
+                <Separator className="my-3" />
+                <Button variant="outline" size="sm" className="w-full" onClick={handleEdit}>
+                  <Edit className="w-4 h-4 mr-2" /> Редактировать
+                </Button>
+              </>
+            )}
+          </Card>
+        </div>
+
+        {/* Main content */}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl font-bold mb-4">
+            {activeSection === "overview" && "Обзор"}
+            {activeSection === "documents" && "Документы"}
+            {activeSection === "calls" && "Звонки"}
+          </h1>
+
+          {activeSection === "overview" && <OverviewSection client={client} profile={profile} />}
+          {activeSection === "documents" && canViewDocs && <DocumentsSection client={client} />}
+          {activeSection === "calls" && <CallsSection client={client} />}
+        </div>
+      </div>
+    </div>
+  )
+}

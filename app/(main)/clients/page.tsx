@@ -69,14 +69,11 @@ import {
   ArchiveRestore,
   ArrowUp,
   ArrowDown,
-  PlayCircle,
 } from "lucide-react";
 import { getCurrentUser, setCurrentUser, hasPermission, getRoleCode } from "@/lib/auth";
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
 import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import * as ClientAPI from "@/src/api/clients.api";
-import { getClientCalls } from "@/src/api/telephony.api";
-import type { TelephonyCall } from "@/src/models/telephony.model";
 import * as AuthAPI from "@/src/api/auth.api";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
@@ -400,60 +397,6 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
   photo_35x45: "",
 };
 
-const DetailItem = ({ label, value }: { label: string; value?: string | null }) => (
-  <div>
-    <p className="text-sm text-gray-500">{label}</p>
-    <p className="font-medium">{value || "-"}</p>
-  </div>
-);
-
-const CALL_STATUS_LABELS: Record<string, string> = {
-  incoming: "Входящий",
-  outgoing: "Исходящий",
-  missed: "Пропущенный",
-  answered: "Отвечен",
-  completed: "Завершён",
-  failed: "Ошибка",
-  unknown: "Неизвестно",
-};
-
-const CALL_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  answered: "default",
-  completed: "default",
-  incoming: "secondary",
-  outgoing: "secondary",
-  missed: "destructive",
-  failed: "destructive",
-  unknown: "outline",
-};
-
-const CALL_DIRECTION_LABELS: Record<string, string> = {
-  inbound: "⬇ Входящий",
-  outbound: "⬆ Исходящий",
-};
-
-function formatCallDuration(seconds?: number): string {
-  if (seconds == null) return "—";
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function formatCallDateTime(iso?: string): string {
-  if (!iso) return "—";
-  try {
-    return new Intl.DateTimeFormat("ru-KZ", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
-}
-
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [clientTypeFilter, setClientTypeFilter] = useState("");
@@ -611,19 +554,12 @@ export default function ClientsPage() {
     }
   }, [clientFormData.client_type, editingClient]);
   const [clientToDelete, setClientToDelete] = useState<Models.Client | null>(null);
-  const [viewingClient, setViewingClient] = useState<Models.Client | null>(null);
   const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
   const [isUnarchiveDialogOpen, setIsUnarchiveDialogOpen] = useState(false);
   const [clientToArchive, setClientToArchive] = useState<Models.Client | null>(null);
   const [selectedPhotoFile, setSelectedPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoPreviewError, setPhotoPreviewError] = useState(false);
-  const [clientProfile, setClientProfile] = useState<any>(null);
-  const [clientPhotoUrl, setClientPhotoUrl] = useState<string | null>(null);
-  const [clientPhotoError, setClientPhotoError] = useState(false);
-  const [clientCalls, setClientCalls] = useState<TelephonyCall[]>([]);
-  const [clientCallsLoading, setClientCallsLoading] = useState(false);
-  const [clientCallsError, setClientCallsError] = useState<string | null>(null);
 
   const [clients, setClients] = useState<Models.Client[]>([]);
   const [totalClients, setTotalClients] = useState(0);
@@ -1214,54 +1150,6 @@ useEffect(() => {
   const handleDeleteClick = (client: Models.Client) => {
     setClientToDelete(client);
   };
-
-  const handleViewClick = async (client: Models.Client) => {
-    setViewingClient(client);
-    setClientPhotoUrl(null);
-    setClientPhotoError(false);
-    try {
-      const profile = await ClientAPI.getClientProfile(client.id.toString());
-      setClientProfile(profile);
-
-      // Update viewingClient with profile data to include legal_profile with banking fields
-      if (profile?.client) {
-        setViewingClient(profile.client as any);
-      }
-      
-      // Fetch authenticated photo if it exists
-      if (profile?.files?.photo35x45?.exists) {
-        const photoUrl = await ClientAPI.getClientPhoto(client.id.toString());
-        setClientPhotoUrl(photoUrl);
-      }
-    } catch (error) {
-      console.error('Failed to fetch client profile:', error);
-      setClientProfile(null);
-      setClientPhotoUrl(null);
-    }
-  };
-
-  useEffect(() => {
-    if (!viewingClient) {
-      setClientCalls([]);
-      setClientCallsError(null);
-      return;
-    }
-    const id = Number(viewingClient.id);
-    setClientCalls([]);
-    setClientCallsLoading(true);
-    setClientCallsError(null);
-    getClientCalls(id)
-      .then((data) => setClientCalls(data.items ?? []))
-      .catch((e: any) => {
-        if (e?.response?.status === 403) {
-          setClientCalls([]);
-        } else {
-          setClientCallsError("Не удалось загрузить историю звонков");
-        }
-      })
-      .finally(() => setClientCallsLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewingClient?.id]);
 
   const handleDeleteConfirm = async () => {
     if (!clientToDelete) return;
@@ -1921,7 +1809,7 @@ useEffect(() => {
                               size="icon"
                               className="h-8 w-8 hover:bg-gray-100"
                               title="Просмотр"
-                              onClick={() => handleViewClick(client)}
+                              onClick={() => router.push(`/clients/${client.id}`)}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
@@ -2592,296 +2480,6 @@ useEffect(() => {
           <DialogFooter className="pt-3">
             <Button variant="outline" onClick={() => setIsFormOpen(false)}>Отмена</Button>
             <Button onClick={handleSubmit}>Сохранить</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={!!viewingClient} onOpenChange={(isOpen) => {
-        if (!isOpen) {
-          setViewingClient(null);
-          setClientProfile(null);
-          // Clean up blob URL to prevent memory leaks
-          if (clientPhotoUrl) {
-            URL.revokeObjectURL(clientPhotoUrl);
-          }
-          setClientPhotoUrl(null);
-          setClientPhotoError(false);
-        }
-      }}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>{viewingClient?.name || `${viewingClient?.last_name} ${viewingClient?.first_name}`}</DialogTitle>
-            <DialogDescription>Детальная информация о клиенте</DialogDescription>
-          </DialogHeader>
-          {viewingClient && (
-            <ScrollArea className="max-h-[70vh] p-4">
-              <div className="space-y-8">
-                {/* Individual Client Fields */}
-                {viewingClient.client_type === "individual" && (
-                  <>
-                    {/* Photo */}
-                    {clientPhotoUrl && (
-                      <div className="space-y-4">
-                        <h3 className="font-semibold text-lg">ФОТО</h3>
-                        <Separator />
-                        <div className="flex justify-center">
-                          {!clientPhotoError ? (
-                            <img
-                              src={clientPhotoUrl}
-                              alt="Client photo"
-                              className="max-h-96 max-w-full rounded-lg border object-contain bg-white"
-                              onError={() => setClientPhotoError(true)}
-                            />
-                          ) : (
-                            <div className="flex h-48 w-40 items-center justify-center rounded-lg border bg-white px-3 text-center text-sm text-muted-foreground">
-                              Фото загружено, но этот формат не поддерживается предпросмотром браузера
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Country and Trip Purpose */}
-                    <div className="space-y-4 border-t pt-4">
-                      <h3 className="font-semibold text-lg">СТРАНА И ЦЕЛЬ ПОЕЗДКИ</h3>
-                      <Separator />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <DetailItem label="Страна" value={viewingClient.country} />
-                        <DetailItem label="Цель поездки" value={viewingClient.trip_purpose} />
-                      </div>
-                    </div>
-
-                    {/* Personal Data */}
-                    <div className="space-y-4 border-t pt-4">
-                      <h3 className="font-semibold text-lg">ЛИЧНЫЕ ДАННЫЕ</h3>
-                      <Separator />
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <DetailItem label="Фамилия" value={viewingClient.last_name} />
-                        <DetailItem label="Имя" value={viewingClient.first_name} />
-                        <DetailItem label="Отчество" value={viewingClient.middle_name} />
-                        <DetailItem label="ИИН" value={viewingClient.iin} />
-                        <DetailItem label="Прежняя фамилия" value={viewingClient.previous_last_name} />
-                        <DetailItem label="Дата рождения" value={viewingClient.birth_date} />
-                        <DetailItem label="Пол" value={viewingClient.sex} />
-                        <DetailItem label="Гражданство" value={viewingClient.citizenship} />
-                        <DetailItem label="Место рождения" value={viewingClient.birth_place} />
-                      </div>
-                    </div>
-
-                    {/* Documents */}
-                    <div className="space-y-4 border-t pt-4">
-                      <h3 className="font-semibold text-lg">ДОКУМЕНТЫ</h3>
-                      <Separator />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <DetailItem label="Номер удостоверения" value={viewingClient.id_number} />
-                        <DetailItem
-                          label="Серия и номер паспорта"
-                          value={
-                            viewingClient.individual_profile?.passport_identity ||
-                            viewingClient.passport_identity ||
-                            [
-                              viewingClient.individual_profile?.passport_series || viewingClient.passport_series,
-                              viewingClient.individual_profile?.passport_number || viewingClient.passport_number,
-                            ].filter(Boolean).join(" ")
-                          }
-                        />
-                        <DetailItem label="Дата выдачи паспорта" value={viewingClient.passport_issue_date} />
-                        <DetailItem label="Дата окончания паспорта" value={viewingClient.passport_expire_date} />
-                      </div>
-                    </div>
-
-                    {/* Marital Status */}
-                    <div className="space-y-4 border-t pt-4">
-                      <h3 className="font-semibold text-lg">СЕМЕЙНОЕ ПОЛОЖЕНИЕ</h3>
-                      <Separator />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <DetailItem label="Гражданское состояние" value={viewingClient.marital_status} />
-                        <DetailItem label="Есть ли дети" value={viewingClient.has_children ? "Да" : "Нет"} />
-                        <DetailItem label="ФИО супруга(и)" value={viewingClient.spouse_name} />
-                        <DetailItem label="Телефон супруга(и)" value={viewingClient.spouse_contacts} />
-                        <DetailItem label="Дети" value={viewingClient.children_list} />
-                        <DetailItem label="ФИО доверенного лица" value={viewingClient.individual_profile?.trusted_person || viewingClient.trusted_person} />
-                        <DetailItem label="Телефон доверенного лица" value={viewingClient.individual_profile?.trusted_person_phone || viewingClient.trusted_person_phone} />
-                      </div>
-                    </div>
-
-                    {/* Contacts and Address */}
-                    <div className="space-y-4 border-t pt-4">
-                      <h3 className="font-semibold text-lg">КОНТАКТЫ И АДРЕС</h3>
-                      <Separator />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <DetailItem label="Адрес прописки" value={viewingClient.registration_address} />
-                        <DetailItem label="Адрес проживания" value={viewingClient.actual_address} />
-                        <DetailItem label="Телефон" value={viewingClient.phone} />
-                        <DetailItem label="Email" value={viewingClient.email} />
-                      </div>
-                    </div>
-
-                    {/* Work and Education */}
-                    <div className="space-y-4 border-t pt-4">
-                      <h3 className="font-semibold text-lg">РАБОТА И ОБРАЗОВАНИЕ</h3>
-                      <Separator />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <DetailItem label="Специальность" value={viewingClient.individual_profile?.specialty || viewingClient.specialty} />
-                        <DetailItem label="Уровень образования" value={
-                          (() => {
-                            const level = viewingClient.individual_profile?.education_level || viewingClient.education_level;
-                            const levelMap: Record<string, string> = {
-                              higher: "Высшее",
-                              secondary_special: "Средне-специальное",
-                              secondary: "Среднее",
-                              primary: "Начальное",
-                              incomplete_higher: "Неоконченное высшее"
-                            };
-                            return level ? (levelMap[level] || level) : "";
-                          })()
-                        } />
-                        <DetailItem label="Образование" value={viewingClient.individual_profile?.education || viewingClient.education} />
-                        <DetailItem label="Название учебного заведения" value={viewingClient.individual_profile?.education_institution_name || viewingClient.education_institution_name} />
-                        <DetailItem label="Адрес учебного заведения" value={viewingClient.individual_profile?.education_institution_address || viewingClient.education_institution_address} />
-                        <DetailItem label="Место работы" value={viewingClient.individual_profile?.job || viewingClient.job} />
-                        <DetailItem label="Должность" value={viewingClient.individual_profile?.position || viewingClient.position} />
-                        <DetailItem label="Поездки за 5 лет" value={viewingClient.individual_profile?.trips_last5_years || viewingClient.trips_last5_years} />
-                        <DetailItem label="Родственники в стране назначения" value={viewingClient.individual_profile?.relatives_in_destination || viewingClient.relatives_in_destination} />
-                        <DetailItem label="Полученные визы" value={viewingClient.individual_profile?.visas_received || viewingClient.visas_received} />
-                        <DetailItem label="Отказы в визах" value={viewingClient.individual_profile?.visa_refusals || viewingClient.visa_refusals} />
-                      </div>
-                    </div>
-
-                    {/* Medical Information */}
-                    <div className="space-y-4 border-t pt-4">
-                      <h3 className="font-semibold text-lg">МЕДИЦИНСКАЯ ИНФОРМАЦИЯ</h3>
-                      <Separator />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <DetailItem label="Рост" value={viewingClient.individual_profile?.height?.toString() || viewingClient.height?.toString()} />
-                        <DetailItem label="Вес" value={viewingClient.individual_profile?.weight?.toString() || viewingClient.weight?.toString()} />
-                        <DetailItem label="Категории водительских прав" value={viewingClient.individual_profile?.driver_license_categories || viewingClient.driver_license_categories} />
-                        <DetailItem label="Серия и номер водительских прав" value={viewingClient.individual_profile?.driver_license_number || viewingClient.driver_license_number} />
-                        <DetailItem label="Дата выдачи водительских прав" value={viewingClient.driver_license_issue_date} />
-                        <DetailItem label="Дата окончания водительских прав" value={viewingClient.driver_license_expire_date} />
-                        <DetailItem label="Терапевт" value={viewingClient.individual_profile?.therapist_name || viewingClient.therapist_name} />
-                        <DetailItem label="Клиника" value={viewingClient.individual_profile?.clinic_name || viewingClient.clinic_name} />
-                        <DetailItem label="Заболевания за 3 года" value={viewingClient.individual_profile?.diseases_last3_years || viewingClient.diseases_last3_years} />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* Legal Client Fields */}
-                {viewingClient.client_type === "legal" && (
-                  <>
-                    <div className="space-y-4">
-                      <h3 className="font-semibold text-lg">ИНФОРМАЦИЯ О КОМПАНИИ</h3>
-                      <Separator />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <DetailItem label="Название компании" value={viewingClient.legal_profile?.company_name || viewingClient.name} />
-                        <DetailItem label="БИН" value={viewingClient.legal_profile?.bin || viewingClient.bin_iin} />
-                        <DetailItem label="Юридический адрес" value={viewingClient.legal_profile?.legal_address || viewingClient.address} />
-                        <DetailItem label="Фактический адрес" value={viewingClient.legal_profile?.actual_address || viewingClient.actual_address} />
-                      </div>
-                    </div>
-
-                    <div className="space-y-4 border-t pt-4">
-                      <h3 className="font-semibold text-lg">КОНТАКТНОЕ ЛИЦО</h3>
-                      <Separator />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <DetailItem label="ФИО контактного лица" value={viewingClient.legal_profile?.contact_person_name || viewingClient.contact_info} />
-                        <DetailItem label="Телефон контактного лица" value={viewingClient.legal_profile?.contact_person_phone || viewingClient.phone} />
-                      </div>
-                    </div>
-
-                    <div className="space-y-4 border-t pt-4">
-                      <h3 className="font-semibold text-lg">БАНКОВСКИЕ РЕКВИЗИТЫ</h3>
-                      <Separator />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <DetailItem label="Название банка" value={viewingClient.legal_profile?.bank_name} />
-                        <DetailItem label="IBAN" value={viewingClient.legal_profile?.iban} />
-                        <DetailItem label="БИК" value={viewingClient.legal_profile?.bik} />
-                        <DetailItem label="КБЕ" value={viewingClient.legal_profile?.kbe} />
-                      </div>
-                    </div>
-
-                    <div className="space-y-4 border-t pt-4">
-                      <h3 className="font-semibold text-lg">ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ</h3>
-                      <Separator />
-                      <DetailItem label="Дополнительная информация" value={viewingClient.legal_profile?.additional_info} />
-                    </div>
-                  </>
-                )}
-
-                {/* Call History */}
-                <div className="space-y-4 border-t pt-4">
-                  <h3 className="font-semibold text-lg">ИСТОРИЯ ЗВОНКОВ</h3>
-                  <Separator />
-                  {clientCallsLoading && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-                      <Spinner className="h-4 w-4" />
-                      Загрузка...
-                    </div>
-                  )}
-                  {!clientCallsLoading && clientCallsError && (
-                    <p className="text-sm text-muted-foreground py-2">{clientCallsError}</p>
-                  )}
-                  {!clientCallsLoading && !clientCallsError && clientCalls.length === 0 && (
-                    <p className="text-sm text-muted-foreground py-2">Звонков нет</p>
-                  )}
-                  {!clientCallsLoading && !clientCallsError && clientCalls.length > 0 && (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Дата и время</TableHead>
-                          <TableHead>Направление</TableHead>
-                          <TableHead>Статус</TableHead>
-                          <TableHead>Номер</TableHead>
-                          <TableHead>Менеджер</TableHead>
-                          <TableHead>Длительность</TableHead>
-                          <TableHead>Запись</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {clientCalls.map((call) => (
-                          <TableRow key={call.id}>
-                            <TableCell className="whitespace-nowrap text-sm">
-                              {formatCallDateTime(call.started_at || call.created_at)}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {CALL_DIRECTION_LABELS[call.direction] ?? call.direction}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={CALL_STATUS_VARIANTS[call.status] ?? "outline"}>
-                                {CALL_STATUS_LABELS[call.status] ?? call.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-sm">{call.phone}</TableCell>
-                            <TableCell className="text-sm">{call.manager_name ?? "—"}</TableCell>
-                            <TableCell className="text-sm">
-                              {formatCallDuration(call.duration_seconds)}
-                            </TableCell>
-                            <TableCell>
-                              {call.recording_url ? (
-                                <a
-                                  href={call.recording_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
-                                >
-                                  <PlayCircle className="h-4 w-4" />
-                                  Слушать
-                                </a>
-                              ) : (
-                                <span className="text-sm text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </div>
-              </div>
-            </ScrollArea>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setViewingClient(null)}>Закрыть</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
