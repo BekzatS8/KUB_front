@@ -25,9 +25,7 @@ export async function uploadDocumentVersion(docId: number, file: File, comment?:
   if (comment) {
     formData.append('comment', comment)
   }
-  const res = await api.post(`/documents/${docId}/versions`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
+  const res = await api.post(`/documents/${docId}/versions`, formData)
   return res.data
 }
 

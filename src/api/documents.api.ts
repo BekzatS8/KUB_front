@@ -94,7 +94,7 @@ export async function uploadDocument(payload: Models.Documents_Upload_document_R
   formData.append('doc_type', payload.doc_type);
   formData.append('file', payload.file);
 
-  const res = await api.post(`/documents/upload`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+  const res = await api.post(`/documents/upload`, formData)
   return res.data
 }
 

@@ -58,6 +58,6 @@ export async function deleteChat(chatId: number): Promise<any> {
 export async function uploadAttachment(chatId: number, file: File): Promise<{ url: string }> {
   const formData = new FormData();
   formData.append('file', file);
-  const res = await api.post(`/chats/${chatId}/upload`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+  const res = await api.post(`/chats/${chatId}/upload`, formData)
   return res.data
 }

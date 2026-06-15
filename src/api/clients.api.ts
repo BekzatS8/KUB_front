@@ -290,10 +290,7 @@ export async function uploadClientPhoto(clientId: string, file: File): Promise<a
     const formData = new FormData()
     formData.append('file', file)
     formData.append('category', 'photo35x45')
-    const res = await api.post(`/clients/${clientId}/files`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 120000,
-    });
+    const res = await api.post(`/clients/${clientId}/files`, formData)
     return res.data;
   } catch (error: any) {
     throw new Error(extractClientErrorMessage(error, 'Не удалось загрузить фото клиента.'));
