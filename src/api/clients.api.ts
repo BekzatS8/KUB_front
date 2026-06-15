@@ -341,9 +341,7 @@ export async function uploadClientAvatar(clientId: string, file: File): Promise<
   try {
     const formData = new FormData()
     formData.append('file', file)
-    const res = await api.post(`/clients/${clientId}/avatar`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    const res = await api.post(`/clients/${clientId}/avatar`, formData)
     return res.data
   } catch (error: any) {
     throw new Error(extractClientErrorMessage(error, 'Не удалось загрузить аватар.'))
@@ -370,6 +368,7 @@ export async function deleteClientAvatar(clientId: string): Promise<void> {
 export async function loadClientAvatar(clientId: string): Promise<string | null> {
   try {
     const res = await api.get(`/clients/${clientId}/avatar/content`, { responseType: 'blob' })
+    // Revoke previous blob URL if needed (caller handles cleanup via key prop)
     return URL.createObjectURL(res.data)
   } catch {
     return null

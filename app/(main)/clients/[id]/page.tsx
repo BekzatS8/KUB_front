@@ -138,9 +138,9 @@ const NAV_ITEMS: { key: SectionKey; label: string; icon: React.ReactNode; permis
 function DetailItem({ label, value, className }: { label: string; value?: React.ReactNode; className?: string }) {
   if (!value || value === "—") return null
   return (
-    <div className={`grid grid-cols-[140px_1fr] gap-2 py-1.5 ${className || ""}`}>
+    <div className={`flex flex-col sm:grid sm:grid-cols-[140px_1fr] gap-1 sm:gap-2 py-1.5 ${className || ""}`}>
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium">{value}</span>
+      <span className="text-sm font-medium break-words">{value}</span>
     </div>
   )
 }
@@ -162,6 +162,8 @@ function ClientAvatar({
   const color = getAvatarColor(client.id)
   const isLegal = client.client_type === "legal"
 
+  useEffect(() => { setError(false) }, [avatarUrl])
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) onUpload(file)
@@ -174,6 +176,7 @@ function ClientAvatar({
         <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-border bg-muted">
           {avatarUrl && !error ? (
             <img
+              key={avatarUrl}
               src={avatarUrl}
               alt={client.display_name || client.name || ""}
               className="w-full h-full object-cover"
@@ -232,7 +235,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <MapPin className="w-4 h-4 text-muted-foreground" /> Поездка
           </h3>
-          <div className="grid grid-cols-2 gap-x-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
             <DetailItem label="Страна" value={p.country} />
             <DetailItem label="Цель" value={p.trip_purpose} />
           </div>
@@ -243,7 +246,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <User className="w-4 h-4 text-muted-foreground" /> Личные данные
           </h3>
-          <div className="grid grid-cols-2 gap-x-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
             <DetailItem label="ФИО" value={[p.last_name, p.first_name, p.middle_name].filter(Boolean).join(" ") || "—"} />
             <DetailItem label="ИИН" value={p.iin} />
             <DetailItem label="Удостоверение" value={p.id_number} />
@@ -260,7 +263,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <Phone className="w-4 h-4 text-muted-foreground" /> Контакты и адрес
           </h3>
-          <div className="grid grid-cols-2 gap-x-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
             <DetailItem label="Телефон" value={client.primary_phone || client.phone} />
             <DetailItem label="Email" value={client.primary_email || client.email} />
             <DetailItem label="Рег. адрес" value={p.registration_address} />
@@ -274,7 +277,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-muted-foreground" /> Паспорт
             </h3>
-            <div className="grid grid-cols-2 gap-x-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
               <DetailItem label="Выдан" value={p.passport_issue_date ? formatDate(p.passport_issue_date) : undefined} />
               <DetailItem label="Действует до" value={p.passport_expire_date ? formatDate(p.passport_expire_date) : undefined} />
             </div>
@@ -287,7 +290,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <Briefcase className="w-4 h-4 text-muted-foreground" /> Работа и образование
             </h3>
-            <div className="grid grid-cols-2 gap-x-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
               <DetailItem label="Работа" value={p.job} />
               <DetailItem label="Должность" value={p.position} />
               <DetailItem label="Образование" value={p.education_level} />
@@ -303,7 +306,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <Heart className="w-4 h-4 text-muted-foreground" /> Семья
             </h3>
-            <div className="grid grid-cols-2 gap-x-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
               <DetailItem label="Сем. положение" value={p.marital_status} />
               <DetailItem label="Дети" value={p.has_children ? "Да" : p.has_children === false ? "Нет" : undefined} />
               <DetailItem label="Супруг(а)" value={p.spouse_name} />
@@ -318,7 +321,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <Activity className="w-4 h-4 text-muted-foreground" /> Медицина
             </h3>
-            <div className="grid grid-cols-2 gap-x-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
               <DetailItem label="Терапевт" value={p.therapist_name} />
               <DetailItem label="Клиника" value={p.clinic_name} />
               <DetailItem label="Заболевания" value={p.diseases_last3_years} />
@@ -344,7 +347,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
           <Building2 className="w-4 h-4 text-muted-foreground" /> Компания
         </h3>
-        <div className="grid grid-cols-2 gap-x-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
           <DetailItem label="Название" value={lp?.company_name || client.name} />
           <DetailItem label="БИН" value={lp?.bin || client.bin_iin} />
           <DetailItem label="Форма" value={lp?.legal_form} />
@@ -360,7 +363,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
           <User className="w-4 h-4 text-muted-foreground" /> Контактное лицо
         </h3>
-        <div className="grid grid-cols-2 gap-x-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
           <DetailItem label="Имя" value={lp?.contact_person_name} />
           <DetailItem label="Должность" value={lp?.contact_person_position || client.contact_person_position} />
           <DetailItem label="Телефон" value={lp?.contact_person_phone || client.primary_phone || client.phone} />
@@ -373,7 +376,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <CreditCard className="w-4 h-4 text-muted-foreground" /> Банковские данные
           </h3>
-          <div className="grid grid-cols-2 gap-x-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
             <DetailItem label="Банк" value={lp?.bank_name || client.bank_name} />
             <DetailItem label="IBAN" value={lp?.iban || client.iban} />
             <DetailItem label="БИК" value={lp?.bik || client.bik} />
@@ -516,7 +519,7 @@ function DocumentsSection({ client }: { client: Client }) {
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-2 items-stretch sm:items-center">
         <div className="relative flex-1 min-w-[200px] max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
@@ -848,13 +851,13 @@ export default function ClientProfilePage() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="flex items-center gap-2 mb-6">
           <Skeleton className="h-8 w-8 rounded" />
           <Skeleton className="h-6 w-48" />
         </div>
-        <div className="flex gap-6">
-          <div className="w-56 shrink-0 space-y-4">
+        <div className="flex flex-col sm:flex-row gap-6">
+          <div className="w-full sm:w-56 shrink-0 space-y-4">
             <Skeleton className="w-24 h-24 rounded-full mx-auto" />
             <Skeleton className="h-5 w-32 mx-auto" />
             <Skeleton className="h-4 w-24 mx-auto" />
@@ -893,7 +896,7 @@ export default function ClientProfilePage() {
   })
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6">
       {/* Back button */}
       <Button
         variant="ghost"
@@ -904,10 +907,10 @@ export default function ClientProfilePage() {
         <ArrowLeft className="w-4 h-4 mr-2" /> К списку клиентов
       </Button>
 
-      <div className="flex gap-6">
+      <div className="flex flex-col md:flex-row gap-6">
         {/* Left sidebar */}
-        <div className="w-56 shrink-0">
-          <Card className="p-4 sticky top-4">
+        <div className="w-full md:w-56 shrink-0">
+          <Card className="p-4 md:sticky md:top-4">
             {/* Avatar */}
             <ClientAvatar
               client={client}
@@ -937,13 +940,13 @@ export default function ClientProfilePage() {
 
             <Separator className="my-3" />
 
-            {/* Navigation */}
-            <nav className="space-y-0.5">
+            {/* Mobile: horizontal tabs */}
+            <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-x-visible">
               {visibleNavItems.map((item) => (
                 <button
                   key={item.key}
                   onClick={() => setActiveSection(item.key)}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-md transition-colors ${
+                  className={`flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors whitespace-nowrap ${
                     activeSection === item.key
                       ? "bg-primary/10 text-primary font-medium"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
