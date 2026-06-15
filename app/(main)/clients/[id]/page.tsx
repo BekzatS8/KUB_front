@@ -211,7 +211,7 @@ function ClientAvatar({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff,application/pdf"
           className="hidden"
           onChange={handleFileChange}
         />

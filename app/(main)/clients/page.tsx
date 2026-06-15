@@ -1944,18 +1944,28 @@ useEffect(() => {
                     <Label htmlFor="photo_35x45">Фото клиента (35x45)</Label>
                     <Input
                       id="photo_35x45"
+                      name="file"
                       type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff,application/pdf"
+                      className="file:mr-3 file:px-3 file:py-1 file:rounded-lg file:border-0 file:bg-primary file:text-primary-foreground file:font-medium file:text-sm hover:file:bg-primary/90"
                       onChange={handlePhotoSelect}
                     />
                     {(photoPreview || (editingClient && clientFormData.photo_35x45)) && (
                       <div className="mt-2 flex items-start gap-3">
                         {!photoPreviewError ? (
-                          <img
-                            src={photoPreview || clientFormData.photo_35x45 || ""}
-                            alt="Preview"
-                            className="h-40 w-32 rounded-lg border object-contain bg-white"
-                            onError={() => setPhotoPreviewError(true)}
-                          />
+                          isPhotoPdf ? (
+                            <div className="h-40 w-32 rounded-lg border bg-gray-100 flex flex-col items-center justify-center text-xs text-muted-foreground">
+                              <FileText className="w-8 h-8 mb-1 text-red-500" />
+                              <span>PDF</span>
+                            </div>
+                          ) : (
+                            <img
+                              src={photoPreview || clientFormData.photo_35x45 || ""}
+                              alt="Preview"
+                              className="h-40 w-32 rounded-lg border object-contain bg-white"
+                              onError={() => setPhotoPreviewError(true)}
+                            />
+                          )
                         ) : (
                           <div className="flex h-40 w-32 items-center justify-center rounded-lg border bg-white px-3 text-center text-xs text-muted-foreground">
                             Предпросмотр недоступен
