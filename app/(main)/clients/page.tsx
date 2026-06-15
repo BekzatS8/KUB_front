@@ -561,6 +561,8 @@ export default function ClientsPage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoPreviewError, setPhotoPreviewError] = useState(false);
 
+  const isPhotoPdf = (selectedPhotoFile?.type === 'application/pdf') || (selectedPhotoFile?.name?.toLowerCase().endsWith('.pdf') ?? false);
+
   const [clients, setClients] = useState<Models.Client[]>([]);
   const [totalClients, setTotalClients] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
