@@ -67,6 +67,8 @@ import {
   Check,
   ArrowUp,
   ArrowDown,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { getCurrentUser, getCurrentCompany, hasPermission, getRoleCode } from "@/lib/auth";
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
@@ -80,6 +82,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import * as ClientAPI from "@/src/api/clients.api"; // Import all as ClientAPI
 import * as BranchesAPI from "@/src/api/branches.api";
+import * as FunnelsAPI from "@/src/api/funnels.api";
+import { getMyPermissions } from "@/src/api/permissions.api";
+import { KanbanBoard } from "@/components/deals/kanban-board";
+import type { Funnel } from "@/src/models/funnels.model";
+import type { FunnelBoardDeal } from "@/src/models/funnel-stages.model";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { cn } from "@/lib/utils";
 import {
@@ -126,6 +133,13 @@ export default function DealsPage() {
   const [clients, setClients] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
+
+  // Kanban view state
+  const [viewMode, setViewMode] = useState<"kanban" | "table">("table");
+  const [canViewFunnels, setCanViewFunnels] = useState(false);
+  const [funnels, setFunnels] = useState<Funnel[]>([]);
+  const [selectedFunnelId, setSelectedFunnelId] = useState<number | null>(null);
+  const [kanbanRefreshKey, setKanbanRefreshKey] = useState(0);
 
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -187,6 +201,33 @@ export default function DealsPage() {
       };
       fetchBranches();
     }
+  }, [user]);
+
+  // Fetch funnels + funnel permission for the kanban view
+  useEffect(() => {
+    if (!user) return;
+    const loadFunnelsData = async () => {
+      try {
+        const permissionData = await getMyPermissions();
+        const canView = Boolean(permissionData?.scopes?.["funnels.view"]);
+        setCanViewFunnels(canView);
+        if (!canView) return;
+
+        const funnelData = await FunnelsAPI.listFunnels();
+        const activeFunnels = (funnelData || []).filter((f) => f.is_active);
+        setFunnels(activeFunnels.length ? activeFunnels : funnelData || []);
+
+        const list = activeFunnels.length ? activeFunnels : funnelData || [];
+        if (list.length > 0) {
+          setSelectedFunnelId((prev) => prev ?? list[0].id);
+          setViewMode("kanban");
+        }
+      } catch (err) {
+        console.error("Error loading funnels for kanban view:", err);
+        setCanViewFunnels(false);
+      }
+    };
+    loadFunnelsData();
   }, [user]);
 
   // Fetch user data like sidebar does
@@ -1186,6 +1227,28 @@ export default function DealsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {canViewFunnels && funnels.length > 0 && (
+            <div className="flex items-center rounded-md border bg-white p-0.5">
+              <Button
+                variant={viewMode === "kanban" ? "default" : "ghost"}
+                size="sm"
+                className="h-8"
+                onClick={() => setViewMode("kanban")}
+              >
+                <LayoutGrid className="h-4 w-4 mr-1.5" />
+                Канбан
+              </Button>
+              <Button
+                variant={viewMode === "table" ? "default" : "ghost"}
+                size="sm"
+                className="h-8"
+                onClick={() => setViewMode("table")}
+              >
+                <List className="h-4 w-4 mr-1.5" />
+                Таблица
+              </Button>
+            </div>
+          )}
           <Button
             variant="outline"
             size="icon"
@@ -1265,7 +1328,46 @@ export default function DealsPage() {
         </Card>
       </div>
 
+      {/* Kanban view */}
+      {viewMode === "kanban" && canViewFunnels && (
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <CardTitle>Воронка продаж</CardTitle>
+                <CardDescription>Перетащите карточку, чтобы изменить этап сделки</CardDescription>
+              </div>
+              {funnels.length > 1 && (
+                <div className="w-full sm:w-64">
+                  <CustomSelect
+                    value={selectedFunnelId ? String(selectedFunnelId) : ""}
+                    onChange={(value) => setSelectedFunnelId(Number(value))}
+                    placeholder="Выберите воронку"
+                    className="w-full"
+                    options={funnels.map((f) => ({ value: String(f.id), label: f.name }))}
+                  />
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {selectedFunnelId ? (
+              <KanbanBoard
+                funnelId={selectedFunnelId}
+                canMove={canWrite}
+                onDealClick={(deal: FunnelBoardDeal) => openViewDialog(deal)}
+                refreshKey={kanbanRefreshKey}
+              />
+            ) : (
+              <p className="text-sm text-gray-500">Нет доступных воронок</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Filters */}
+      {viewMode === "table" && (
+      <>
       <CollapsibleFilter defaultOpen={false}>
         <Card className="overflow-visible">
           <CardContent className="p-4 overflow-visible">
@@ -1625,6 +1727,8 @@ export default function DealsPage() {
           </div>
         )}
       </Card >
+      </>
+      )}
 
       {/* Create Deal Dialog */}
       < Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} >

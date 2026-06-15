@@ -66,3 +66,19 @@ export async function unarchive_deal(payload?: void, params?: Record<string, any
   const res = await api.post(`/deals/${params?.id}/unarchive`)
   return res.data
 }
+
+export async function move_deal_stage(
+  payload: Models.Deals_Move_deal_stage_Request,
+  params?: Record<string, any>
+): Promise<any> {
+  const res = await api.post(`/deals/${params?.id}/move`, payload)
+  return res.data
+}
+
+export async function get_deal_history(
+  payload?: void,
+  params?: Record<string, any>
+): Promise<any> {
+  const res = await api.get(`/deals/${params?.id}/history`)
+  return res.data
+}

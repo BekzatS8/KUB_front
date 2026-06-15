@@ -24,6 +24,11 @@ export type Deals_Update_deal_status_Request = {
   comment?: string
 }
 
+export type Deals_Move_deal_stage_Request = {
+  stage_id: number
+  comment?: string
+}
+
 // Response types
 export interface Deal {
   id: number
@@ -34,6 +39,8 @@ export interface Deal {
   client_type?: string
   owner_id?: number
   funnel_id?: number | null
+  stage_id?: number | null
+  branch_id?: number | null
   amount: number
   currency: string
   status: string
