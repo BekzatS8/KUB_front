@@ -1753,7 +1753,7 @@ useEffect(() => {
               <TableHeader>
                 <TableRow>
                   <TableHead className="px-4">ID</TableHead>
-                  <TableHead className="px-4">Название/Имя</TableHead>
+                  <TableHead className="px-4">ФИО</TableHead>
                   <TableHead className="px-4">Тип</TableHead>
                   <TableHead className="px-4">БИН/ИИН</TableHead>
                   <TableHead className="px-4">Контакт</TableHead>
@@ -1781,8 +1781,13 @@ useEffect(() => {
                       <TableRow key={client.id} className={isArchived ? "bg-gray-200" : ""}>
                         <TableCell className="px-4 align-top font-mono text-sm">{client.id}</TableCell>
                         <TableCell className="px-4 align-top">
-                          <div className="break-words font-medium leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
-                            {client.name || `${client.last_name} ${client.first_name}`}
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-200 text-sm font-medium text-gray-600">
+                              {(client.name || `${client.last_name || ''} ${client.first_name || ''}` || '?').trim().charAt(0).toUpperCase()}
+                            </div>
+                            <div className="break-words font-medium leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                              {client.name || `${client.last_name} ${client.first_name}`}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="px-4 align-top">
@@ -1798,7 +1803,7 @@ useEffect(() => {
                         <TableCell className="px-4 align-top break-words">{client.bin_iin || client.iin || '-'}</TableCell>
                         <TableCell className="px-4 align-top">
                           <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
-                            {client.client_type === "legal" ? (client.contact_info || '-') : `${client.last_name} ${client.first_name}`}
+                            {client.client_type === "legal" ? (client.contact_info || '-') : (client.email || '-')}
                           </div>
                         </TableCell>
                         <TableCell className="px-4 align-top break-words">{client.phone || '-'}</TableCell>

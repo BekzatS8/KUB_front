@@ -1,15 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertCircle,
-  Instagram,
-  MessageCircle,
-  RefreshCw,
-  Send,
-  Settings,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertCircle, RefreshCw, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,61 +15,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
-  getWazzupChannels,
   getWazzupIframe,
   setupWazzup,
-  type WazzupChannel,
 } from "@/src/api/integrations_wazzup.api";
 
-type ChannelId = "whatsapp" | "telegram" | "instagram";
 type WidgetState = "loading" | "ready" | "error";
-
-const CHANNELS: Array<{
-  id: ChannelId;
-  title: string;
-  description: string;
-  icon: typeof MessageCircle;
-  iconClassName: string;
-}> = [
-  {
-    id: "whatsapp",
-    title: "WhatsApp",
-    description: "Диалоги через Wazzup",
-    icon: MessageCircle,
-    iconClassName: "bg-emerald-500 text-white",
-  },
-  {
-    id: "telegram",
-    title: "Telegram",
-    description: "Диалоги через Wazzup",
-    icon: Send,
-    iconClassName: "bg-sky-500 text-white",
-  },
-  {
-    id: "instagram",
-    title: "Instagram",
-    description: "Direct через Wazzup",
-    icon: Instagram,
-    iconClassName: "bg-pink-500 text-white",
-  },
-];
-
-const GLOBAL_IFRAME_MESSAGE =
-  "Wazzup отдаёт общий iframe. Выберите Telegram или Instagram внутри виджета Wazzup.";
-
-const normalizeTransport = (value: string): ChannelId | "" => {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "wa" || normalized === "waba" || normalized === "whatsapp") {
-    return "whatsapp";
-  }
-  if (normalized === "tg" || normalized === "telegram") {
-    return "telegram";
-  }
-  if (normalized === "ig" || normalized === "instagram" || normalized === "instagram_direct" || normalized === "direct") {
-    return "instagram";
-  }
-  return "";
-};
 
 const getWidgetErrorMessage = (error: any) => {
   const status = error?.response?.status;
@@ -99,17 +41,10 @@ const getWidgetErrorMessage = (error: any) => {
 };
 
 export default function MessengerPage() {
-  const [activeChannel, setActiveChannel] = useState<ChannelId>("whatsapp");
-  const [selectedChannelId, setSelectedChannelId] = useState("");
   const [iframeUrl, setIframeUrl] = useState("");
   const [widgetState, setWidgetState] = useState<WidgetState>("loading");
   const [widgetError, setWidgetError] = useState("");
-  const [widgetWarning, setWidgetWarning] = useState("");
   const [isManualRefresh, setIsManualRefresh] = useState(false);
-
-  const [wazzupChannels, setWazzupChannels] = useState<WazzupChannel[]>([]);
-  const [channelsLoaded, setChannelsLoaded] = useState(false);
-  const [channelsLoadFailed, setChannelsLoadFailed] = useState(false);
 
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
   const [isSetupLoading, setIsSetupLoading] = useState(false);
@@ -120,113 +55,42 @@ export default function MessengerPage() {
   });
   const initialLoadRef = useRef(false);
 
-  const widgetReady = widgetState === "ready";
+  const loadWidget = useCallback(async () => {
+    setWidgetState("loading");
+    setWidgetError("");
 
-  const loadChannels = useCallback(async () => {
     try {
-      const response = await getWazzupChannels();
-      const nextChannels = response.value || [];
-      setWazzupChannels(nextChannels);
-      setChannelsLoaded(true);
-      setChannelsLoadFailed(false);
-      return { channels: nextChannels, failed: false };
-    } catch {
-      setChannelsLoaded(true);
-      setChannelsLoadFailed(true);
-      return { channels: [], failed: true };
+      const response = await getWazzupIframe({});
+      const nextUrl = response.iframe_url || response.url;
+
+      if (!nextUrl) {
+        setWidgetState("error");
+        setWidgetError("Wazzup iframe URL не получен");
+        return;
+      }
+
+      setIframeUrl(nextUrl);
+      setWidgetState("ready");
+    } catch (error: any) {
+      setWidgetState("error");
+      setWidgetError(getWidgetErrorMessage(error));
+    } finally {
+      setIsManualRefresh(false);
     }
   }, []);
 
-  const findChannel = useCallback(
-    (transport: ChannelId, source: WazzupChannel[]) =>
-      source.find((channel) => normalizeTransport(channel.transport) === transport),
-    [],
-  );
-
-  const loadWidget = useCallback(
-    async (transport: ChannelId = activeChannel) => {
-      setWidgetState("loading");
-      setWidgetError("");
-      setWidgetWarning("");
-
-      let sourceChannels = wazzupChannels;
-      let channelListFailed = channelsLoadFailed;
-      if (!channelsLoaded) {
-        const result = await loadChannels();
-        sourceChannels = result.channels;
-        channelListFailed = result.failed;
-      }
-      const selectedChannel = findChannel(transport, sourceChannels);
-      const nextChannelId = selectedChannel?.channel_id || "";
-
-      setActiveChannel(transport);
-      setSelectedChannelId(nextChannelId);
-
-      if (!selectedChannel && !channelListFailed) {
-        setWidgetWarning("Канал не найден в Wazzup");
-      }
-
-      try {
-        const response = await getWazzupIframe({
-          transport,
-          channel_id: nextChannelId || undefined,
-        });
-        const nextUrl = response.iframe_url || response.url;
-
-        if (!nextUrl) {
-          setWidgetState("error");
-          setWidgetError("Wazzup iframe URL не получен");
-          return;
-        }
-
-        setIframeUrl(nextUrl);
-        setSelectedChannelId(response.channel_id || nextChannelId);
-        setWidgetState("ready");
-
-        if (response.channel_specific === false) {
-          setWidgetWarning(GLOBAL_IFRAME_MESSAGE);
-        }
-      } catch (error: any) {
-        setWidgetState("error");
-        setWidgetError(getWidgetErrorMessage(error));
-      } finally {
-        setIsManualRefresh(false);
-      }
-    },
-    [activeChannel, channelsLoaded, channelsLoadFailed, findChannel, loadChannels, wazzupChannels],
-  );
-
   const refreshWidget = useCallback(async () => {
     setIsManualRefresh(true);
-    await loadWidget(activeChannel);
-  }, [activeChannel, loadWidget]);
+    await loadWidget();
+  }, [loadWidget]);
 
   useEffect(() => {
     if (initialLoadRef.current) {
       return;
     }
     initialLoadRef.current = true;
-    loadWidget("whatsapp");
+    loadWidget();
   }, [loadWidget]);
-
-  const channels = useMemo(
-    () =>
-      CHANNELS.map((channel) => {
-        const hasChannel = Boolean(findChannel(channel.id, wazzupChannels));
-        const channelMissing = channelsLoaded && !channelsLoadFailed && !hasChannel;
-
-        return {
-          ...channel,
-          status: channelMissing ? "Канал не найден" : "Через Wazzup",
-          statusClassName: channelMissing
-            ? "bg-amber-50 text-amber-700"
-            : widgetReady
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-sky-50 text-sky-700",
-        };
-      }),
-    [channelsLoaded, channelsLoadFailed, findChannel, wazzupChannels, widgetReady],
-  );
 
   const handleSetup = async () => {
     setIsSetupLoading(true);
@@ -235,8 +99,7 @@ export default function MessengerPage() {
     try {
       await setupWazzup(setupForm);
       setIsSetupModalOpen(false);
-      setChannelsLoaded(false);
-      await loadWidget(activeChannel);
+      await loadWidget();
     } catch (error: any) {
       setSetupError(getWidgetErrorMessage(error));
     } finally {
@@ -247,7 +110,7 @@ export default function MessengerPage() {
   const renderWidget = () => {
     if (widgetState === "loading") {
       return (
-        <div className="flex h-[calc(100vh-220px)] min-h-[560px] items-center justify-center rounded-lg border bg-white shadow-sm">
+        <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center rounded-lg border bg-white shadow-sm">
           <div className="text-center">
             <RefreshCw className="mx-auto mb-4 h-8 w-8 animate-spin text-blue-600" />
             <p className="text-slate-600">Загрузка Wazzup...</p>
@@ -258,7 +121,7 @@ export default function MessengerPage() {
 
     if (widgetState === "error") {
       return (
-        <div className="flex h-[calc(100vh-220px)] min-h-[560px] items-center justify-center rounded-lg border bg-white p-6 shadow-sm">
+        <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center rounded-lg border bg-white p-6 shadow-sm">
           <div className="max-w-md text-center">
             <AlertCircle className="mx-auto mb-4 h-12 w-12 text-amber-500" />
             <h2 className="mb-2 text-lg font-semibold text-slate-900">
@@ -283,12 +146,12 @@ export default function MessengerPage() {
     }
 
     return (
-      <div className="h-[calc(100vh-220px)] min-h-[560px] overflow-hidden rounded-lg border bg-white shadow-sm">
+      <div className="h-[calc(100vh-180px)] min-h-[560px] overflow-hidden rounded-lg border bg-white shadow-sm">
         <iframe
-          key={`${activeChannel}-${selectedChannelId}-${iframeUrl}`}
+          key={iframeUrl}
           src={iframeUrl}
           className="h-full w-full border-0"
-          title={`Wazzup ${activeChannel}`}
+          title="Wazzup Messenger"
           allow="microphone *; clipboard-write *"
           onError={refreshWidget}
         />
@@ -302,7 +165,7 @@ export default function MessengerPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Мессенджер</h1>
           <p className="text-sm text-slate-600">
-            Все диалоги WhatsApp, Telegram и Instagram открываются через Wazzup iframe
+            WhatsApp, Telegram и Instagram через Wazzup
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -310,57 +173,12 @@ export default function MessengerPage() {
             <RefreshCw className={cn("mr-2 h-4 w-4", isManualRefresh && "animate-spin")} />
             Обновить
           </Button>
-          <Button variant="outline" onClick={() => loadWidget(activeChannel)}>
-            <MessageCircle className="mr-2 h-4 w-4" />
-            Открыть виджет
-          </Button>
           <Button onClick={() => setIsSetupModalOpen(true)}>
             <Settings className="mr-2 h-4 w-4" />
             Wazzup
           </Button>
         </div>
       </div>
-
-      <div className="grid gap-3 md:grid-cols-3">
-        {channels.map((channel) => {
-          const Icon = channel.icon;
-          const isActive = activeChannel === channel.id;
-
-          return (
-            <button
-              key={channel.id}
-              type="button"
-              onClick={() => loadWidget(channel.id)}
-              className={cn(
-                "rounded-lg border bg-white p-4 text-left shadow-sm transition",
-                "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset",
-                isActive ? "border-blue-500 shadow-md" : "border-slate-200 hover:border-blue-200",
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", channel.iconClassName)}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-semibold text-slate-900">{channel.title}</div>
-                    <div className="truncate text-sm text-slate-500">{channel.description}</div>
-                  </div>
-                </div>
-                <Badge className={cn("shrink-0 border-0", channel.statusClassName)}>
-                  {channel.status}
-                </Badge>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {widgetWarning && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {widgetWarning}
-        </div>
-      )}
 
       {renderWidget()}
 
