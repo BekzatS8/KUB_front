@@ -5,6 +5,7 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  pointerWithin,
   useDraggable,
   useDroppable,
   useSensor,
@@ -12,6 +13,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { snapCenterToCursor } from "@dnd-kit/modifiers";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -54,26 +56,24 @@ interface DealCardProps {
   disabled?: boolean;
 }
 
-function DealCard({ deal, onClick, disabled }: DealCardProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+function DealCard({ deal, onClick, disabled, overlay }: DealCardProps & { overlay?: boolean }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `deal-${deal.id}`,
     disabled,
   });
 
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
-    : undefined;
-
   return (
     <div
       ref={setNodeRef}
-      style={style}
       {...attributes}
       {...listeners}
       onClick={() => onClick?.(deal)}
       className={cn(
-        "rounded-lg border bg-white p-3 shadow-sm transition-shadow hover:shadow-md cursor-grab active:cursor-grabbing select-none",
-        isDragging && "opacity-40"
+        "rounded-lg border bg-white p-3 shadow-sm select-none transition-all",
+        overlay
+          ? "shadow-xl ring-2 ring-blue-500 ring-offset-1 rotate-1 cursor-move scale-105"
+          : "cursor-move hover:shadow-md hover:ring-2 hover:ring-blue-300 hover:ring-offset-1",
+        isDragging && !overlay && "opacity-25 border-dashed border-blue-300"
       )}
     >
       <div className="flex items-center justify-between gap-2">
@@ -211,8 +211,20 @@ export function KanbanBoard({ funnelId, canMove = true, onDealClick, refreshKey 
 
     const dealId = Number(String(active.id).replace("deal-", ""));
     const overId = String(over.id);
-    if (!overId.startsWith("stage-") || overId === "stage-none") return;
-    const targetStageId = Number(overId.replace("stage-", ""));
+
+    // over can be either the column droppable ("stage-X") or another card
+    // ("deal-X") when the card is on top of the column's droppable area.
+    // In both cases we resolve the target stage.
+    let targetStageId: number | null = null;
+    if (overId.startsWith("stage-") && overId !== "stage-none") {
+      targetStageId = Number(overId.replace("stage-", ""));
+    } else if (overId.startsWith("deal-")) {
+      const overDealId = Number(overId.replace("deal-", ""));
+      const overColumn = board.columns.find((c) => c.deals.some((d) => d.id === overDealId));
+      if (overColumn?.stage) targetStageId = overColumn.stage.id;
+    }
+
+    if (!targetStageId) return;
 
     const sourceColumn = board.columns.find((c) => c.deals.some((d) => d.id === dealId));
     const deal = sourceColumn?.deals.find((d) => d.id === dealId);
@@ -222,27 +234,17 @@ export function KanbanBoard({ funnelId, canMove = true, onDealClick, refreshKey 
     const targetColumn = board.columns.find((c) => c.stage?.id === targetStageId);
     if (!targetColumn) return;
 
-    // Optimistic update
+    // Optimistic move (status will be refreshed from server after API call)
     const previousBoard = board;
-    const updatedDeal: FunnelBoardDeal = { ...deal, stage_id: targetStageId };
+    const optimisticDeal: FunnelBoardDeal = { ...deal, stage_id: targetStageId };
     const newColumns = board.columns.map((col) => {
       if (col === sourceColumn) {
         const deals = col.deals.filter((d) => d.id !== dealId);
-        return {
-          ...col,
-          deals,
-          count: deals.length,
-          total_amount: deals.reduce((sum, d) => sum + Number(d.amount || 0), 0),
-        };
+        return { ...col, deals, count: deals.length, total_amount: deals.reduce((s, d) => s + Number(d.amount || 0), 0) };
       }
       if (col === targetColumn) {
-        const deals = [...col.deals, updatedDeal];
-        return {
-          ...col,
-          deals,
-          count: deals.length,
-          total_amount: deals.reduce((sum, d) => sum + Number(d.amount || 0), 0),
-        };
+        const deals = [...col.deals, optimisticDeal];
+        return { ...col, deals, count: deals.length, total_amount: deals.reduce((s, d) => s + Number(d.amount || 0), 0) };
       }
       return col;
     });
@@ -251,6 +253,9 @@ export function KanbanBoard({ funnelId, canMove = true, onDealClick, refreshKey 
     move_deal_stage({ stage_id: targetStageId }, { id: dealId })
       .then(() => {
         toast.success("Сделка перемещена");
+        // Reload board to get the real status change from backend
+        // (won/lost/in_progress is set server-side based on stage.type)
+        loadBoard();
       })
       .catch((err: any) => {
         console.error("Error moving deal:", err);
@@ -279,7 +284,7 @@ export function KanbanBoard({ funnelId, canMove = true, onDealClick, refreshKey 
   }
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex gap-3 overflow-x-auto pb-2">
         {board.columns.map((column) => (
           <Column
@@ -290,8 +295,8 @@ export function KanbanBoard({ funnelId, canMove = true, onDealClick, refreshKey 
           />
         ))}
       </div>
-      <DragOverlay>
-        {activeDeal ? <DealCard deal={activeDeal} /> : null}
+      <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]}>
+        {activeDeal ? <DealCard deal={activeDeal} overlay /> : null}
       </DragOverlay>
     </DndContext>
   );

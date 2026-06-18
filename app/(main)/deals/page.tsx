@@ -160,6 +160,7 @@ export default function DealsPage() {
     client_id: 0,
     client_type: "individual",
     owner_id: 0,
+    funnel_id: 0,
     amount: 0,
     currency: "KZT",
     status: "new",
@@ -734,6 +735,7 @@ export default function DealsPage() {
       client_id: 0,
       client_type: "individual",
       owner_id: user?.id ? parseInt(user.id) : 0,
+      funnel_id: selectedFunnelId || 0,
       amount: 0,
       currency: "KZT",
       status: "new",
@@ -910,6 +912,7 @@ export default function DealsPage() {
         client_id: Number(newDeal.client_id),
         client_type: newDeal.client_type || "individual",
         owner_id: newDeal.owner_id ? Number(newDeal.owner_id) : undefined,
+        funnel_id: newDeal.funnel_id ? Number(newDeal.funnel_id) : undefined,
         amount: Number(newDeal.amount),
         currency: newDeal.currency || "KZT",
         status: newDeal.status || "new",
@@ -1740,6 +1743,20 @@ export default function DealsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {canViewFunnels && funnels.length > 0 && (
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="new_funnel_id">Воронка</Label>
+                <CustomSelect
+                  value={newDeal.funnel_id ? String(newDeal.funnel_id) : ""}
+                  onChange={(value) => setNewDeal({ ...newDeal, funnel_id: Number(value) || 0 })}
+                  placeholder="Выберите воронку (необязательно)"
+                  options={[
+                    { value: "", label: "Без воронки" },
+                    ...funnels.map((f) => ({ value: String(f.id), label: f.name })),
+                  ]}
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="lead_id">Лид <span className="text-red-500">*</span></Label>
               <ComboboxSelect
