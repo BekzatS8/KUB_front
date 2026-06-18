@@ -234,9 +234,25 @@ export function KanbanBoard({ funnelId, canMove = true, onDealClick, refreshKey 
     const targetColumn = board.columns.find((c) => c.stage?.id === targetStageId);
     if (!targetColumn) return;
 
-    // Optimistic move (status will be refreshed from server after API call)
+    // Derive the status the server will assign so the optimistic card badge is correct.
+    const VALID_DEAL_STATUSES = ["new", "in_progress", "negotiation", "won", "lost", "cancelled"];
+    let optimisticStatus = deal.status;
+    if (targetColumn.stage) {
+      const s = targetColumn.stage;
+      if (s.type === "won") {
+        optimisticStatus = "won";
+      } else if (s.type === "lost") {
+        optimisticStatus = "lost";
+      } else if (VALID_DEAL_STATUSES.includes(s.code)) {
+        optimisticStatus = s.code;
+      } else {
+        optimisticStatus = "in_progress";
+      }
+    }
+
+    // Optimistic move
     const previousBoard = board;
-    const optimisticDeal: FunnelBoardDeal = { ...deal, stage_id: targetStageId };
+    const optimisticDeal: FunnelBoardDeal = { ...deal, stage_id: targetStageId, status: optimisticStatus };
     const newColumns = board.columns.map((col) => {
       if (col === sourceColumn) {
         const deals = col.deals.filter((d) => d.id !== dealId);
