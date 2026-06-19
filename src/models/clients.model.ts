@@ -11,6 +11,7 @@ export interface Client {
   phone?: string | null;
   email?: string | null;
   photo_35x45?: string | null;
+  avatar_url?: string | null;
   contact_info?: string | null;
   owner_id?: number | null;
   display_name?: string | null;
