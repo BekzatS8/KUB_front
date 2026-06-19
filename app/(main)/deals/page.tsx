@@ -154,6 +154,11 @@ export default function DealsPage() {
   const [currentDeal, setCurrentDeal] = useState<any>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
 
+  // Stage move from modal
+  const [modalStages, setModalStages] = useState<any[]>([]);
+  const [modalMoveStageId, setModalMoveStageId] = useState<string>("");
+  const [isMovingStage, setIsMovingStage] = useState(false);
+
   // Form states
   const [newDeal, setNewDeal] = useState({
     lead_id: 0,
@@ -808,7 +813,33 @@ export default function DealsPage() {
   // Open view dialog
   const openViewDialog = (deal: any) => {
     setCurrentDeal(deal);
+    setModalMoveStageId("");
+    setModalStages([]);
     setIsViewDialogOpen(true);
+    if (deal?.funnel_id) {
+      import("@/src/api/funnel-stages.api").then(({ listFunnelStages }) => {
+        listFunnelStages(deal.funnel_id).then((stages) => {
+          setModalStages(stages || []);
+        }).catch(() => {});
+      });
+    }
+  };
+
+  const handleModalMoveStage = async () => {
+    if (!currentDeal?.id || !modalMoveStageId) return;
+    setIsMovingStage(true);
+    try {
+      const { move_deal_stage } = await import("@/src/api/deals.api");
+      await move_deal_stage({ stage_id: Number(modalMoveStageId) }, { id: currentDeal.id });
+      toast.success("Сделка перемещена на новый этап");
+      setIsViewDialogOpen(false);
+      setKanbanRefreshKey((k) => k + 1);
+      fetchDeals();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || "Ошибка при перемещении");
+    } finally {
+      setIsMovingStage(false);
+    }
   };
 
   // Open status update dialog
@@ -2094,6 +2125,31 @@ export default function DealsPage() {
                   </p>
                 </div>
               </div>
+
+              {canWrite && modalStages.length > 0 && (
+                <div className="border-t pt-4 space-y-3">
+                  <Label className="text-sm font-semibold">Перенести на этап</Label>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <CustomSelect
+                        value={modalMoveStageId}
+                        onChange={setModalMoveStageId}
+                        placeholder="Выберите этап"
+                        options={modalStages
+                          .filter((s) => s.id !== currentDeal.stage_id)
+                          .map((s) => ({ value: String(s.id), label: s.name }))}
+                      />
+                    </div>
+                    <Button
+                      onClick={handleModalMoveStage}
+                      disabled={!modalMoveStageId || isMovingStage}
+                      size="sm"
+                    >
+                      {isMovingStage ? "..." : "Перенести"}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
