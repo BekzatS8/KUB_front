@@ -81,6 +81,67 @@ const SIGN_STATUS_LABELS: Record<string, string> = {
   expired: "Просрочен",
 }
 
+const COUNTRY_LABELS: Record<string, string> = {
+  kazakhstan: "Казахстан",
+  south_korea: "Южная Корея",
+  japan: "Япония",
+  usa: "США",
+  uk: "Великобритания",
+  australia: "Австралия",
+  canada: "Канада",
+  poland: "Польша",
+  estonia: "Эстония",
+  lithuania: "Литва",
+  slovakia: "Словакия",
+  germany: "Германия",
+  italy: "Италия",
+  spain: "Испания",
+  czech_republic: "Чехия",
+  norway: "Норвегия",
+  sweden: "Швеция",
+  france: "Франция",
+  other: "Другая страна",
+}
+
+const TRIP_PURPOSE_LABELS: Record<string, string> = {
+  tourism: "Туризм",
+  business: "Бизнес",
+  study: "Учеба",
+  work: "Работа",
+  family_visit: "Посещение семьи/друзей",
+  medical: "Лечение",
+  residence_permit: "ВНЖ",
+  permanent_residence: "ПМЖ",
+  transit: "Транзит",
+  other: "Другая цель",
+}
+
+const SEX_LABELS: Record<string, string> = {
+  male: "Мужской",
+  female: "Женский",
+}
+
+const MARITAL_STATUS_LABELS: Record<string, string> = {
+  married: "В браке",
+  not_married: "Не в браке",
+  divorced: "В разводе",
+  widowed: "Вдова/Вдовец",
+  civil_marriage: "Гражданский брак",
+}
+
+const EDUCATION_LEVEL_LABELS: Record<string, string> = {
+  higher: "Высшее",
+  secondary_special: "Средне-специальное",
+  secondary: "Среднее",
+  primary: "Начальное",
+  incomplete_higher: "Неоконченное высшее",
+}
+
+function translateValue(value: string | null | undefined, labels: Record<string, string>): string | undefined {
+  if (!value) return undefined
+  return labels[value] || value
+}
+
 const AVATAR_COLORS = [
   "bg-blue-500", "bg-emerald-500", "bg-violet-500", "bg-rose-500",
   "bg-amber-500", "bg-cyan-500", "bg-pink-500", "bg-indigo-500",
@@ -241,8 +302,8 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
             <MapPin className="w-4 h-4 text-muted-foreground" /> Поездка
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 min-w-0">
-            <DetailItem label="Страна" value={p.country} />
-            <DetailItem label="Цель" value={p.trip_purpose} />
+            <DetailItem label="Страна" value={p.country === "other" ? (client.country_other || "Другая страна") : translateValue(p.country, COUNTRY_LABELS)} />
+            <DetailItem label="Цель" value={p.trip_purpose === "other" ? (client.trip_purpose_other || "Другая цель") : translateValue(p.trip_purpose, TRIP_PURPOSE_LABELS)} />
           </div>
         </Card>
 
@@ -259,7 +320,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
             <DetailItem label="Дата рожд." value={p.birth_date ? formatDate(p.birth_date) : undefined} />
             <DetailItem label="Место рожд." value={p.birth_place} />
             <DetailItem label="Гражданство" value={p.citizenship} />
-            <DetailItem label="Пол" value={p.sex} />
+            <DetailItem label="Пол" value={translateValue(p.sex, SEX_LABELS)} />
           </div>
         </Card>
 
@@ -298,7 +359,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 min-w-0">
               <DetailItem label="Работа" value={p.job} />
               <DetailItem label="Должность" value={p.position} />
-              <DetailItem label="Образование" value={p.education_level} />
+              <DetailItem label="Образование" value={translateValue(p.education_level, EDUCATION_LEVEL_LABELS)} />
               <DetailItem label="Специальность" value={p.specialty} />
               <DetailItem label="Уч. заведение" value={p.education_institution_name} />
             </div>
@@ -312,7 +373,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
               <Heart className="w-4 h-4 text-muted-foreground" /> Семья
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 min-w-0">
-              <DetailItem label="Сем. положение" value={p.marital_status} />
+              <DetailItem label="Сем. положение" value={translateValue(p.marital_status, MARITAL_STATUS_LABELS)} />
               <DetailItem label="Дети" value={p.has_children ? "Да" : p.has_children === false ? "Нет" : undefined} />
               <DetailItem label="Супруг(а)" value={p.spouse_name} />
               <DetailItem label="Контакты" value={p.spouse_contacts} />
