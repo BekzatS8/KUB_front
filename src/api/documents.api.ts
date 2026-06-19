@@ -223,3 +223,14 @@ export async function submitPublicSign(token: string, signatureData: string, ema
   const res = await publicApi.post(`/public/documents/${token}/sign`, { signature: signatureData, email })
   return res.data
 }
+
+export interface SignPublicDocumentPayload {
+  signer_name: string
+  signer_phone?: string
+  signature: string
+}
+
+export async function signPublicDocument(token: string, payload: SignPublicDocumentPayload): Promise<any> {
+  const res = await publicApi.post(`/public/documents/${token}/sign`, payload)
+  return res.data
+}
