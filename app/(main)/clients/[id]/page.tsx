@@ -16,7 +16,9 @@ import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu"
+import { PdfViewer } from "@/components/ui/pdf-viewer-simple"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog"
@@ -410,6 +412,10 @@ function DocumentsSection({ client }: { client: Client }) {
   const [statusFilter, setStatusFilter] = useState("")
   const [typeFilter, setTypeFilter] = useState("")
 
+  // PDF viewer state
+  const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false)
+  const [selectedPdfDoc, setSelectedPdfDoc] = useState<Document | null>(null)
+
   // Version dialog state
   const [versionDoc, setVersionDoc] = useState<Document | null>(null)
   const [versions, setVersions] = useState<DocumentVersion[]>([])
@@ -495,23 +501,18 @@ function DocumentsSection({ client }: { client: Client }) {
     }
   }
 
-  const handleViewDocument = async (doc: Document) => {
-    try {
-      const blob = await DocAPI.viewDocumentFile(doc.id)
-      const url = URL.createObjectURL(blob)
-      window.open(url, "_blank")
-    } catch (err: any) {
-      toast({ title: "Ошибка", description: err.message, variant: "destructive" })
-    }
+  const handleViewDocument = (doc: Document) => {
+    setSelectedPdfDoc(doc)
+    setIsPdfViewerOpen(true)
   }
 
-  const handleDownloadDocument = async (doc: Document) => {
+  const handleDownloadDocument = async (doc: Document, format: "pdf" | "docx") => {
     try {
-      const blob = await DocAPI.downloadDocument(doc.id, "pdf")
+      const blob = await DocAPI.downloadDocument(doc.id, format)
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `document_${doc.id}.pdf`
+      a.download = `document_${doc.id}.${format}`
       a.click()
       URL.revokeObjectURL(url)
     } catch (err: any) {
@@ -607,9 +608,19 @@ function DocumentsSection({ client }: { client: Client }) {
                     <DropdownMenuItem onClick={() => handleViewDocument(doc)}>
                       <Eye className="w-4 h-4 mr-2" /> Просмотр
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleDownloadDocument(doc)}>
-                      <Download className="w-4 h-4 mr-2" /> Скачать
-                    </DropdownMenuItem>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <Download className="w-4 h-4 mr-2" /> Скачать
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        <DropdownMenuItem onClick={() => handleDownloadDocument(doc, "pdf")}>
+                          <FileText className="w-4 h-4 mr-2" /> PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDownloadDocument(doc, "docx")}>
+                          <FileText className="w-4 h-4 mr-2" /> Word
+                        </DropdownMenuItem>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
                     <DropdownMenuItem onClick={() => loadVersions(doc)}>
                       <History className="w-4 h-4 mr-2" /> История версий
                     </DropdownMenuItem>
@@ -620,6 +631,14 @@ function DocumentsSection({ client }: { client: Client }) {
           ))}
         </div>
       )}
+
+      {/* PDF Viewer */}
+      <PdfViewer
+        isOpen={isPdfViewerOpen}
+        onClose={() => setIsPdfViewerOpen(false)}
+        documentId={selectedPdfDoc?.id || 0}
+        documentName={selectedPdfDoc ? (DOC_TYPE_LABELS[selectedPdfDoc.doc_type as DocType] || selectedPdfDoc.doc_type) : undefined}
+      />
 
       {/* Version dialog */}
       <Dialog open={!!versionDoc} onOpenChange={(isOpen: boolean) => { if (!isOpen) setVersionDoc(null) }}>

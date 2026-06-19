@@ -76,7 +76,6 @@ const MENU: NavEntry[] = [
   {
     type: "item", title: "Отчеты", href: "/analytics", icon: BarChart3,
     permission: "reports.view",
-    roles: ["admin", "quality_control", "management"],
   },
   {
     type: "item", title: "Лиды", href: "/leads", icon: Target,
@@ -91,7 +90,6 @@ const MENU: NavEntry[] = [
   {
     type: "item", title: "Клиенты", href: "/clients", icon: Users,
     permission: "clients.view",
-    roles: ["admin", "sales", "visa", "partner", "quality_control", "management", "legal"],
   },
   {
     type: "item", title: "Документы", href: "/documents", icon: FileText,
@@ -126,7 +124,6 @@ const MENU: NavEntry[] = [
   {
     type: "item", title: "Мессенджер", href: "/whatsapp", icon: MessageCircle,
     permission: "messenger.view",
-    roles: ["admin", "sales", "visa", "partner", "quality_control", "management"],
   },
   {
     type: "item", title: "Телефония", href: "/telephony", icon: Phone,
