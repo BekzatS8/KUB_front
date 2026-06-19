@@ -146,6 +146,7 @@ const docTypeLabels: Record<string, string> = {
     termination_waiver: "Соглашение о расторжении с отказом от претензий",
     contract_language_courses: "Договор на языковые курсы",
     addendum_korea: "Дополнительное соглашение (Корея)",
+    contract_ukaby_visa: "Договор UKABY (визовые услуги)",
 }
 
 // Only main types for creation
@@ -165,6 +166,7 @@ const creatableDocTypes: { value: string; label: string }[] = [
     { value: "termination_waiver", label: "Соглашение о расторжении с отказом от претензий" },
     { value: "contract_language_courses", label: "Договор на языковые курсы" },
     { value: "addendum_korea", label: "Дополнительное соглашение (Корея)" },
+    { value: "contract_ukaby_visa", label: "Договор UKABY (визовые услуги)" },
 ]
 
 const statusLabels: Record<string, string> = {

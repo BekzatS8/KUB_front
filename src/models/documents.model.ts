@@ -13,7 +13,8 @@ export type DocType =
   | "termination_transfer"
   | "termination_waiver"
   | "contract_language_courses"
-  | "addendum_korea";
+  | "addendum_korea"
+  | "contract_ukaby_visa";
 
 export type DocStatus = "draft" | "under_review" | "approved" | "returned" | "signed";
 

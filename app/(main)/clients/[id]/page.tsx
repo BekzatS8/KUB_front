@@ -57,6 +57,7 @@ const DOC_TYPE_LABELS: Record<DocType, string> = {
   termination_waiver: "Расторжение (отказ)",
   contract_language_courses: "Договор (языковые курсы)",
   addendum_korea: "Доп. соглашение (Корея)",
+  contract_ukaby_visa: "Договор UKABY (визовые услуги)",
 }
 
 const DOC_STATUS_LABELS: Record<DocStatus, string> = {
