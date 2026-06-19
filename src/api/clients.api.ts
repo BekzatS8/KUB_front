@@ -302,38 +302,27 @@ export async function uploadClientPhoto(clientId: string, file: File): Promise<a
 }
 
 export async function createClientWithPhoto(payload: Models.CreateClientRequest, photoFile?: File): Promise<Models.Client> {
-  // First create client with JSON data
   const client = await createClient(payload);
-  
-  // Then upload photo if provided
   if (photoFile) {
     try {
-      await uploadClientPhoto(client.id.toString(), photoFile);
+      await uploadClientAvatar(client.id.toString(), photoFile);
     } catch (error) {
       throw new Error(`Клиент создан, но фото не загрузилось: ${(error as Error)?.message || 'неизвестная ошибка'}`);
     }
   }
-  
   return client;
 }
 
 export async function updateClientWithPhoto(id: string, payload: Models.UpdateClientRequest, photoFile?: File): Promise<Models.Client> {
+  const updatedClient = await updateClient(id, payload);
   if (photoFile) {
-    // First update client data
-    const updatedClient = await updateClient(id, payload);
-
-    // Then upload photo
     try {
-      await uploadClientPhoto(id, photoFile);
+      await uploadClientAvatar(id, photoFile);
     } catch (error) {
       throw new Error(`Клиент обновлен, но фото не загрузилось: ${(error as Error)?.message || 'неизвестная ошибка'}`);
     }
-
-    return updatedClient;
-  } else {
-    // Regular client update without photo
-    return updateClient(id, payload);
   }
+  return updatedClient;
 }
 
 // ─── Client Avatar ─────────────────────────────────────────────────

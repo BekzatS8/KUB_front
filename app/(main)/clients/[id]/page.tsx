@@ -7,7 +7,7 @@ import {
   CreditCard, Briefcase, Heart,
   Edit, MoreHorizontal, Eye,
   Download, RefreshCw, Upload, AlertCircle, History, RotateCcw, Camera, X,
-  Search, PlayCircle,
+  Search, PlayCircle, TrendingUp,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -16,7 +16,9 @@ import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu"
+import { PdfViewer } from "@/components/ui/pdf-viewer-simple"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog"
@@ -26,6 +28,8 @@ import { useToast } from "@/components/ui/use-toast"
 import * as ClientAPI from "@/src/api/clients.api"
 import { getClientCalls } from "@/src/api/telephony.api"
 import * as DocAPI from "@/src/api/documents.api"
+import { list_deals } from "@/src/api/deals.api"
+import type { Deal } from "@/src/models/deals.model"
 import {
   getDocumentVersions, uploadDocumentVersion, downloadDocumentVersion,
   restoreDocumentVersion, type DocumentVersion,
@@ -77,6 +81,67 @@ const SIGN_STATUS_LABELS: Record<string, string> = {
   expired: "Просрочен",
 }
 
+const COUNTRY_LABELS: Record<string, string> = {
+  kazakhstan: "Казахстан",
+  south_korea: "Южная Корея",
+  japan: "Япония",
+  usa: "США",
+  uk: "Великобритания",
+  australia: "Австралия",
+  canada: "Канада",
+  poland: "Польша",
+  estonia: "Эстония",
+  lithuania: "Литва",
+  slovakia: "Словакия",
+  germany: "Германия",
+  italy: "Италия",
+  spain: "Испания",
+  czech_republic: "Чехия",
+  norway: "Норвегия",
+  sweden: "Швеция",
+  france: "Франция",
+  other: "Другая страна",
+}
+
+const TRIP_PURPOSE_LABELS: Record<string, string> = {
+  tourism: "Туризм",
+  business: "Бизнес",
+  study: "Учеба",
+  work: "Работа",
+  family_visit: "Посещение семьи/друзей",
+  medical: "Лечение",
+  residence_permit: "ВНЖ",
+  permanent_residence: "ПМЖ",
+  transit: "Транзит",
+  other: "Другая цель",
+}
+
+const SEX_LABELS: Record<string, string> = {
+  male: "Мужской",
+  female: "Женский",
+}
+
+const MARITAL_STATUS_LABELS: Record<string, string> = {
+  married: "В браке",
+  not_married: "Не в браке",
+  divorced: "В разводе",
+  widowed: "Вдова/Вдовец",
+  civil_marriage: "Гражданский брак",
+}
+
+const EDUCATION_LEVEL_LABELS: Record<string, string> = {
+  higher: "Высшее",
+  secondary_special: "Средне-специальное",
+  secondary: "Среднее",
+  primary: "Начальное",
+  incomplete_higher: "Неоконченное высшее",
+}
+
+function translateValue(value: string | null | undefined, labels: Record<string, string>): string | undefined {
+  if (!value) return undefined
+  return labels[value] || value
+}
+
 const AVATAR_COLORS = [
   "bg-blue-500", "bg-emerald-500", "bg-violet-500", "bg-rose-500",
   "bg-amber-500", "bg-cyan-500", "bg-pink-500", "bg-indigo-500",
@@ -125,11 +190,12 @@ function formatFileSize(bytes?: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`
 }
 
-type SectionKey = "overview" | "documents" | "calls"
+type SectionKey = "overview" | "documents" | "deals" | "calls"
 
-const NAV_ITEMS: { key: SectionKey; label: string; icon: React.ReactNode; permission?: string }[] = [
+const NAV_ITEMS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: "overview", label: "Обзор", icon: <User className="w-4 h-4" /> },
-  { key: "documents", label: "Документы", icon: <FileText className="w-4 h-4" />, permission: "documents.view" },
+  { key: "deals", label: "Сделки", icon: <TrendingUp className="w-4 h-4" /> },
+  { key: "documents", label: "Документы", icon: <FileText className="w-4 h-4" /> },
   { key: "calls", label: "Звонки", icon: <Phone className="w-4 h-4" /> },
 ]
 
@@ -138,9 +204,9 @@ const NAV_ITEMS: { key: SectionKey; label: string; icon: React.ReactNode; permis
 function DetailItem({ label, value, className }: { label: string; value?: React.ReactNode; className?: string }) {
   if (!value || value === "—") return null
   return (
-    <div className={`flex flex-col sm:grid sm:grid-cols-[140px_1fr] gap-1 sm:gap-2 py-1.5 ${className || ""}`}>
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium break-words">{value}</span>
+    <div className={`flex flex-col sm:grid sm:grid-cols-[140px_1fr] gap-1 sm:gap-2 py-1.5 min-w-0 ${className || ""}`}>
+      <span className="text-sm text-muted-foreground shrink-0">{label}</span>
+      <span className="text-sm font-medium break-all min-w-0">{value}</span>
     </div>
   )
 }
@@ -211,7 +277,7 @@ function ClientAvatar({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff,application/pdf"
+          accept="image/jpeg,image/png,image/webp,application/pdf"
           className="hidden"
           onChange={handleFileChange}
         />
@@ -235,9 +301,9 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <MapPin className="w-4 h-4 text-muted-foreground" /> Поездка
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
-            <DetailItem label="Страна" value={p.country} />
-            <DetailItem label="Цель" value={p.trip_purpose} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 min-w-0">
+            <DetailItem label="Страна" value={p.country === "other" ? (client.country_other || "Другая страна") : translateValue(p.country, COUNTRY_LABELS)} />
+            <DetailItem label="Цель" value={p.trip_purpose === "other" ? (client.trip_purpose_other || "Другая цель") : translateValue(p.trip_purpose, TRIP_PURPOSE_LABELS)} />
           </div>
         </Card>
 
@@ -246,7 +312,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <User className="w-4 h-4 text-muted-foreground" /> Личные данные
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 min-w-0">
             <DetailItem label="ФИО" value={[p.last_name, p.first_name, p.middle_name].filter(Boolean).join(" ") || "—"} />
             <DetailItem label="ИИН" value={p.iin} />
             <DetailItem label="Удостоверение" value={p.id_number} />
@@ -254,7 +320,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
             <DetailItem label="Дата рожд." value={p.birth_date ? formatDate(p.birth_date) : undefined} />
             <DetailItem label="Место рожд." value={p.birth_place} />
             <DetailItem label="Гражданство" value={p.citizenship} />
-            <DetailItem label="Пол" value={p.sex} />
+            <DetailItem label="Пол" value={translateValue(p.sex, SEX_LABELS)} />
           </div>
         </Card>
 
@@ -263,7 +329,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <Phone className="w-4 h-4 text-muted-foreground" /> Контакты и адрес
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 min-w-0">
             <DetailItem label="Телефон" value={client.primary_phone || client.phone} />
             <DetailItem label="Email" value={client.primary_email || client.email} />
             <DetailItem label="Рег. адрес" value={p.registration_address} />
@@ -277,7 +343,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-muted-foreground" /> Паспорт
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 min-w-0">
               <DetailItem label="Выдан" value={p.passport_issue_date ? formatDate(p.passport_issue_date) : undefined} />
               <DetailItem label="Действует до" value={p.passport_expire_date ? formatDate(p.passport_expire_date) : undefined} />
             </div>
@@ -290,10 +356,10 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <Briefcase className="w-4 h-4 text-muted-foreground" /> Работа и образование
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 min-w-0">
               <DetailItem label="Работа" value={p.job} />
               <DetailItem label="Должность" value={p.position} />
-              <DetailItem label="Образование" value={p.education_level} />
+              <DetailItem label="Образование" value={translateValue(p.education_level, EDUCATION_LEVEL_LABELS)} />
               <DetailItem label="Специальность" value={p.specialty} />
               <DetailItem label="Уч. заведение" value={p.education_institution_name} />
             </div>
@@ -306,8 +372,8 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <Heart className="w-4 h-4 text-muted-foreground" /> Семья
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
-              <DetailItem label="Сем. положение" value={p.marital_status} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 min-w-0">
+              <DetailItem label="Сем. положение" value={translateValue(p.marital_status, MARITAL_STATUS_LABELS)} />
               <DetailItem label="Дети" value={p.has_children ? "Да" : p.has_children === false ? "Нет" : undefined} />
               <DetailItem label="Супруг(а)" value={p.spouse_name} />
               <DetailItem label="Контакты" value={p.spouse_contacts} />
@@ -321,7 +387,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <Activity className="w-4 h-4 text-muted-foreground" /> Медицина
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 min-w-0">
               <DetailItem label="Терапевт" value={p.therapist_name} />
               <DetailItem label="Клиника" value={p.clinic_name} />
               <DetailItem label="Заболевания" value={p.diseases_last3_years} />
@@ -347,7 +413,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
           <Building2 className="w-4 h-4 text-muted-foreground" /> Компания
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 min-w-0">
           <DetailItem label="Название" value={lp?.company_name || client.name} />
           <DetailItem label="БИН" value={lp?.bin || client.bin_iin} />
           <DetailItem label="Форма" value={lp?.legal_form} />
@@ -363,7 +429,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
           <User className="w-4 h-4 text-muted-foreground" /> Контактное лицо
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 min-w-0">
           <DetailItem label="Имя" value={lp?.contact_person_name} />
           <DetailItem label="Должность" value={lp?.contact_person_position || client.contact_person_position} />
           <DetailItem label="Телефон" value={lp?.contact_person_phone || client.primary_phone || client.phone} />
@@ -376,7 +442,7 @@ function OverviewSection({ client, profile }: { client: Client; profile: any }) 
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <CreditCard className="w-4 h-4 text-muted-foreground" /> Банковские данные
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 min-w-0">
             <DetailItem label="Банк" value={lp?.bank_name || client.bank_name} />
             <DetailItem label="IBAN" value={lp?.iban || client.iban} />
             <DetailItem label="БИК" value={lp?.bik || client.bik} />
@@ -406,6 +472,10 @@ function DocumentsSection({ client }: { client: Client }) {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("")
   const [typeFilter, setTypeFilter] = useState("")
+
+  // PDF viewer state
+  const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false)
+  const [selectedPdfDoc, setSelectedPdfDoc] = useState<Document | null>(null)
 
   // Version dialog state
   const [versionDoc, setVersionDoc] = useState<Document | null>(null)
@@ -492,23 +562,18 @@ function DocumentsSection({ client }: { client: Client }) {
     }
   }
 
-  const handleViewDocument = async (doc: Document) => {
-    try {
-      const blob = await DocAPI.viewDocumentFile(doc.id)
-      const url = URL.createObjectURL(blob)
-      window.open(url, "_blank")
-    } catch (err: any) {
-      toast({ title: "Ошибка", description: err.message, variant: "destructive" })
-    }
+  const handleViewDocument = (doc: Document) => {
+    setSelectedPdfDoc(doc)
+    setIsPdfViewerOpen(true)
   }
 
-  const handleDownloadDocument = async (doc: Document) => {
+  const handleDownloadDocument = async (doc: Document, format: "pdf" | "docx") => {
     try {
-      const blob = await DocAPI.downloadDocument(doc.id, "pdf")
+      const blob = await DocAPI.downloadDocument(doc.id, format)
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `document_${doc.id}.pdf`
+      a.download = `document_${doc.id}.${format}`
       a.click()
       URL.revokeObjectURL(url)
     } catch (err: any) {
@@ -604,9 +669,19 @@ function DocumentsSection({ client }: { client: Client }) {
                     <DropdownMenuItem onClick={() => handleViewDocument(doc)}>
                       <Eye className="w-4 h-4 mr-2" /> Просмотр
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleDownloadDocument(doc)}>
-                      <Download className="w-4 h-4 mr-2" /> Скачать
-                    </DropdownMenuItem>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <Download className="w-4 h-4 mr-2" /> Скачать
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        <DropdownMenuItem onClick={() => handleDownloadDocument(doc, "pdf")}>
+                          <FileText className="w-4 h-4 mr-2" /> PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDownloadDocument(doc, "docx")}>
+                          <FileText className="w-4 h-4 mr-2" /> Word
+                        </DropdownMenuItem>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
                     <DropdownMenuItem onClick={() => loadVersions(doc)}>
                       <History className="w-4 h-4 mr-2" /> История версий
                     </DropdownMenuItem>
@@ -617,6 +692,14 @@ function DocumentsSection({ client }: { client: Client }) {
           ))}
         </div>
       )}
+
+      {/* PDF Viewer */}
+      <PdfViewer
+        isOpen={isPdfViewerOpen}
+        onClose={() => setIsPdfViewerOpen(false)}
+        documentId={selectedPdfDoc?.id || 0}
+        documentName={selectedPdfDoc ? (DOC_TYPE_LABELS[selectedPdfDoc.doc_type as DocType] || selectedPdfDoc.doc_type) : undefined}
+      />
 
       {/* Version dialog */}
       <Dialog open={!!versionDoc} onOpenChange={(isOpen: boolean) => { if (!isOpen) setVersionDoc(null) }}>
@@ -689,6 +772,86 @@ function DocumentsSection({ client }: { client: Client }) {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// ─── Deals Section ──────────────────────────────────────────────────
+
+const DEAL_STATUS_LABELS: Record<string, string> = {
+  new: "Новая",
+  in_progress: "В работе",
+  won: "Выиграна",
+  lost: "Проиграна",
+  cancelled: "Отменена",
+}
+
+const DEAL_STATUS_COLORS: Record<string, string> = {
+  new: "bg-slate-100 text-slate-700",
+  in_progress: "bg-amber-100 text-amber-700",
+  won: "bg-emerald-100 text-emerald-700",
+  lost: "bg-rose-100 text-rose-700",
+  cancelled: "bg-slate-100 text-slate-500",
+}
+
+function DealsSection({ client }: { client: Client }) {
+  const [deals, setDeals] = useState<Deal[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const router = useRouter()
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      setError("")
+      try {
+        const res = await list_deals(undefined, { client_id: client.id, size: 50 })
+        setDeals(res.items || res.data || [])
+      } catch (err: any) {
+        setError(err.message || "Не удалось загрузить сделки")
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [client.id])
+
+  if (loading) return <div className="py-8 text-center"><RefreshCw className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></div>
+  if (error) return <p className="text-sm text-destructive text-center py-8">{error}</p>
+  if (deals.length === 0) return (
+    <div className="text-center py-12 text-muted-foreground">
+      <TrendingUp className="w-10 h-10 mx-auto mb-3 opacity-40" />
+      <p className="text-sm">Нет сделок</p>
+    </div>
+  )
+
+  return (
+    <div className="space-y-2">
+      {deals.map((deal) => (
+        <Card
+          key={deal.id}
+          className="p-3 hover:shadow-sm transition-shadow cursor-pointer"
+          onClick={() => router.push(`/deals?id=${deal.id}`)}
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm">Сделка #{deal.id}</span>
+                <Badge variant="outline" className={`text-xs ${DEAL_STATUS_COLORS[deal.status] || ""}`}>
+                  {DEAL_STATUS_LABELS[deal.status] || deal.status}
+                </Badge>
+                {(deal.is_archived || deal.archived) && (
+                  <Badge variant="outline" className="text-xs bg-slate-100 text-slate-500">Архив</Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{deal.amount} {deal.currency}</span>
+                {deal.created_at && <span>{formatDate(deal.created_at)}</span>}
+              </div>
+            </div>
+          </div>
+        </Card>
+      ))}
     </div>
   )
 }
@@ -791,8 +954,8 @@ export default function ClientProfilePage() {
   // Permission check
   const user = getCurrentUser()
   const roleCode = getRoleCode(user)
-  const canEdit = user ? hasPermission(roleCode, ["clients.update"]) : false
-  const canViewDocs = user ? hasPermission(roleCode, ["documents.view"]) : false
+  const canEdit = user ? hasPermission(roleCode, ["clients:write"]) : false
+  const canViewDocs = user ? hasPermission(roleCode, ["documents:read"]) : false
 
   // Load client
   const loadClient = useCallback(async () => {
@@ -889,11 +1052,7 @@ export default function ClientProfilePage() {
   const clientType = client.client_type === "legal" ? "Юр. лицо" : "Физ. лицо"
   const isArchived = client.is_archived || client.archived
 
-  const visibleNavItems = NAV_ITEMS.filter(item => {
-    if (item.permission && !user) return false
-    if (item.permission && !hasPermission(roleCode, [item.permission])) return false
-    return true
-  })
+  const visibleNavItems = NAV_ITEMS
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6">
@@ -973,12 +1132,23 @@ export default function ClientProfilePage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold mb-4">
             {activeSection === "overview" && "Обзор"}
+            {activeSection === "deals" && "Сделки"}
             {activeSection === "documents" && "Документы"}
             {activeSection === "calls" && "Звонки"}
           </h1>
 
           {activeSection === "overview" && <OverviewSection client={client} profile={profile} />}
-          {activeSection === "documents" && canViewDocs && <DocumentsSection client={client} />}
+          {activeSection === "deals" && <DealsSection client={client} />}
+          {activeSection === "documents" && (
+            canViewDocs
+              ? <DocumentsSection client={client} />
+              : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                  <p className="text-sm">Нет доступа к документам</p>
+                </div>
+              )
+          )}
           {activeSection === "calls" && <CallsSection client={client} />}
         </div>
       </div>
