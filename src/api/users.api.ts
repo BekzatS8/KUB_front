@@ -74,3 +74,11 @@ export async function deleteUser(id: string): Promise<void> {
     throw new Error(translateUserError(error, 'Не удалось удалить пользователя.'));
   }
 }
+
+export async function changeUserPassword(id: string, password: string): Promise<void> {
+  try {
+    await api.put(`/users/${id}/password`, { password });
+  } catch (error: any) {
+    throw new Error(translateUserError(error, 'Не удалось изменить пароль.'));
+  }
+}

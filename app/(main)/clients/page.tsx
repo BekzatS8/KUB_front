@@ -75,6 +75,7 @@ import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filte
 import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import * as ClientAPI from "@/src/api/clients.api";
 import * as AuthAPI from "@/src/api/auth.api";
+import * as FeedAPI from "@/src/api/feed.api";
 import { AuthenticatedAvatarImage } from "@/components/authenticated-avatar-image";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/use-toast";
@@ -1460,6 +1461,28 @@ useEffect(() => {
       payload.diseases_last3_years = clientFormData.diseases_last3_years || "";
     }
 
+    // Visa and sales users: send to admin approval feed
+    if (userRole === 'visa' || userRole === 'sales') {
+      try {
+        if (editingClient) {
+          await FeedAPI.createFeedEvent({
+            type: 'pending_edit_client',
+            payload,
+            resource_id: editingClient.id,
+          });
+          toast({ title: "Запрос отправлен", description: "Запрос на редактирование клиента отправлен администратору на подтверждение." });
+        } else {
+          await FeedAPI.createFeedEvent({ type: 'pending_create_client', payload });
+          toast({ title: "Запрос отправлен", description: "Запрос на создание клиента отправлен администратору на подтверждение." });
+        }
+        setIsFormOpen(false);
+        resetForm();
+      } catch (err: any) {
+        toast({ variant: "destructive", title: "Ошибка", description: `Ошибка отправки запроса: ${err?.message || 'Unknown error'}` });
+      }
+      return;
+    }
+
     try {
       if (editingClient) {
         console.log('Updating existing client:', editingClient.id);
@@ -2508,7 +2531,9 @@ useEffect(() => {
           </div>
           <DialogFooter className="pt-3">
             <Button variant="outline" onClick={() => setIsFormOpen(false)}>Отмена</Button>
-            <Button onClick={handleSubmit}>Сохранить</Button>
+            <Button onClick={handleSubmit}>
+              {userRole === 'sales' ? 'Отправить на подтверждение' : 'Сохранить'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

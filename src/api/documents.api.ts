@@ -3,7 +3,7 @@ import type * as Models from '@/src/models/documents.model'
 
 // ─── List / Get ──────────────────────────────────────────────────
 
-export async function getDocuments(params?: { page?: number; size?: number; search?: string }): Promise<Models.Document[] | { data: Models.Document[]; total: number }> {
+export async function getDocuments(params?: { page?: number; size?: number; search?: string; [key: string]: any }): Promise<Models.Document[] | { data: Models.Document[]; total: number }> {
   const res = await api.get(`/documents`, { params: { ...params, paginate: true } })
   return res.data
 }

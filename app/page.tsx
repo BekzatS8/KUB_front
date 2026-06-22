@@ -11,8 +11,8 @@ export default function HomePage() {
     const token = localStorage.getItem("auth_token")
 
     if (token) {
-      // Если пользователь авторизован, перенаправляем на лиды
-      router.push("/leads")
+      // Если пользователь авторизован, перенаправляем на ленту
+      router.push("/feed")
     } else {
       // Если не авторизован, перенаправляем на страницу входа
       router.push("/auth/login")

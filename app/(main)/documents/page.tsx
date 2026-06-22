@@ -419,10 +419,16 @@ export default function DocumentsPage() {
     const user = freshUserData || currentUser;
 
     const [uploadOwnOpen, setUploadOwnOpen] = useState(false)
+    const [legalOnlyMode, setLegalOnlyMode] = useState(false)
     const roleCode = getRoleCode(user)
     const isHR = roleCode === 'hr'
     const isLegal = roleCode === 'legal'
     const canUploadOwn = isHR || isLegal
+
+    // Map department query param to document scope filter (admin viewing dept groups)
+    const departmentParam = searchParams.get('department')
+    const departmentScopeMap: Record<string, string> = { hr: 'hr', legal: 'legal' }
+    const departmentScope = departmentParam ? (departmentScopeMap[departmentParam] ?? null) : null
 
     // Role-based fallback when permissions API hasn't loaded yet
     const docPermFallback: Record<string, string[]> = {
@@ -703,6 +709,10 @@ export default function DocumentsPage() {
                 if (archiveFilter !== "active") params.archive = archiveFilter
                 params.sort_by = sortBy
                 params.order = sortOrder
+                // When admin opens a department group (e.g. ?department=hr), scope-filter to that dept
+                if (departmentScope) params.scope = departmentScope
+                // Legal "Документы юристов" mode: show only docs created by legal staff
+                if (isLegal && legalOnlyMode) params.creator_role_id = 90
 
                 const res = await getDocuments(params)
                 let data = extractList<any>(res)
@@ -906,7 +916,7 @@ export default function DocumentsPage() {
         if (user) {
             fetchDocuments()
         }
-    }, [currentPage, statusFilter, docTypeFilter, dealIdFilter, clientIdFilter, clientTypeFilter, archiveFilter, sortBy, sortOrder, user])
+    }, [currentPage, statusFilter, docTypeFilter, dealIdFilter, clientIdFilter, clientTypeFilter, archiveFilter, sortBy, sortOrder, user, departmentScope, legalOnlyMode])
 
     // Update URL when filters change
     useEffect(() => {
@@ -1245,7 +1255,11 @@ export default function DocumentsPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between m-6 gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Документы</h1>
+                    <h1 className="text-3xl font-bold text-gray-900">
+                        {departmentParam === 'hr' ? 'Документы — Отдел кадров'
+                            : departmentParam === 'legal' ? 'Документы — Юридический отдел'
+                            : 'Документы'}
+                    </h1>
                     <p className="text-gray-600">Управление документооборотом и подписанием</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1266,6 +1280,26 @@ export default function DocumentsPage() {
                     )}
                 </div>
             </div>
+
+            {/* Legal-only quick-filter tabs */}
+            {isLegal && (
+                <div className="mx-6 mb-4 flex gap-2">
+                    <Button
+                        variant={!legalOnlyMode ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setLegalOnlyMode(false)}
+                    >
+                        Все документы
+                    </Button>
+                    <Button
+                        variant={legalOnlyMode ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setLegalOnlyMode(true)}
+                    >
+                        Документы юристов
+                    </Button>
+                </div>
+            )}
 
             {/* Filters */}
             <div className="mx-6 mb-6">

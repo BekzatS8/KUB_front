@@ -82,6 +82,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import * as ClientAPI from "@/src/api/clients.api"; // Import all as ClientAPI
 import * as BranchesAPI from "@/src/api/branches.api";
+import * as FeedAPI from "@/src/api/feed.api";
 import * as FunnelsAPI from "@/src/api/funnels.api";
 import { getMyPermissions } from "@/src/api/permissions.api";
 import { KanbanBoard } from "@/components/deals/kanban-board";
@@ -886,6 +887,7 @@ export default function DealsPage() {
   };
 
   const isAdmin = getRoleCode(user) === 'system_admin';
+  const isSales = getRoleCode(user) === 'sales';
 
   // Get status badge
   const getStatusBadge = (status: string) => {
@@ -920,7 +922,6 @@ export default function DealsPage() {
 
   // Handle create deal
   const handleCreateDeal = async () => {
-    // Validate required fields
     if (!newDeal.lead_id) {
       toast.error("Выберите лид");
       return;
@@ -934,41 +935,45 @@ export default function DealsPage() {
       return;
     }
 
+    const payload = {
+      lead_id: Number(newDeal.lead_id),
+      client_id: Number(newDeal.client_id),
+      client_type: newDeal.client_type || "individual",
+      owner_id: newDeal.owner_id ? Number(newDeal.owner_id) : undefined,
+      funnel_id: newDeal.funnel_id ? Number(newDeal.funnel_id) : undefined,
+      amount: Number(newDeal.amount),
+      currency: newDeal.currency || "KZT",
+      status: newDeal.status || "new",
+    };
+
+    if (isSales) {
+      // Sales users: send to admin approval feed
+      try {
+        await FeedAPI.createFeedEvent({ type: 'pending_create_deal', payload });
+        resetNewDealForm();
+        toast.success("Запрос на создание сделки отправлен администратору на подтверждение");
+      } catch (err: any) {
+        toast.error(`Ошибка отправки запроса: ${err?.message || 'Unknown error'}`);
+      } finally {
+        setIsCreateDialogOpen(false);
+      }
+      return;
+    }
+
+    // Non-sales: create directly
     try {
       setIsLoading(true);
       const { create_deal } = await import("@/src/api/deals.api");
-
-      const payload = {
-        lead_id: Number(newDeal.lead_id),
-        client_id: Number(newDeal.client_id),
-        client_type: newDeal.client_type || "individual",
-        owner_id: newDeal.owner_id ? Number(newDeal.owner_id) : undefined,
-        funnel_id: newDeal.funnel_id ? Number(newDeal.funnel_id) : undefined,
-        amount: Number(newDeal.amount),
-        currency: newDeal.currency || "KZT",
-        status: newDeal.status || "new",
-      };
-
-      console.log("Creating deal with payload:", payload);
       const res = await create_deal(payload as any);
       const createdDeal = res?.data || res;
-
       setDeals(prev => [createdDeal, ...prev]);
       resetNewDealForm();
       toast.success("Сделка успешно создана");
     } catch (err: any) {
       console.error("Error creating deal:", err);
-      console.error("Error response data:", err?.response?.data);
-      
       const errorMsg = err?.response?.data?.message || err?.message || "Ошибка при создании сделки";
-      
-      // Check for specific error types
       if (err?.response?.status === 409) {
-        if (errorMsg.includes("deal already exists") || errorMsg.includes("Invalid deal state")) {
-          toast.error("Этот лид уже имеет связанную сделку. Выберите другой лид.");
-        } else {
-          toast.error(errorMsg);
-        }
+        toast.error("Этот лид уже имеет связанную сделку. Выберите другой лид.");
       } else {
         toast.error(errorMsg);
       }
@@ -982,29 +987,42 @@ export default function DealsPage() {
   const handleUpdateDeal = async () => {
     if (!currentDeal?.id) return;
 
+    const payload = {
+      lead_id: editDeal.lead_id ? Number(editDeal.lead_id) : undefined,
+      client_id: editDeal.client_id ? Number(editDeal.client_id) : undefined,
+      client_type: editDeal.client_type || "individual",
+      owner_id: editDeal.owner_id ? Number(editDeal.owner_id) : undefined,
+      amount: Number(editDeal.amount),
+      currency: editDeal.currency || "KZT",
+      status: editDeal.status || "new",
+    };
+
+    if (isSales) {
+      // Sales users: send edit request to admin approval feed
+      try {
+        await FeedAPI.createFeedEvent({
+          type: 'pending_edit_deal',
+          payload,
+          resource_id: currentDeal.id,
+        });
+        setCurrentDeal(null);
+        toast.success("Запрос на редактирование сделки отправлен администратору на подтверждение");
+      } catch (err: any) {
+        toast.error(`Ошибка отправки запроса: ${err?.message || 'Unknown error'}`);
+      } finally {
+        setIsEditDialogOpen(false);
+      }
+      return;
+    }
+
+    // Non-sales: update directly
     try {
       setIsLoading(true);
       const { update_deal } = await import("@/src/api/deals.api");
-
-      const payload = {
-        lead_id: editDeal.lead_id ? Number(editDeal.lead_id) : undefined,
-        client_id: editDeal.client_id ? Number(editDeal.client_id) : undefined,
-        client_type: editDeal.client_type || "individual",
-        owner_id: editDeal.owner_id ? Number(editDeal.owner_id) : undefined,
-        amount: Number(editDeal.amount),
-        currency: editDeal.currency || "KZT",
-        status: editDeal.status || "new",
-      };
-
       await update_deal(payload as any, { id: currentDeal.id });
-
-      // Update local state
       setDeals(prev => prev.map(deal =>
-        deal.id === currentDeal.id
-          ? { ...deal, ...payload }
-          : deal
+        deal.id === currentDeal.id ? { ...deal, ...payload } : deal
       ));
-
       setCurrentDeal(null);
       toast.success("Сделка успешно обновлена");
     } catch (err: any) {
@@ -1681,7 +1699,7 @@ export default function DealsPage() {
                                 <RefreshCw className="h-4 w-4" />
                               </Button>
                             )}
-                            {isArchived ? (
+                            {!isSales && (isArchived ? (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1707,7 +1725,7 @@ export default function DealsPage() {
                               >
                                 <Archive className="h-4 w-4" />
                               </Button>
-                            )}
+                            ))}
                             {isAdmin && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -1921,6 +1939,8 @@ export default function DealsPage() {
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                   Создание...
                 </>
+              ) : isSales ? (
+                "Отправить на подтверждение"
               ) : (
                 "Создать"
               )}
@@ -2060,7 +2080,7 @@ export default function DealsPage() {
               Отмена
             </Button>
             <Button onClick={handleUpdateDeal} disabled={isLoading}>
-              {isLoading ? "Обновление..." : "Обновить сделку"}
+              {isLoading ? "Обновление..." : isSales ? "Отправить на подтверждение" : "Обновить сделку"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -57,7 +57,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Check, ChevronsUpDown, Search, Plus, Edit, Trash2, Users, UserCheck, Shield, RefreshCw, Eye } from "lucide-react";
+import { Check, ChevronsUpDown, Search, Plus, Edit, Trash2, Users, UserCheck, Shield, RefreshCw, Eye, KeyRound } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import * as UserAPI from "@/src/api/users.api";
@@ -213,6 +213,9 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<Models.User | null>(null);
   const [userToDelete, setUserToDelete] = useState<Models.User | null>(null);
   const [viewingUser, setViewingUser] = useState<Models.User | null>(null);
+  const [passwordChangeUser, setPasswordChangeUser] = useState<Models.User | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
 
   const [users, setUsers] = useState<Models.User[]>([]);
   const [stats, setStats] = useState({ total: 0, admin: 0, manager: 0, user: 0 });
@@ -400,6 +403,22 @@ export default function UsersPage() {
 
   const handleDeleteClick = (user: Models.User) => {
     setUserToDelete(user);
+  };
+
+  const handlePasswordChangeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordChangeUser || !newPassword.trim()) return;
+    setPasswordChangeLoading(true);
+    try {
+      await UserAPI.changeUserPassword(String(passwordChangeUser.id), newPassword.trim());
+      toast({ title: "Успех", description: "Пароль успешно изменён." });
+      setPasswordChangeUser(null);
+      setNewPassword("");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Ошибка", description: err?.message || "Не удалось изменить пароль." });
+    } finally {
+      setPasswordChangeLoading(false);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -686,6 +705,17 @@ export default function UsersPage() {
                               <Edit className="h-4 w-4" />
                             </Button>
                           )}
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-500 hover:text-blue-600"
+                              title="Сменить пароль"
+                              onClick={() => { setPasswordChangeUser(user); setNewPassword(""); }}
+                            >
+                              <KeyRound className="h-4 w-4" />
+                            </Button>
+                          )}
                           {canDelete && (
                             <Button
                               variant="ghost"
@@ -894,6 +924,36 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog >
+
+      {/* Change Password Dialog */}
+      <Dialog open={!!passwordChangeUser} onOpenChange={(open) => { if (!open) { setPasswordChangeUser(null); setNewPassword(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Сменить пароль</DialogTitle>
+            <DialogDescription>{getUserFullName(passwordChangeUser)}</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handlePasswordChangeSubmit}>
+            <div className="py-4 space-y-2">
+              <Label htmlFor="new_password">Новый пароль</Label>
+              <Input
+                id="new_password"
+                type="password"
+                placeholder="Введите новый пароль..."
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => { setPasswordChangeUser(null); setNewPassword(""); }}>Отмена</Button>
+              <Button type="submit" disabled={passwordChangeLoading || !newPassword.trim()}>
+                {passwordChangeLoading ? "Сохранение..." : "Сохранить"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

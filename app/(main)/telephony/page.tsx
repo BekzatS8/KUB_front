@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -19,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Phone, PhoneIncoming, PhoneMissed, PhoneOff } from "lucide-react";
 import { getCalls } from "@/src/api/telephony.api";
 import type { TelephonyCall, TelephonyCallListFilter, CallStatus } from "@/src/models/telephony.model";
 
@@ -69,24 +71,132 @@ function formatDateTime(iso?: string): string {
   }
 }
 
+function toDateInputValue(iso: string): string {
+  // Convert ISO datetime string to YYYY-MM-DDTHH:mm for datetime-local input
+  try {
+    return new Date(iso).toISOString().slice(0, 16);
+  } catch {
+    return "";
+  }
+}
+
+interface Stats {
+  total: number;
+  missed: number;
+  answered: number;
+}
+
+function StatsCards({ stats, loading }: { stats: Stats | null; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-3 gap-4">
+        {[0, 1, 2].map((i) => (
+          <Card key={i}>
+            <CardContent className="pt-4 pb-3">
+              <Skeleton className="h-6 w-16 mb-1" />
+              <Skeleton className="h-4 w-24" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+  if (!stats) return null;
+  return (
+    <div className="grid grid-cols-3 gap-4">
+      <Card>
+        <CardContent className="pt-4 pb-3 flex items-center gap-3">
+          <Phone className="w-5 h-5 text-slate-400 shrink-0" />
+          <div>
+            <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
+            <p className="text-xs text-slate-500">Всего звонков</p>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-4 pb-3 flex items-center gap-3">
+          <PhoneMissed className="w-5 h-5 text-rose-400 shrink-0" />
+          <div>
+            <p className="text-2xl font-bold text-rose-600">{stats.missed}</p>
+            <p className="text-xs text-slate-500">Пропущено</p>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-4 pb-3 flex items-center gap-3">
+          <PhoneIncoming className="w-5 h-5 text-emerald-400 shrink-0" />
+          <div>
+            <p className="text-2xl font-bold text-emerald-600">{stats.answered}</p>
+            <p className="text-xs text-slate-500">Отвечено</p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function TableSkeleton() {
+  return (
+    <TableBody>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <TableRow key={i}>
+          {Array.from({ length: 9 }).map((_, j) => (
+            <TableCell key={j}>
+              <Skeleton className="h-4 w-full" />
+            </TableCell>
+          ))}
+        </TableRow>
+      ))}
+    </TableBody>
+  );
+}
+
 export default function TelephonyPage() {
   const [calls, setCalls] = useState<TelephonyCall[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
 
   const [filter, setFilter] = useState<TelephonyCallListFilter>({
     phone: "",
     status: "",
+    date_from: "",
+    date_to: "",
     limit: 50,
     offset: 0,
   });
+
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      const [all, missed, answered] = await Promise.all([
+        getCalls({ limit: 1, offset: 0 }),
+        getCalls({ status: "missed" as CallStatus, limit: 1, offset: 0 }),
+        getCalls({ status: "answered" as CallStatus, limit: 1, offset: 0 }),
+      ]);
+      setStats({
+        total: all.total ?? 0,
+        missed: missed.total ?? 0,
+        answered: answered.total ?? 0,
+      });
+    } catch {
+      // stats are best-effort
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getCalls(filter);
+      const f: TelephonyCallListFilter = { ...filter };
+      // Convert datetime-local values to ISO 8601
+      if (f.date_from) f.date_from = new Date(f.date_from).toISOString();
+      if (f.date_to) f.date_to = new Date(f.date_to).toISOString();
+      const data = await getCalls(f);
       setCalls(data.items ?? []);
       setTotal(data.total ?? 0);
     } catch (e: any) {
@@ -100,11 +210,9 @@ export default function TelephonyPage() {
     load();
   }, [load]);
 
-  const handlePhoneChange = (v: string) =>
-    setFilter((f) => ({ ...f, phone: v, offset: 0 }));
-
-  const handleStatusChange = (v: string) =>
-    setFilter((f) => ({ ...f, status: v as CallStatus | "", offset: 0 }));
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
 
   const page = Math.floor((filter.offset ?? 0) / (filter.limit ?? 50));
   const totalPages = Math.ceil(total / (filter.limit ?? 50));
@@ -118,28 +226,96 @@ export default function TelephonyPage() {
         </div>
       </div>
 
+      <StatsCards stats={stats} loading={statsLoading} />
+
       {/* Filters */}
       <Card>
         <CardContent className="pt-4">
-          <div className="flex flex-wrap gap-3">
-            <Input
-              placeholder="Поиск по номеру"
-              value={filter.phone ?? ""}
-              onChange={(e) => handlePhoneChange(e.target.value)}
-              className="w-52"
-            />
-            <select
-              value={filter.status ?? ""}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500">Номер телефона</label>
+              <Input
+                placeholder="+7 700..."
+                value={filter.phone ?? ""}
+                onChange={(e) =>
+                  setFilter((f) => ({ ...f, phone: e.target.value, offset: 0 }))
+                }
+                className="w-44"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500">Статус</label>
+              <select
+                value={filter.status ?? ""}
+                onChange={(e) =>
+                  setFilter((f) => ({
+                    ...f,
+                    status: e.target.value as CallStatus | "",
+                    offset: 0,
+                  }))
+                }
+                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm h-9 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Все статусы</option>
+                {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500">Дата с</label>
+              <input
+                type="datetime-local"
+                value={filter.date_from ?? ""}
+                onChange={(e) =>
+                  setFilter((f) => ({ ...f, date_from: e.target.value, offset: 0 }))
+                }
+                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm h-9 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500">Дата по</label>
+              <input
+                type="datetime-local"
+                value={filter.date_to ?? ""}
+                onChange={(e) =>
+                  setFilter((f) => ({ ...f, date_to: e.target.value, offset: 0 }))
+                }
+                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm h-9 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFilter((f) => ({ ...f, offset: 0 }));
+                load();
+              }}
+              disabled={loading}
             >
-              <option value="">Все статусы</option>
-              {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-            <Button variant="outline" onClick={load} disabled={loading}>
-              {loading ? "Загрузка…" : "Обновить"}
+              {loading ? "Загрузка…" : "Применить"}
+            </Button>
+
+            <Button
+              variant="ghost"
+              onClick={() =>
+                setFilter({
+                  phone: "",
+                  status: "",
+                  date_from: "",
+                  date_to: "",
+                  limit: 50,
+                  offset: 0,
+                })
+              }
+              disabled={loading}
+            >
+              Сбросить
             </Button>
           </div>
         </CardContent>
@@ -168,77 +344,85 @@ export default function TelephonyPage() {
                 <TableHead>Запись</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
-              {calls.length === 0 && !loading && (
-                <TableRow>
-                  <TableCell colSpan={9} className="py-8 text-center text-slate-400">
-                    Звонков не найдено
-                  </TableCell>
-                </TableRow>
-              )}
-              {calls.map((call) => (
-                <TableRow key={call.id}>
-                  <TableCell className="whitespace-nowrap text-sm">
-                    {formatDateTime(call.started_at)}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {DIRECTION_LABELS[call.direction] ?? call.direction}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={STATUS_VARIANTS[call.status] ?? "outline"}>
-                      {STATUS_LABELS[call.status] ?? call.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">
-                    {call.phone || call.normalized_phone || "—"}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {call.client_id ? (
-                      <Link
-                        href={`/clients/${call.client_id}`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        {call.client_name ?? `#${call.client_id}`}
-                      </Link>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {call.lead_id ? (
-                      <Link
-                        href={`/leads/${call.lead_id}`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        {call.lead_title ?? `#${call.lead_id}`}
-                      </Link>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {call.manager_name ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {formatDuration(call.duration_seconds)}
-                  </TableCell>
-                  <TableCell>
-                    {call.recording_url ? (
-                      <a
-                        href={call.recording_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-600 hover:underline"
-                      >
-                        ▶ Слушать
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
+            {loading ? (
+              <TableSkeleton />
+            ) : (
+              <TableBody>
+                {calls.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={9}
+                      className="py-12 text-center text-slate-400"
+                    >
+                      <PhoneOff className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                      Звонков не найдено
+                    </TableCell>
+                  </TableRow>
+                )}
+                {calls.map((call) => (
+                  <TableRow key={call.id}>
+                    <TableCell className="whitespace-nowrap text-sm">
+                      {formatDateTime(call.started_at)}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {DIRECTION_LABELS[call.direction] ?? call.direction}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={STATUS_VARIANTS[call.status] ?? "outline"}>
+                        {STATUS_LABELS[call.status] ?? call.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {call.phone || call.normalized_phone || "—"}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {call.client_id ? (
+                        <Link
+                          href={`/clients/${call.client_id}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {call.client_name ?? `#${call.client_id}`}
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {call.lead_id ? (
+                        <Link
+                          href={`/leads/${call.lead_id}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {call.lead_title ?? `#${call.lead_id}`}
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {call.manager_name ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {formatDuration(call.duration_seconds)}
+                    </TableCell>
+                    <TableCell>
+                      {call.recording_url ? (
+                        <a
+                          href={call.recording_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          ▶ Слушать
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            )}
           </Table>
 
           {/* Pagination */}
@@ -251,7 +435,7 @@ export default function TelephonyPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={page === 0}
+                  disabled={page === 0 || loading}
                   onClick={() =>
                     setFilter((f) => ({
                       ...f,
@@ -264,7 +448,7 @@ export default function TelephonyPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={page >= totalPages - 1}
+                  disabled={page >= totalPages - 1 || loading}
                   onClick={() =>
                     setFilter((f) => ({
                       ...f,

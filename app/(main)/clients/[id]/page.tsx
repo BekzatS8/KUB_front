@@ -7,7 +7,7 @@ import {
   CreditCard, Briefcase, Heart,
   Edit, MoreHorizontal, Eye,
   Download, RefreshCw, Upload, AlertCircle, History, RotateCcw, Camera, X,
-  Search, PlayCircle, TrendingUp,
+  Search, PlayCircle, TrendingUp, PhoneCall,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -26,7 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/components/ui/use-toast"
 
 import * as ClientAPI from "@/src/api/clients.api"
-import { getClientCalls } from "@/src/api/telephony.api"
+import { getClientCalls, initiateCall } from "@/src/api/telephony.api"
 import * as DocAPI from "@/src/api/documents.api"
 import { list_deals } from "@/src/api/deals.api"
 import type { Deal } from "@/src/models/deals.model"
@@ -951,6 +951,7 @@ export default function ClientProfilePage() {
   const [error, setError] = useState("")
   const [activeSection, setActiveSection] = useState<SectionKey>("overview")
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [calling, setCalling] = useState(false)
 
   // Permission check
   const user = getCurrentUser()
@@ -1011,6 +1012,24 @@ export default function ClientProfilePage() {
   // Edit redirect
   const handleEdit = () => {
     router.push(`/clients?edit=${clientId}`)
+  }
+
+  const handleClientCall = async () => {
+    const phone = client?.primary_phone || client?.phone
+    if (!phone) return
+    setCalling(true)
+    try {
+      await initiateCall(phone)
+      toast({ title: "Звонок инициирован", description: `Набираем ${phone}` })
+    } catch (err: any) {
+      toast({
+        title: "Ошибка звонка",
+        description: err?.response?.data?.error ?? err?.message ?? "Неизвестная ошибка",
+        variant: "destructive",
+      })
+    } finally {
+      setCalling(false)
+    }
   }
 
   if (loading) {
@@ -1092,9 +1111,21 @@ export default function ClientProfilePage() {
                 )}
               </div>
               {(client.primary_phone || client.phone) && (
-                <p className="text-xs text-muted-foreground mt-2 truncate">
-                  {client.primary_phone || client.phone}
-                </p>
+                <div className="mt-2 flex items-center justify-center gap-1.5">
+                  <p className="text-xs text-muted-foreground truncate">
+                    {client.primary_phone || client.phone}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 shrink-0"
+                    onClick={handleClientCall}
+                    disabled={calling}
+                    title="Позвонить"
+                  >
+                    <PhoneCall className="w-3 h-3 text-emerald-600" />
+                  </Button>
+                </div>
               )}
             </div>
 

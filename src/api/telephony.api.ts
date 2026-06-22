@@ -47,3 +47,14 @@ export const getLeadCalls = async (
   });
   return response.data;
 };
+
+export const initiateCall = async (
+  phone: string,
+  managerId?: number,
+): Promise<{ general_call_id: string }> => {
+  const response = await api.post('/api/v1/telephony/calls/initiate', {
+    phone,
+    ...(managerId ? { manager_id: managerId } : {}),
+  });
+  return response.data;
+};

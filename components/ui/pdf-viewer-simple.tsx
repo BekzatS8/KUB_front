@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, Download, ExternalLink, Maximize2, Minimize2 } from "lucide-react"
+import { Loader2, Download, ExternalLink, Maximize2, Minimize2, X } from "lucide-react"
 import { toast } from "sonner"
 import { downloadDocument, viewDocumentFile } from "@/src/api/documents.api"
 import { renderAsync } from 'docx-preview'
@@ -125,13 +125,13 @@ export function PdfViewer({ isOpen, onClose, documentId, documentName }: PdfView
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={isFullscreen ? "max-w-screen max-h-screen p-0" : "max-w-6xl max-h-[90vh] p-0"}>
+      <DialogContent hideCloseButton className={isFullscreen ? "max-w-screen max-h-screen p-0" : "max-w-6xl max-h-[90vh] p-0"}>
         <DialogHeader className="p-4 pb-2 border-b">
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-lg font-semibold truncate">
+            <DialogTitle className="text-lg font-semibold truncate pr-4">
               {documentName || `Документ #${documentId}`}
             </DialogTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
               <Button
                 variant="outline"
                 size="sm"
@@ -156,6 +156,16 @@ export function PdfViewer({ isOpen, onClose, documentId, documentName }: PdfView
                 title={isFullscreen ? "Выйти из полноэкранного режима" : "Полноэкранный режим"}
               >
                 {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </Button>
+              <div className="w-px h-6 bg-slate-200 mx-1" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                title="Закрыть"
+                className="text-slate-400 hover:text-red-500 hover:bg-red-50"
+              >
+                <X className="h-4 w-4" />
               </Button>
             </div>
           </div>

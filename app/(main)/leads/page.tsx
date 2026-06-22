@@ -86,6 +86,7 @@ import { getMe } from "@/src/api/auth.api";
 import type { Lead } from "@/lib/types";
 import * as leadsApi from "@/src/api/leads.api";
 import * as ClientAPI from "@/src/api/clients.api";
+import * as FeedAPI from "@/src/api/feed.api";
 import * as BranchesAPI from "@/src/api/branches.api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
@@ -574,36 +575,51 @@ export default function LeadsPage() {
   };
 
   const createLeadWithUser = async (user: any) => {
-    console.log('createLeadWithUser called with:', user);
-    
     if (!newLead.title.trim()) {
-      console.log('Title is empty, returning');
       alert('Пожалуйста, введите название лида');
       return;
     }
-    
+
+    const userRole = getRoleCode(user);
+
+    if (userRole === 'sales') {
+      // Sales users: send to admin approval feed
+      try {
+        const payload = {
+          ...newLead,
+          owner_id: user.id ? parseInt(user.id) : 0,
+          status: "new",
+        };
+        await FeedAPI.createFeedEvent({
+          type: 'pending_create_lead',
+          payload,
+        });
+        setNewLead({ title: "", description: "" });
+        toast.success('Запрос на создание лида отправлен администратору на подтверждение');
+      } catch (err: any) {
+        toast.error(`Ошибка отправки запроса: ${err?.message || 'Unknown error'}`);
+      } finally {
+        setIsCreateDialogOpen(false);
+      }
+      return;
+    }
+
+    // Non-sales users: create directly
     try {
       const payload = {
         ...newLead,
         owner_id: user.id ? parseInt(user.id) : 0,
         status: "new",
       };
-      console.log('Sending payload:', payload);
-      
       const res = await leadsApi.create_lead(payload);
-      console.log('API response:', res);
-      
       const created = res?.data || res;
-      console.log('Created lead:', created);
-      
       setLeads((prev) => [created, ...(prev || [])]);
       setNewLead({ title: "", description: "" });
-      fetchLeads(); // Refresh to ensure sync
-      
-      alert('Лид успешно создан!');
+      fetchLeads();
+      toast.success('Лид успешно создан!');
     } catch (err: any) {
       console.error("Ошибка создания лида:", err);
-      alert(`Ошибка создания лида: ${err?.message || err?.response?.data?.message || 'Unknown error'}`);
+      toast.error(`Ошибка создания лида: ${err?.message || err?.response?.data?.message || 'Unknown error'}`);
     } finally {
       setIsCreateDialogOpen(false);
     }
@@ -611,6 +627,31 @@ export default function LeadsPage() {
 
   const handleUpdateLead = async () => {
     if (!selectedLead || !user) return;
+
+    const userRole = getRoleCode(user);
+
+    if (userRole === 'sales') {
+      // Sales users: send edit request to admin approval feed
+      try {
+        const payload = {
+          ...editLeadData,
+          owner_id: selectedLead.owner_id,
+        };
+        await FeedAPI.createFeedEvent({
+          type: 'pending_edit_lead',
+          payload,
+          resource_id: selectedLead.id,
+        });
+        toast.success('Запрос на редактирование лида отправлен администратору на подтверждение');
+      } catch (err: any) {
+        toast.error(`Ошибка отправки запроса: ${err?.message || 'Unknown error'}`);
+      } finally {
+        setIsEditDialogOpen(false);
+      }
+      return;
+    }
+
+    // Non-sales users: update directly
     try {
       const payload = {
         ...editLeadData,
@@ -620,8 +661,10 @@ export default function LeadsPage() {
       const updatedLead = res?.data || res;
       setLeads((prev) => (prev || []).map((l) => (l.id === updatedLead.id ? updatedLead : l)));
       fetchLeads();
+      toast.success('Лид обновлен');
     } catch (err) {
       console.error("Ошибка обновления лида:", err);
+      toast.error('Ошибка при обновлении лида');
     } finally {
       setIsEditDialogOpen(false);
     }
@@ -769,6 +812,8 @@ export default function LeadsPage() {
   };
 
   const isAdmin = user?.role && typeof user.role === 'object' && 'id' in user.role ? (user.role as any).id === 50 : false;
+  const isSales = getRoleCode(user) === 'sales';
+  const isPartner = getRoleCode(user) === 'partner';
 
   if (isLoading && (!leads || leads.length === 0)) {
     return (
@@ -833,7 +878,9 @@ export default function LeadsPage() {
                 </div>
                 <div className="flex justify-end space-x-2 mt-4">
                   <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Отмена</Button>
-                  <Button onClick={handleCreateLead}>Создать</Button>
+                  <Button onClick={handleCreateLead}>
+                    {isSales ? 'Отправить на подтверждение' : 'Создать'}
+                  </Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -1079,9 +1126,11 @@ export default function LeadsPage() {
                                 <Edit className="h-4 w-4" />
                               </Button>
                             )}
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openAssignDialog(lead)} title="Назначить">
-                              <UserPlus className="h-4 w-4" />
-                            </Button>
+                            {!isSales && !isPartner && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openAssignDialog(lead)} title="Назначить">
+                                <UserPlus className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1092,17 +1141,19 @@ export default function LeadsPage() {
                             >
                               <Replace className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => openConvertDialog(lead)}
-                              disabled={lead.status === 'converted' || lead.status === 'cancelled' || !!isArchived}
-                              title="Конвертировать"
-                            >
-                              <ChevronsRight className="h-4 w-4" />
-                            </Button>
-                            {isArchived ? (
+                            {!isPartner && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => openConvertDialog(lead)}
+                                disabled={lead.status === 'converted' || lead.status === 'cancelled' || !!isArchived}
+                                title="Конвертировать"
+                              >
+                                <ChevronsRight className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {!isSales && (isArchived ? (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1128,7 +1179,7 @@ export default function LeadsPage() {
                               >
                                 <Archive className="h-4 w-4" />
                               </Button>
-                            )}
+                            ))}
                             {isAdmin && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -1195,7 +1246,9 @@ export default function LeadsPage() {
           </div>
           <div className="flex justify-end space-x-2 mt-4">
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Отмена</Button>
-            <Button onClick={handleUpdateLead}>Сохранить</Button>
+            <Button onClick={handleUpdateLead}>
+              {isSales ? 'Отправить на подтверждение' : 'Сохранить'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download } from "lucide-react"
+import { Loader2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, X } from "lucide-react"
 import { toast } from "sonner"
 
 interface PdfViewerProps {
@@ -164,13 +164,13 @@ export function PdfViewer({ isOpen, onClose, documentId, documentName }: PdfView
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] p-0">
+      <DialogContent hideCloseButton className="max-w-6xl max-h-[90vh] p-0">
         <DialogHeader className="p-6 pb-0">
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-lg font-semibold truncate">
+            <DialogTitle className="text-lg font-semibold truncate pr-4">
               {documentName || `Документ #${documentId}`}
             </DialogTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
               <Button
                 variant="outline"
                 size="sm"
@@ -194,8 +194,19 @@ export function PdfViewer({ isOpen, onClose, documentId, documentName }: PdfView
                 variant="outline"
                 size="sm"
                 onClick={handleDownload}
+                title="Скачать"
               >
                 <Download className="h-4 w-4" />
+              </Button>
+              <div className="w-px h-6 bg-slate-200 mx-1" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                title="Закрыть"
+                className="text-slate-400 hover:text-red-500 hover:bg-red-50"
+              >
+                <X className="h-4 w-4" />
               </Button>
             </div>
           </div>
