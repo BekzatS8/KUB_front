@@ -23,10 +23,7 @@ console.log('API Base URL:', baseURL)
 
 export const api = axios.create({
   baseURL,
-  headers: {
-    "Content-Type": "application/json",
-  },
-  timeout: 30000, // Увеличиваем таймаут
+  timeout: 30000,
 })
 
 // Остальной код остается без изменений...
