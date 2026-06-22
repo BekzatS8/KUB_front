@@ -1,12 +1,11 @@
 ﻿"use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
-import { SignaturePad, type SignaturePadHandle } from "@/components/ui/signature-pad"
 import { getPublicDocument, signPublicDocument } from "@/src/api/documents.api"
 import { Loader2, CheckCircle2, FileX2, AlertCircle, FileText } from "lucide-react"
 
@@ -38,8 +37,6 @@ export default function PublicSignPage() {
   const [signerName, setSignerName] = useState("")
   const [signerPhone, setSignerPhone] = useState("")
 
-  const signaturePadRef = useRef<SignaturePadHandle>(null)
-
   useEffect(() => {
     if (!token) return
     loadDocument()
@@ -68,12 +65,6 @@ export default function PublicSignPage() {
       return
     }
 
-    const dataURL = signaturePadRef.current?.getDataURL()
-    if (!dataURL) {
-      setError("Пожалуйста, нарисуйте подпись")
-      return
-    }
-
     setError(null)
     setSubmitting(true)
 
@@ -81,7 +72,6 @@ export default function PublicSignPage() {
       const result = await signPublicDocument(token, {
         signer_name: signerName.trim(),
         signer_phone: signerPhone.trim() || undefined,
-        signature: dataURL,
       })
       setSuccessData(result)
       setPageState("success")
@@ -215,16 +205,6 @@ export default function PublicSignPage() {
             onChange={(e) => setSignerPhone(e.target.value)}
             disabled={submitting}
           />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>
-            Подпись <span className="text-red-500">*</span>
-          </Label>
-          <SignaturePad ref={signaturePadRef} />
-          <p className="text-xs text-slate-400">
-            Нарисуйте вашу подпись в поле выше пальцем или мышью
-          </p>
         </div>
 
         {error && (

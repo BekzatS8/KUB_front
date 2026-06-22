@@ -227,7 +227,7 @@ export async function submitPublicSign(token: string, signatureData: string, ema
 export interface SignPublicDocumentPayload {
   signer_name: string
   signer_phone?: string
-  signature: string
+  signature?: string
 }
 
 export async function signPublicDocument(token: string, payload: SignPublicDocumentPayload): Promise<any> {
