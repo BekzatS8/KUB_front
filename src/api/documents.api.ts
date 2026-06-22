@@ -234,3 +234,16 @@ export async function signPublicDocument(token: string, payload: SignPublicDocum
   const res = await publicApi.post(`/public/documents/${token}/sign`, payload)
   return res.data
 }
+
+export async function uploadDocumentWithMeta(payload: Models.Documents_UploadWithMeta_Request): Promise<Models.Document> {
+  const form = new FormData()
+  form.append('scope', payload.scope)
+  form.append('title', payload.title)
+  if (payload.description) form.append('description', payload.description)
+  if (payload.target_user_id) form.append('target_user_id', String(payload.target_user_id))
+  form.append('file', payload.file)
+  const res = await api.post('/documents/upload-with-meta', form, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+  return res.data
+}

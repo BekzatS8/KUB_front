@@ -127,6 +127,7 @@ import type { SignHistoryEvent } from "@/src/api/documents.api"
 import type { Document, DocType, DocStatus, SignStatus } from "@/src/models/documents.model"
 import { PdfViewer } from "@/components/ui/pdf-viewer-simple"
 import { SendForSignatureModal } from "@/components/send-for-signature-modal"
+import UploadOwnDocumentModal from "@/components/upload-own-document-modal"
 
 // ─── Constants ───────────────────────────────────────────────────
 
@@ -416,6 +417,12 @@ export default function DocumentsPage() {
     
     // Get fresh user data or fallback to state
     const user = freshUserData || currentUser;
+
+    const [uploadOwnOpen, setUploadOwnOpen] = useState(false)
+    const roleCode = getRoleCode(user)
+    const isHR = roleCode === 'hr'
+    const isLegal = roleCode === 'legal'
+    const canUploadOwn = isHR || isLegal
 
     // Role-based fallback when permissions API hasn't loaded yet
     const docPermFallback: Record<string, string[]> = {
@@ -1245,10 +1252,16 @@ export default function DocumentsPage() {
                     <Button variant="outline" size="icon" onClick={fetchDocuments} disabled={loading}>
                         <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                     </Button>
-                    {canCreateDocs && (
+                    {canCreateDocs && !isHR && (
                         <Button onClick={openCreate}>
                             <Plus className="h-4 w-4 mr-2" />
                             Создать документ
+                        </Button>
+                    )}
+                    {canUploadOwn && (
+                        <Button onClick={() => setUploadOwnOpen(true)} variant="outline">
+                            <Upload className="w-4 h-4 mr-2" />
+                            Загрузить документ
                         </Button>
                     )}
                 </div>
@@ -1453,6 +1466,13 @@ export default function DocumentsPage() {
                 </Card>
             </div>
 
+            {/* HR banner */}
+            {isHR && (
+                <div className="mb-4 mx-6 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                    Генерация HR-документов (найм, кадровый учёт, приказы) — в разработке
+                </div>
+            )}
+
             {/* Documents Table */}
             <Card className="mx-6 mb-6">
                 <CardHeader>
@@ -1518,7 +1538,9 @@ export default function DocumentsPage() {
                                                 <TableCell className="px-4 align-top font-mono text-sm">{doc.id}</TableCell>
                                                 <TableCell className="px-4 align-top">
                                                     <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
-                                                        {docTypeLabels[doc.doc_type] || doc.doc_type}
+                                                        {(doc.scope === 'hr' || doc.scope === 'legal') && doc.title
+                                                            ? doc.title
+                                                            : (docTypeLabels[doc.doc_type] || doc.doc_type)}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="px-4 align-top text-sm">
@@ -2210,6 +2232,13 @@ export default function DocumentsPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <UploadOwnDocumentModal
+                open={uploadOwnOpen}
+                onClose={() => setUploadOwnOpen(false)}
+                onSuccess={() => { setUploadOwnOpen(false); fetchDocuments() }}
+                scope={isHR ? 'hr' : 'legal'}
+            />
         </>
     )
 }

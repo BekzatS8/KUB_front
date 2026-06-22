@@ -36,6 +36,18 @@ export interface Document {
   updated_at?: string;
   is_hidden?: boolean;
   created_by?: number;
+  scope?: 'deal' | 'hr' | 'legal';
+  title?: string;
+  description?: string;
+  target_user_id?: number;
+}
+
+export type Documents_UploadWithMeta_Request = {
+  scope: 'hr' | 'legal';
+  title: string;
+  description?: string;
+  target_user_id?: number;
+  file: File;
 }
 
 export type Documents_Create_from_client_Request = {
