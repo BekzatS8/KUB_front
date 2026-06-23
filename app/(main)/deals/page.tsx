@@ -149,7 +149,9 @@ export default function DealsPage() {
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
   const [isUnarchiveDialogOpen, setIsUnarchiveDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [dealToArchive, setDealToArchive] = useState<any>(null);
+  const [dealToDelete, setDealToDelete] = useState<any>(null);
 
   // Current deal states
   const [currentDeal, setCurrentDeal] = useState<any>(null);
@@ -860,6 +862,7 @@ export default function DealsPage() {
       const { archive_deal } = await import("@/src/api/deals.api");
       await archive_deal(undefined, { id: dealToArchive.id });
       toast.success("Сделка успешно заархивирована");
+      setKanbanRefreshKey((k) => k + 1);
       await fetchDeals();
     } catch (err: any) {
       console.error("Ошибка архивации сделки:", err);
@@ -1024,6 +1027,7 @@ export default function DealsPage() {
         deal.id === currentDeal.id ? { ...deal, ...payload } : deal
       ));
       setCurrentDeal(null);
+      setKanbanRefreshKey((k) => k + 1);
       toast.success("Сделка успешно обновлена");
     } catch (err: any) {
       console.error("Error updating deal:", err);
@@ -1044,6 +1048,7 @@ export default function DealsPage() {
 
       // Update local state
       setDeals(prev => prev.filter(deal => deal.id !== dealId));
+      setKanbanRefreshKey((k) => k + 1);
       toast.success("Сделка успешно удалена");
     } catch (err: any) {
       console.error("Error deleting deal:", err);
@@ -1409,6 +1414,18 @@ export default function DealsPage() {
                 canMove={canWrite}
                 onDealClick={(deal: FunnelBoardDeal) => openViewDialog(deal)}
                 refreshKey={kanbanRefreshKey}
+                canWrite={canWrite}
+                isSales={isSales}
+                isAdmin={isAdmin}
+                onEdit={(deal: FunnelBoardDeal) => openEditDialog(deal)}
+                onArchive={(deal: FunnelBoardDeal) => {
+                  setDealToArchive(deal);
+                  setIsArchiveDialogOpen(true);
+                }}
+                onDelete={(deal: FunnelBoardDeal) => {
+                  setDealToDelete(deal);
+                  setIsDeleteDialogOpen(true);
+                }}
               />
             ) : (
               <p className="text-sm text-gray-500">Нет доступных воронок</p>
@@ -2267,6 +2284,29 @@ export default function DealsPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Отмена</AlertDialogCancel>
             <AlertDialogAction onClick={handleUnarchiveDeal}>Разархивировать</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить сделку?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Запись будет удалена без возможности восстановления.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (dealToDelete) handleDeleteDeal(dealToDelete.id);
+                setDealToDelete(null);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Удалить
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
