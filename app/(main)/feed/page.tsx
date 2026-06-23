@@ -97,6 +97,7 @@ function formatPayloadPreview(type: FeedEventType, payload: Record<string, any>)
 const USER_ACTION_LABELS: Record<string, string> = {
   create: "Создание пользователя",
   delete: "Удаление пользователя",
+  update: "Редактирование пользователя",
 }
 
 export default function FeedPage() {

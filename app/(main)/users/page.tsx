@@ -505,8 +505,12 @@ export default function UsersPage() {
 
     try {
       if (editingUser) {
-        await UserAPI.updateUser(String(editingUser.id), payload as Models.UpdateUserRequest);
-        toast({ title: "Успех", description: "Пользователь успешно обновлен." });
+        const result = await UserAPI.updateUser(String(editingUser.id), payload as Models.UpdateUserRequest);
+        if (result && (result as any).pending) {
+          toast({ title: "Заявка отправлена", description: (result as any).message || "Заявка на редактирование отправлена администратору на рассмотрение." });
+        } else {
+          toast({ title: "Успех", description: "Пользователь успешно обновлен." });
+        }
       } else {
         const createPayload = { ...payload } as Models.CreateUserRequest;
         // Auto-verify if created by Leadership or System Admin only
@@ -762,7 +766,13 @@ export default function UsersPage() {
       < Dialog open={isFormOpen} onOpenChange={setIsFormOpen} >
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingUser ? "Редактировать пользователя" : "Создать пользователя"}</DialogTitle>
+            <DialogTitle>
+              {editingUser
+                ? currentUser?.role?.id === Roles.HR
+                  ? "Заявка на редактирование пользователя"
+                  : "Редактировать пользователя"
+                : "Создать пользователя"}
+            </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="space-y-4 py-4">
@@ -884,14 +894,18 @@ export default function UsersPage() {
       } onOpenChange={() => setUserToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
+            <AlertDialogTitle>Подтвердите действие</AlertDialogTitle>
             <AlertDialogDescription>
-              Вы уверены, что хотите удалить пользователя "{getUserFullName(userToDelete)}"? Это действие нельзя будет отменить.
+              {currentUser?.role?.id === Roles.HR
+                ? `Заявка на удаление пользователя "${getUserFullName(userToDelete)}" будет отправлена администратору на рассмотрение.`
+                : `Вы уверены, что хотите удалить пользователя "${getUserFullName(userToDelete)}"? Это действие нельзя будет отменить.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Отмена</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm}>Удалить</AlertDialogAction>
+            <AlertDialogAction onClick={handleDeleteConfirm}>
+              {currentUser?.role?.id === Roles.HR ? "Отправить заявку" : "Удалить"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog >

@@ -4,7 +4,7 @@ export interface UserApprovalRequest {
   id: number
   requester_id: number
   requester_name: string
-  action: 'create' | 'delete'
+  action: 'create' | 'delete' | 'update'
   target_user_id?: number
   target_user_name?: string
   request_data?: Record<string, any>

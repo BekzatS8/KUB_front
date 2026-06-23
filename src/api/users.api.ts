@@ -57,7 +57,7 @@ export async function getUserById(id: string): Promise<Models.User> {
   return res.data;
 }
 
-export async function updateUser(id: string, payload: Models.UpdateUserRequest): Promise<Models.User> {
+export async function updateUser(id: string, payload: Models.UpdateUserRequest): Promise<Models.User | { pending: boolean; request_id: number; message: string }> {
   try {
     const res = await api.put(`/users/${id}`, payload);
     return res.data;
