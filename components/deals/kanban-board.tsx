@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type PointerEvent, type MouseEvent } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Building2, User, RefreshCw } from "lucide-react";
+import { Building2, User, RefreshCw, Pencil, Archive, Trash2 } from "lucide-react";
 import * as FunnelStagesAPI from "@/src/api/funnel-stages.api";
 import { move_deal_stage } from "@/src/api/deals.api";
 import type {
@@ -50,17 +50,45 @@ function formatAmount(amount: number, currency?: string) {
   return currency ? `${value} ${currency}` : value;
 }
 
-interface DealCardProps {
+interface DealActions {
+  onEdit?: (deal: FunnelBoardDeal) => void;
+  onArchive?: (deal: FunnelBoardDeal) => void;
+  onDelete?: (deal: FunnelBoardDeal) => void;
+  canWrite?: boolean;
+  isSales?: boolean;
+  isAdmin?: boolean;
+}
+
+interface DealCardProps extends DealActions {
   deal: FunnelBoardDeal;
   onClick?: (deal: FunnelBoardDeal) => void;
   disabled?: boolean;
 }
 
-function DealCard({ deal, onClick, disabled, overlay }: DealCardProps & { overlay?: boolean }) {
+function DealCard({
+  deal,
+  onClick,
+  disabled,
+  overlay,
+  onEdit,
+  onArchive,
+  onDelete,
+  canWrite,
+  isSales,
+  isAdmin,
+}: DealCardProps & { overlay?: boolean }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `deal-${deal.id}`,
     disabled,
   });
+
+  const showEdit = !overlay && canWrite && onEdit;
+  const showArchive = !overlay && !isSales && onArchive;
+  const showDelete = !overlay && isAdmin && onDelete;
+  const hasActions = showEdit || showArchive || showDelete;
+
+  // Prevent drag/card-click from firing when interacting with action buttons.
+  const stop = (e: PointerEvent | MouseEvent) => e.stopPropagation();
 
   return (
     <div
@@ -69,13 +97,51 @@ function DealCard({ deal, onClick, disabled, overlay }: DealCardProps & { overla
       {...listeners}
       onClick={() => onClick?.(deal)}
       className={cn(
-        "rounded-lg border bg-white p-3 shadow-sm select-none transition-all",
+        "group relative rounded-lg border bg-white p-3 shadow-sm select-none transition-all",
         overlay
           ? "shadow-xl ring-2 ring-blue-500 ring-offset-1 rotate-1 cursor-move scale-105"
           : "cursor-move hover:shadow-md hover:ring-2 hover:ring-blue-300 hover:ring-offset-1",
         isDragging && !overlay && "opacity-25 border-dashed border-blue-300"
       )}
     >
+      {hasActions && (
+        <div
+          className="absolute right-1.5 top-1.5 z-10 flex gap-0.5 rounded-md border bg-white/95 p-0.5 opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
+          onPointerDown={stop}
+          onClick={stop}
+        >
+          {showEdit && (
+            <button
+              type="button"
+              title="Редактировать"
+              className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+              onClick={() => onEdit!(deal)}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {showArchive && (
+            <button
+              type="button"
+              title="Архивировать"
+              className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+              onClick={() => onArchive!(deal)}
+            >
+              <Archive className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {showDelete && (
+            <button
+              type="button"
+              title="Удалить"
+              className="rounded p-1 text-red-600 hover:bg-red-50 hover:text-red-700"
+              onClick={() => onDelete!(deal)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-mono text-gray-400">#{deal.id}</span>
         <Badge className={cn("text-xs", STATUS_CLASSNAMES[deal.status] || "bg-gray-100 text-gray-800")}>
@@ -99,13 +165,13 @@ function DealCard({ deal, onClick, disabled, overlay }: DealCardProps & { overla
   );
 }
 
-interface ColumnProps {
+interface ColumnProps extends DealActions {
   column: FunnelBoardColumn;
   onDealClick?: (deal: FunnelBoardDeal) => void;
   canMove: boolean;
 }
 
-function Column({ column, onDealClick, canMove }: ColumnProps) {
+function Column({ column, onDealClick, canMove, ...actions }: ColumnProps) {
   const stage = column.stage;
   const droppableId = stage ? `stage-${stage.id}` : "stage-none";
   const { setNodeRef, isOver } = useDroppable({
@@ -150,7 +216,7 @@ function Column({ column, onDealClick, canMove }: ColumnProps) {
           <div className="py-6 text-center text-xs text-gray-400">Нет сделок</div>
         ) : (
           column.deals.map((deal) => (
-            <DealCard key={deal.id} deal={deal} onClick={onDealClick} disabled={!canMove} />
+            <DealCard key={deal.id} deal={deal} onClick={onDealClick} disabled={!canMove} {...actions} />
           ))
         )}
       </div>
@@ -158,14 +224,20 @@ function Column({ column, onDealClick, canMove }: ColumnProps) {
   );
 }
 
-interface KanbanBoardProps {
+interface KanbanBoardProps extends DealActions {
   funnelId: number;
   canMove?: boolean;
   onDealClick?: (deal: FunnelBoardDeal) => void;
   refreshKey?: number;
 }
 
-export function KanbanBoard({ funnelId, canMove = true, onDealClick, refreshKey }: KanbanBoardProps) {
+export function KanbanBoard({
+  funnelId,
+  canMove = true,
+  onDealClick,
+  refreshKey,
+  ...actions
+}: KanbanBoardProps) {
   const [board, setBoard] = useState<FunnelBoard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeDeal, setActiveDeal] = useState<FunnelBoardDeal | null>(null);
@@ -308,6 +380,7 @@ export function KanbanBoard({ funnelId, canMove = true, onDealClick, refreshKey 
             column={column}
             onDealClick={onDealClick}
             canMove={canMove}
+            {...actions}
           />
         ))}
       </div>
