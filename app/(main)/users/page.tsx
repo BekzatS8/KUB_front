@@ -244,23 +244,25 @@ export default function UsersPage() {
     setIsLoading(true);
     setError("");
     try {
-      const [usersResponse, totalCount, systemAdmin, leadership, sales] = await Promise.all([
-        UserAPI.listUsers(currentPage, limit),
-        UserAPI.getUsersCount(), // We might use this or response total
+      const usersResponse = await UserAPI.listUsers(currentPage, limit);
+      const usersData = Array.isArray(usersResponse) ? usersResponse : (usersResponse as any).data || [];
+      const totalFromResponse = (usersResponse as any).total;
+      setUsers(usersData);
+
+      // Stats fetched independently — 403 on any stat does not break the user list
+      const [totalResult, adminResult, managerResult, userResult] = await Promise.allSettled([
+        UserAPI.getUsersCount(),
         UserAPI.getUsersCountByRole(Roles.SYSTEM_ADMIN),
         UserAPI.getUsersCountByRole(Roles.MANAGEMENT),
         UserAPI.getUsersCountByRole(Roles.SALES),
       ]);
 
-      const usersData = Array.isArray(usersResponse) ? usersResponse : (usersResponse as any).data || [];
-      const totalUsers = (usersResponse as any).total || totalCount.count;
-
-      setUsers(usersData);
       setStats({
-        total: totalUsers,
-        admin: systemAdmin.count,
-        manager: leadership.count,
-        user: sales.count
+        total: totalFromResponse ??
+          (totalResult.status === "fulfilled" ? totalResult.value.count : usersData.length),
+        admin: adminResult.status === "fulfilled" ? adminResult.value.count : 0,
+        manager: managerResult.status === "fulfilled" ? managerResult.value.count : 0,
+        user: userResult.status === "fulfilled" ? userResult.value.count : 0,
       });
     } catch (err: any) {
       const errorMessage = err?.message || "Ошибка при загрузке пользователей";
