@@ -233,6 +233,7 @@ export default function UsersPage() {
   const canCreate = Boolean(permissionScopes["users.create"]);
   const canEdit = Boolean(permissionScopes["users.update"]);
   const canDelete = Boolean(permissionScopes["users.delete"]);
+  const canChangePassword = currentUser?.role?.id === Roles.SYSTEM_ADMIN || currentUser?.role?.id === Roles.MANAGEMENT;
 
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -426,8 +427,12 @@ export default function UsersPage() {
   const handleDeleteConfirm = async () => {
     if (!userToDelete) return;
     try {
-      await UserAPI.deleteUser(String(userToDelete.id));
-      toast({ title: "Успех", description: "Пользователь успешно удален." });
+      const result = await UserAPI.deleteUser(String(userToDelete.id));
+      if (result && (result as any).pending) {
+        toast({ title: "Заявка отправлена", description: (result as any).message || "Заявка на удаление отправлена администратору на рассмотрение." });
+      } else {
+        toast({ title: "Успех", description: "Пользователь успешно удален." });
+      }
       void fetchUsersAndStats();
     } catch (err: any) {
       toast({
@@ -508,8 +513,12 @@ export default function UsersPage() {
         if (currentUser?.role?.id === Roles.MANAGEMENT || currentUser?.role?.id === Roles.SYSTEM_ADMIN) {
           createPayload.is_verified = true;
         }
-        await UserAPI.createUser(createPayload);
-        toast({ title: "Успех", description: "Пользователь успешно создан." });
+        const result = await UserAPI.createUser(createPayload);
+        if (result && (result as any).pending) {
+          toast({ title: "Заявка отправлена", description: (result as any).message || "Заявка на создание пользователя отправлена администратору на рассмотрение." });
+        } else {
+          toast({ title: "Успех", description: "Пользователь успешно создан." });
+        }
       }
       void fetchUsersAndStats();
       setIsFormOpen(false);
@@ -707,7 +716,7 @@ export default function UsersPage() {
                               <Edit className="h-4 w-4" />
                             </Button>
                           )}
-                          {canEdit && (
+                          {canChangePassword && (
                             <Button
                               variant="ghost"
                               size="icon"

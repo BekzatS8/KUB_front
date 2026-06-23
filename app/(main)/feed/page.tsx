@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { toast } from "sonner"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -29,7 +29,6 @@ import { CustomSelect } from "@/components/ui/custom-select"
 import {
   CheckCircle,
   XCircle,
-  Clock,
   RefreshCw,
   FileText,
   Users,
@@ -40,6 +39,8 @@ import {
 import { getRoleCode } from "@/lib/auth"
 import { getMe } from "@/src/api/auth.api"
 import * as FeedAPI from "@/src/api/feed.api"
+import * as UserRequestsAPI from "@/src/api/user-requests.api"
+import type { UserApprovalRequest } from "@/src/api/user-requests.api"
 import type { FeedEvent, FeedEventType } from "@/src/models/feed.model"
 import { Toaster } from "@/components/ui/sonner"
 
@@ -93,6 +94,11 @@ function formatPayloadPreview(type: FeedEventType, payload: Record<string, any>)
   }
 }
 
+const USER_ACTION_LABELS: Record<string, string> = {
+  create: "Создание пользователя",
+  delete: "Удаление пользователя",
+}
+
 export default function FeedPage() {
   const [user, setUser] = useState<any>(null)
   const [events, setEvents] = useState<FeedEvent[]>([])
@@ -105,7 +111,16 @@ export default function FeedPage() {
   const [rejectReason, setRejectReason] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
 
+  const [userRequests, setUserRequests] = useState<UserApprovalRequest[]>([])
+  const [userRequestsLoading, setUserRequestsLoading] = useState(false)
+  const [selectedUserRequest, setSelectedUserRequest] = useState<UserApprovalRequest | null>(null)
+  const [isUserRequestDetailOpen, setIsUserRequestDetailOpen] = useState(false)
+  const [isUserRejectDialogOpen, setIsUserRejectDialogOpen] = useState(false)
+  const [userRequestToReject, setUserRequestToReject] = useState<UserApprovalRequest | null>(null)
+  const [userRejectReason, setUserRejectReason] = useState("")
+
   const isAdmin = getRoleCode(user) === "system_admin"
+  const isHROrLegal = getRoleCode(user) === "hr" || getRoleCode(user) === "legal"
   const isElevated =
     isAdmin ||
     getRoleCode(user) === "management" ||
@@ -147,6 +162,29 @@ export default function FeedPage() {
     fetchEvents()
   }, [fetchEvents])
 
+  const fetchUserRequests = useCallback(async (currentUser: any) => {
+    const roleCode = getRoleCode(currentUser)
+    const isCurrentAdmin = roleCode === "system_admin"
+    const isCurrentHROrLegal = roleCode === "hr" || roleCode === "legal"
+    if (!isCurrentAdmin && !isCurrentHROrLegal) return
+    setUserRequestsLoading(true)
+    try {
+      const res = isCurrentAdmin
+        ? await UserRequestsAPI.listUserRequests({ status: "all", size: 100 })
+        : await UserRequestsAPI.listMyUserRequests({ size: 100 })
+      setUserRequests(res?.data || [])
+    } catch {
+      // ignore — endpoint may not be deployed yet
+      setUserRequests([])
+    } finally {
+      setUserRequestsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (user) fetchUserRequests(user)
+  }, [user, fetchUserRequests])
+
   const handleApprove = async (event: FeedEvent) => {
     setIsProcessing(true)
     try {
@@ -184,7 +222,40 @@ export default function FeedPage() {
     }
   }
 
+  const handleApproveUserRequest = async (req: UserApprovalRequest) => {
+    setIsProcessing(true)
+    try {
+      await UserRequestsAPI.approveUserRequest(req.id)
+      toast.success("Заявка одобрена и выполнена")
+      fetchUserRequests(user)
+      setIsUserRequestDetailOpen(false)
+    } catch (err: any) {
+      toast.error(err?.message || "Ошибка при одобрении")
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleRejectUserRequest = async () => {
+    if (!userRequestToReject) return
+    setIsProcessing(true)
+    try {
+      await UserRequestsAPI.rejectUserRequest(userRequestToReject.id, userRejectReason || undefined)
+      toast.success("Заявка отклонена")
+      fetchUserRequests(user)
+      setIsUserRequestDetailOpen(false)
+    } catch (err: any) {
+      toast.error(err?.message || "Ошибка при отклонении")
+    } finally {
+      setIsProcessing(false)
+      setIsUserRejectDialogOpen(false)
+      setUserRequestToReject(null)
+      setUserRejectReason("")
+    }
+  }
+
   const pendingCount = events.filter((e) => e.status === "pending").length
+  const pendingUserRequestsCount = userRequests.filter((r) => r.status === "pending").length
 
   return (
     <>
@@ -200,13 +271,13 @@ export default function FeedPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {pendingCount > 0 && (
+            {(pendingCount + pendingUserRequestsCount) > 0 && (
               <Badge className="bg-yellow-100 text-yellow-800 text-sm px-3 py-1">
-                {pendingCount} ожидает
+                {pendingCount + pendingUserRequestsCount} ожидает
               </Badge>
             )}
-            <Button variant="outline" size="icon" onClick={fetchEvents} disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            <Button variant="outline" size="icon" onClick={() => { fetchEvents(); if (user) fetchUserRequests(user) }} disabled={isLoading || userRequestsLoading}>
+              <RefreshCw className={`h-4 w-4 ${(isLoading || userRequestsLoading) ? "animate-spin" : ""}`} />
             </Button>
           </div>
         </div>
@@ -225,6 +296,112 @@ export default function FeedPage() {
             ]}
           />
         </div>
+
+        {/* User approval requests section */}
+        {(isAdmin || isHROrLegal) && (
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Заявки на управление пользователями
+              {pendingUserRequestsCount > 0 && (
+                <Badge className="bg-yellow-100 text-yellow-800">{pendingUserRequestsCount} ожидает</Badge>
+              )}
+            </h2>
+            {userRequestsLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            ) : userRequests.length === 0 ? (
+              <Card>
+                <CardContent className="py-6 text-center text-slate-400 text-sm">
+                  Нет заявок на пользователей
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {userRequests.map((req) => (
+                  <Card
+                    key={req.id}
+                    className={`transition-shadow hover:shadow-md ${req.status === "pending" ? "border-yellow-200" : ""}`}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                            req.status === "pending" ? "bg-yellow-100 text-yellow-700"
+                            : req.status === "approved" ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                          }`}>
+                            <UserCheck className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                              <span className="font-semibold text-slate-900 text-sm">
+                                {USER_ACTION_LABELS[req.action] || req.action}
+                              </span>
+                              <Badge className={`text-xs ${STATUS_BADGE_CLASS[req.status]}`}>
+                                {STATUS_LABELS[req.status]}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                              {isAdmin && <span>От: {req.requester_name || `#${req.requester_id}`}</span>}
+                              {req.target_user_name && <span>Пользователь: {req.target_user_name}</span>}
+                              {req.request_data && (req.request_data as any).email && (
+                                <span>Email: {(req.request_data as any).email}</span>
+                              )}
+                              <span>{new Date(req.created_at).toLocaleString("ru-RU")}</span>
+                              {req.reject_reason && (
+                                <span className="text-red-500">Причина: {req.reject_reason}</span>
+                              )}
+                              {req.reviewer_name && req.status !== "pending" && (
+                                <span className="text-slate-400">
+                                  {req.status === "approved" ? "Одобрил" : "Отклонил"}: {req.reviewer_name}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { setSelectedUserRequest(req); setIsUserRequestDetailOpen(true) }}
+                          >
+                            <Eye className="h-3.5 w-3.5 mr-1.5" />
+                            Детали
+                          </Button>
+                          {isAdmin && req.status === "pending" && (
+                            <>
+                              <Button
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                                onClick={() => handleApproveUserRequest(req)}
+                                disabled={isProcessing}
+                              >
+                                <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                                Одобрить
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => { setUserRequestToReject(req); setUserRejectReason(""); setIsUserRejectDialogOpen(true) }}
+                                disabled={isProcessing}
+                              >
+                                <XCircle className="h-3.5 w-3.5 mr-1.5" />
+                                Отклонить
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Events list */}
         {isLoading ? (
@@ -457,6 +634,130 @@ export default function FeedPage() {
             <AlertDialogCancel>Отмена</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleReject}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={isProcessing}
+            >
+              Отклонить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* User Request Detail Dialog */}
+      <Dialog open={isUserRequestDetailOpen} onOpenChange={setIsUserRequestDetailOpen}>
+        <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedUserRequest && (USER_ACTION_LABELS[selectedUserRequest.action] || selectedUserRequest.action)}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedUserRequest && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <Badge className={STATUS_BADGE_CLASS[selectedUserRequest.status]}>
+                  {STATUS_LABELS[selectedUserRequest.status]}
+                </Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {isAdmin && (
+                  <div>
+                    <p className="text-slate-500">Автор запроса</p>
+                    <p className="font-medium">{selectedUserRequest.requester_name || `#${selectedUserRequest.requester_id}`}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-slate-500">Дата создания</p>
+                  <p className="font-medium">{new Date(selectedUserRequest.created_at).toLocaleString("ru-RU")}</p>
+                </div>
+                {selectedUserRequest.target_user_name && (
+                  <div>
+                    <p className="text-slate-500">Пользователь</p>
+                    <p className="font-medium">{selectedUserRequest.target_user_name}</p>
+                  </div>
+                )}
+                {selectedUserRequest.reviewer_name && selectedUserRequest.status !== "pending" && (
+                  <div>
+                    <p className="text-slate-500">{selectedUserRequest.status === "approved" ? "Одобрил" : "Отклонил"}</p>
+                    <p className="font-medium">{selectedUserRequest.reviewer_name}</p>
+                  </div>
+                )}
+                {selectedUserRequest.reject_reason && (
+                  <div className="col-span-2">
+                    <p className="text-red-500">Причина отказа</p>
+                    <p className="font-medium">{selectedUserRequest.reject_reason}</p>
+                  </div>
+                )}
+              </div>
+              {selectedUserRequest.request_data && (
+                <div>
+                  <p className="text-sm font-semibold text-slate-700 mb-2">Данные запроса</p>
+                  <div className="bg-slate-50 rounded-lg p-3 text-xs font-mono overflow-auto max-h-48">
+                    {Object.entries(selectedUserRequest.request_data).map(([key, value]) => {
+                      if (key === "password_hash" || value === null || value === undefined || value === "") return null
+                      if (typeof value === "object") return null
+                      return (
+                        <div key={key} className="flex gap-2 py-0.5">
+                          <span className="text-slate-500 shrink-0">{key}:</span>
+                          <span className="text-slate-900 break-all">{String(value)}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              {isAdmin && selectedUserRequest.status === "pending" && (
+                <div className="flex gap-2 pt-2 border-t">
+                  <Button
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => handleApproveUserRequest(selectedUserRequest)}
+                    disabled={isProcessing}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Одобрить и выполнить
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="flex-1"
+                    onClick={() => { setUserRequestToReject(selectedUserRequest); setUserRejectReason(""); setIsUserRejectDialogOpen(true) }}
+                    disabled={isProcessing}
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Отклонить
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsUserRequestDetailOpen(false)}>Закрыть</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* User Request Reject Dialog */}
+      <AlertDialog open={isUserRejectDialogOpen} onOpenChange={setIsUserRejectDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Отклонить заявку?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Укажите причину отклонения (необязательно).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Label htmlFor="user-reject-reason">Причина отказа</Label>
+            <Textarea
+              id="user-reject-reason"
+              placeholder="Укажите причину отклонения..."
+              value={userRejectReason}
+              onChange={(e) => setUserRejectReason(e.target.value)}
+              className="mt-1"
+              rows={3}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRejectUserRequest}
               className="bg-red-600 hover:bg-red-700"
               disabled={isProcessing}
             >

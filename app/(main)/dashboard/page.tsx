@@ -47,8 +47,8 @@ export default function DashboardPage() {
         console.log('Redirecting to /users based on token role_id');
         router.push("/users");
       } else {
-        console.log('Redirecting to /leads');
-        router.push("/leads");
+        console.log('Redirecting to /feed');
+        router.push("/feed");
       }
       setIsLoading(false);
     };

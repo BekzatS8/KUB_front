@@ -25,7 +25,7 @@ function translateUserError(error: any, fallback: string) {
   return fallback;
 }
 
-export async function createUser(payload: Models.CreateUserRequest): Promise<Models.User> {
+export async function createUser(payload: Models.CreateUserRequest): Promise<Models.User | { pending: boolean; request_id: number; message: string }> {
   try {
     const res = await api.post('/users', payload);
     return res.data;
@@ -66,7 +66,7 @@ export async function updateUser(id: string, payload: Models.UpdateUserRequest):
   }
 }
 
-export async function deleteUser(id: string): Promise<void> {
+export async function deleteUser(id: string): Promise<{ pending?: boolean; message?: string } | void> {
   try {
     const res = await api.delete(`/users/${id}`);
     return res.data;
