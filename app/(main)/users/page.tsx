@@ -234,6 +234,8 @@ export default function UsersPage() {
   const canEdit = Boolean(permissionScopes["users.update"]);
   const canDelete = Boolean(permissionScopes["users.delete"]);
   const canChangePassword = currentUser?.role?.id === Roles.SYSTEM_ADMIN || currentUser?.role?.id === Roles.MANAGEMENT;
+  // HR, юрист и руководство управляют пользователями только через заявку на подтверждение админу
+  const userActionsNeedApproval = [Roles.HR, Roles.LEGAL, Roles.MANAGEMENT].includes(currentUser?.role?.id as number);
 
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -768,10 +770,12 @@ export default function UsersPage() {
           <DialogHeader>
             <DialogTitle>
               {editingUser
-                ? currentUser?.role?.id === Roles.HR
+                ? userActionsNeedApproval
                   ? "Заявка на редактирование пользователя"
                   : "Редактировать пользователя"
-                : "Создать пользователя"}
+                : userActionsNeedApproval
+                  ? "Заявка на создание пользователя"
+                  : "Создать пользователя"}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
@@ -896,7 +900,7 @@ export default function UsersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Подтвердите действие</AlertDialogTitle>
             <AlertDialogDescription>
-              {currentUser?.role?.id === Roles.HR
+              {userActionsNeedApproval
                 ? `Заявка на удаление пользователя "${getUserFullName(userToDelete)}" будет отправлена администратору на рассмотрение.`
                 : `Вы уверены, что хотите удалить пользователя "${getUserFullName(userToDelete)}"? Это действие нельзя будет отменить.`}
             </AlertDialogDescription>
@@ -904,7 +908,7 @@ export default function UsersPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Отмена</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm}>
-              {currentUser?.role?.id === Roles.HR ? "Отправить заявку" : "Удалить"}
+              {userActionsNeedApproval ? "Отправить заявку" : "Удалить"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

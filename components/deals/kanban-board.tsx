@@ -83,7 +83,7 @@ function DealCard({
   });
 
   const showEdit = !overlay && canWrite && onEdit;
-  const showArchive = !overlay && !isSales && onArchive;
+  const showArchive = !overlay && canWrite && !isSales && onArchive;
   const showDelete = !overlay && isAdmin && onDelete;
   const hasActions = showEdit || showArchive || showDelete;
 

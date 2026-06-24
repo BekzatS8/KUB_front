@@ -891,6 +891,7 @@ export default function DealsPage() {
 
   const isAdmin = getRoleCode(user) === 'system_admin';
   const isSales = getRoleCode(user) === 'sales';
+  const isManagement = getRoleCode(user) === 'management';
 
   // Get status badge
   const getStatusBadge = (status: string) => {
@@ -986,7 +987,25 @@ export default function DealsPage() {
       status: editDeal.status || "new",
     };
 
-    // Отдел продаж редактирует сделки напрямую (без подтверждения админа)
+    // Руководство редактирует сделки только с подтверждением админа (заявка в ленту)
+    if (getRoleCode(user) === 'management') {
+      try {
+        await FeedAPI.createFeedEvent({
+          type: 'pending_edit_deal',
+          payload,
+          resource_id: currentDeal.id,
+        });
+        setCurrentDeal(null);
+        toast.success("Запрос на редактирование сделки отправлен администратору на подтверждение");
+      } catch (err: any) {
+        toast.error(err?.response?.data?.message || err?.message || "Ошибка отправки запроса");
+      } finally {
+        setIsEditDialogOpen(false);
+      }
+      return;
+    }
+
+    // Остальные роли (ОП) редактируют сделки напрямую
     try {
       setIsLoading(true);
       const { update_deal } = await import("@/src/api/deals.api");
@@ -1673,7 +1692,7 @@ export default function DealsPage() {
                                 <Edit className="h-4 w-4" />
                               </Button>
                             )}
-                            {!isFinalStatus(deal.status) && !isArchived && (
+                            {canWrite && !isFinalStatus(deal.status) && !isArchived && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1684,7 +1703,7 @@ export default function DealsPage() {
                                 <RefreshCw className="h-4 w-4" />
                               </Button>
                             )}
-                            {!isSales && (isArchived ? (
+                            {canWrite && !isSales && (isArchived ? (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -2063,7 +2082,7 @@ export default function DealsPage() {
               Отмена
             </Button>
             <Button onClick={handleUpdateDeal} disabled={isLoading}>
-              {isLoading ? "Обновление..." : "Обновить сделку"}
+              {isLoading ? "Обновление..." : isManagement ? "Отправить на подтверждение" : "Обновить сделку"}
             </Button>
           </DialogFooter>
         </DialogContent>

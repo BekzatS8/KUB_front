@@ -604,12 +604,30 @@ export default function LeadsPage() {
   const handleUpdateLead = async () => {
     if (!selectedLead || !user) return;
 
-    // Отдел продаж редактирует лиды своего отдела напрямую (без подтверждения админа)
+    const payload = {
+      ...editLeadData,
+      owner_id: selectedLead.owner_id,
+    };
+
+    // Руководство редактирует лиды только с подтверждением админа (заявка в ленту)
+    if (getRoleCode(user) === 'management') {
+      try {
+        await FeedAPI.createFeedEvent({
+          type: 'pending_edit_lead',
+          payload,
+          resource_id: selectedLead.id,
+        });
+        toast.success('Запрос на редактирование лида отправлен администратору на подтверждение');
+      } catch (err: any) {
+        toast.error(`Ошибка отправки запроса: ${err?.message || 'Unknown error'}`);
+      } finally {
+        setIsEditDialogOpen(false);
+      }
+      return;
+    }
+
+    // Остальные роли (ОП/ВО/ПО) управляют лидами своего отдела напрямую
     try {
-      const payload = {
-        ...editLeadData,
-        owner_id: selectedLead.owner_id,
-      };
       const res = await leadsApi.update_lead(payload, { id: selectedLead.id });
       const updatedLead = res?.data || res;
       setLeads((prev) => (prev || []).map((l) => (l.id === updatedLead.id ? updatedLead : l)));
@@ -767,6 +785,8 @@ export default function LeadsPage() {
   const isAdmin = user?.role && typeof user.role === 'object' && 'id' in user.role ? (user.role as any).id === 50 : false;
   const isSales = getRoleCode(user) === 'sales';
   const isPartner = getRoleCode(user) === 'partner';
+  const isVisa = getRoleCode(user) === 'visa';
+  const isManagement = getRoleCode(user) === 'management';
 
   if (isLoading && (!leads || leads.length === 0)) {
     return (
@@ -1079,22 +1099,24 @@ export default function LeadsPage() {
                                 <Edit className="h-4 w-4" />
                               </Button>
                             )}
-                            {!isSales && !isPartner && (
+                            {canWrite && !isSales && !isPartner && !isVisa && (
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openAssignDialog(lead)} title="Назначить">
                                 <UserPlus className="h-4 w-4" />
                               </Button>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => openStatusDialog(lead)}
-                              disabled={statusTransitions[lead.status as LeadStatus]?.length === 0}
-                              title="Сменить статус"
-                            >
-                              <Replace className="h-4 w-4" />
-                            </Button>
-                            {!isPartner && (
+                            {canWrite && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => openStatusDialog(lead)}
+                                disabled={statusTransitions[lead.status as LeadStatus]?.length === 0}
+                                title="Сменить статус"
+                              >
+                                <Replace className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {canWrite && !isPartner && !isVisa && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1106,7 +1128,7 @@ export default function LeadsPage() {
                                 <ChevronsRight className="h-4 w-4" />
                               </Button>
                             )}
-                            {!isSales && (isArchived ? (
+                            {canWrite && !isSales && (isArchived ? (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1200,7 +1222,7 @@ export default function LeadsPage() {
           <div className="flex justify-end space-x-2 mt-4">
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Отмена</Button>
             <Button onClick={handleUpdateLead}>
-              Сохранить
+              {isManagement ? 'Отправить на подтверждение' : 'Сохранить'}
             </Button>
           </div>
         </DialogContent>

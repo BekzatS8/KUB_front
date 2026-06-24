@@ -195,12 +195,12 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'analytics:write',
     ],
     control: [
-      // Отдел контроля: read-only for leads/deals/clients + document writes for own dept
+      // Отдел контроля: наблюдатель — read-only for leads/deals/clients/tasks
+      // + document writes for own dept (свои документы/отчёты)
       'leads:read',
       'deals:read',
       'clients:read',
       'tasks:read',
-      'tasks:write',
       'documents:read',
       'documents:write',
       'analytics:read',

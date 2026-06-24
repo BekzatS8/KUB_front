@@ -639,7 +639,8 @@ export default function ClientsPage() {
   // Get fresh user data for each render
   const user = freshUserData || getCurrentUser();
   const userRole = getRoleCode(user);
-  const canCreate = user && hasPermission(userRole, ["clients:write"]);
+  // Визовый и партнёрский отделы не создают клиентов (по матрице — только редактирование с подтверждением)
+  const canCreate = user && hasPermission(userRole, ["clients:write"]) && userRole !== 'visa' && userRole !== 'partner';
   const canEdit = user && hasPermission(userRole, ["clients:write"]);
   const canDelete = user && hasPermission(userRole, ["clients:write"]);
 
@@ -1461,9 +1462,9 @@ useEffect(() => {
       payload.diseases_last3_years = clientFormData.diseases_last3_years || "";
     }
 
-    // Отдел продаж создаёт клиентов напрямую, но редактирование требует подтверждения админа.
-    // Визовый отдел — через подтверждение и при создании, и при редактировании.
-    if (userRole === 'visa' || (userRole === 'sales' && editingClient)) {
+    // Редактирование клиента у ОП, ВО, ПО и Руководства требует подтверждения админа.
+    // Создание клиента: ОП и Руководство — напрямую, ВО и ПО — запрещено (кнопка скрыта).
+    if (editingClient && (userRole === 'sales' || userRole === 'visa' || userRole === 'partner' || userRole === 'management')) {
       try {
         if (editingClient) {
           await FeedAPI.createFeedEvent({
@@ -1865,7 +1866,7 @@ useEffect(() => {
                               </Button>
                             )}
 
-                            {isArchived ? (
+                            {canEdit && (isArchived ? (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1891,7 +1892,7 @@ useEffect(() => {
                               >
                                 <Archive className="h-4 w-4" />
                               </Button>
-                            )}
+                            ))}
 
                             {isAdmin && (
                               <AlertDialog>
@@ -2533,7 +2534,7 @@ useEffect(() => {
           <DialogFooter className="pt-3">
             <Button variant="outline" onClick={() => setIsFormOpen(false)}>Отмена</Button>
             <Button onClick={handleSubmit}>
-              {userRole === 'sales' && editingClient ? 'Отправить на подтверждение' : 'Сохранить'}
+              {editingClient && (userRole === 'sales' || userRole === 'visa' || userRole === 'partner' || userRole === 'management') ? 'Отправить на подтверждение' : 'Сохранить'}
             </Button>
           </DialogFooter>
         </DialogContent>

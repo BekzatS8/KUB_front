@@ -166,7 +166,9 @@ export default function FeedPage() {
   const roleCode = getRoleCode(user)
   const isAdmin = roleCode === "system_admin"
   const isHROrLegal = roleCode === "hr" || roleCode === "legal"
-  const isElevated = isAdmin || roleCode === "management" || roleCode === "quality_control"
+  // Только администратор одобряет/отклоняет заявки ленты (бэкенд тоже это требует).
+  // Остальные роли видят лишь свои собственные заявки (без кнопок согласования).
+  const isElevated = isAdmin
 
   // ── Fetch feed events ────────────────────────────────────────────────────────
   const fetchEvents = useCallback(async () => {
@@ -190,7 +192,7 @@ export default function FeedPage() {
   // ── Fetch user approval requests ─────────────────────────────────────────────
   const fetchUserRequests = useCallback(async (currentUser: any) => {
     const rc = getRoleCode(currentUser)
-    if (rc !== "system_admin" && rc !== "hr" && rc !== "legal") return
+    if (rc !== "system_admin" && rc !== "hr" && rc !== "legal" && rc !== "management") return
     setUserRequestsLoading(true)
     try {
       const res = rc === "system_admin"
@@ -308,7 +310,7 @@ export default function FeedPage() {
     ...(leadEvents.length ? [{ id: "leads" as CategoryId, items: leadEvents, kind: "feed" as const }] : []),
     ...(dealEvents.length ? [{ id: "deals" as CategoryId, items: dealEvents, kind: "feed" as const }] : []),
     ...(clientEvents.length ? [{ id: "clients" as CategoryId, items: clientEvents, kind: "feed" as const }] : []),
-    ...((isAdmin || isHROrLegal) && filteredUserRequests.length
+    ...((isAdmin || isHROrLegal || roleCode === "management") && filteredUserRequests.length
       ? [{ id: "users" as CategoryId, items: filteredUserRequests, kind: "user" as const }]
       : []),
   ]

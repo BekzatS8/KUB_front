@@ -436,8 +436,8 @@ export default function DocumentsPage() {
         management: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
         quality_control: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
         sales: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
-        visa: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
-        partner: ['documents.view','documents.create','documents.update','documents.download'],
+        visa: ['documents.view','documents.send'],
+        partner: ['documents.view'],
         hr: ['documents.view','documents.create','documents.update','documents.download'],
         legal: ['documents.view','documents.create','documents.update','documents.download'],
     }
