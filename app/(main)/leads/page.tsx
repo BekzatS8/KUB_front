@@ -580,31 +580,7 @@ export default function LeadsPage() {
       return;
     }
 
-    const userRole = getRoleCode(user);
-
-    if (userRole === 'sales') {
-      // Sales users: send to admin approval feed
-      try {
-        const payload = {
-          ...newLead,
-          owner_id: user.id ? parseInt(user.id) : 0,
-          status: "new",
-        };
-        await FeedAPI.createFeedEvent({
-          type: 'pending_create_lead',
-          payload,
-        });
-        setNewLead({ title: "", description: "" });
-        toast.success('Запрос на создание лида отправлен администратору на подтверждение');
-      } catch (err: any) {
-        toast.error(`Ошибка отправки запроса: ${err?.message || 'Unknown error'}`);
-      } finally {
-        setIsCreateDialogOpen(false);
-      }
-      return;
-    }
-
-    // Non-sales users: create directly
+    // Отдел продаж управляет лидами своего отдела напрямую (без подтверждения админа)
     try {
       const payload = {
         ...newLead,
@@ -628,30 +604,7 @@ export default function LeadsPage() {
   const handleUpdateLead = async () => {
     if (!selectedLead || !user) return;
 
-    const userRole = getRoleCode(user);
-
-    if (userRole === 'sales') {
-      // Sales users: send edit request to admin approval feed
-      try {
-        const payload = {
-          ...editLeadData,
-          owner_id: selectedLead.owner_id,
-        };
-        await FeedAPI.createFeedEvent({
-          type: 'pending_edit_lead',
-          payload,
-          resource_id: selectedLead.id,
-        });
-        toast.success('Запрос на редактирование лида отправлен администратору на подтверждение');
-      } catch (err: any) {
-        toast.error(`Ошибка отправки запроса: ${err?.message || 'Unknown error'}`);
-      } finally {
-        setIsEditDialogOpen(false);
-      }
-      return;
-    }
-
-    // Non-sales users: update directly
+    // Отдел продаж редактирует лиды своего отдела напрямую (без подтверждения админа)
     try {
       const payload = {
         ...editLeadData,
@@ -879,7 +832,7 @@ export default function LeadsPage() {
                 <div className="flex justify-end space-x-2 mt-4">
                   <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Отмена</Button>
                   <Button onClick={handleCreateLead}>
-                    {isSales ? 'Отправить на подтверждение' : 'Создать'}
+                    Создать
                   </Button>
                 </div>
               </DialogContent>
@@ -1247,7 +1200,7 @@ export default function LeadsPage() {
           <div className="flex justify-end space-x-2 mt-4">
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Отмена</Button>
             <Button onClick={handleUpdateLead}>
-              {isSales ? 'Отправить на подтверждение' : 'Сохранить'}
+              Сохранить
             </Button>
           </div>
         </DialogContent>

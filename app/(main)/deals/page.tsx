@@ -949,21 +949,7 @@ export default function DealsPage() {
       status: newDeal.status || "new",
     };
 
-    if (isSales) {
-      // Sales users: send to admin approval feed
-      try {
-        await FeedAPI.createFeedEvent({ type: 'pending_create_deal', payload });
-        resetNewDealForm();
-        toast.success("Запрос на создание сделки отправлен администратору на подтверждение");
-      } catch (err: any) {
-        toast.error(`Ошибка отправки запроса: ${err?.message || 'Unknown error'}`);
-      } finally {
-        setIsCreateDialogOpen(false);
-      }
-      return;
-    }
-
-    // Non-sales: create directly
+    // Отдел продаж управляет сделками напрямую (без подтверждения админа)
     try {
       setIsLoading(true);
       const { create_deal } = await import("@/src/api/deals.api");
@@ -1000,25 +986,7 @@ export default function DealsPage() {
       status: editDeal.status || "new",
     };
 
-    if (isSales) {
-      // Sales users: send edit request to admin approval feed
-      try {
-        await FeedAPI.createFeedEvent({
-          type: 'pending_edit_deal',
-          payload,
-          resource_id: currentDeal.id,
-        });
-        setCurrentDeal(null);
-        toast.success("Запрос на редактирование сделки отправлен администратору на подтверждение");
-      } catch (err: any) {
-        toast.error(`Ошибка отправки запроса: ${err?.message || 'Unknown error'}`);
-      } finally {
-        setIsEditDialogOpen(false);
-      }
-      return;
-    }
-
-    // Non-sales: update directly
+    // Отдел продаж редактирует сделки напрямую (без подтверждения админа)
     try {
       setIsLoading(true);
       const { update_deal } = await import("@/src/api/deals.api");
@@ -1956,8 +1924,6 @@ export default function DealsPage() {
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                   Создание...
                 </>
-              ) : isSales ? (
-                "Отправить на подтверждение"
               ) : (
                 "Создать"
               )}
@@ -2097,7 +2063,7 @@ export default function DealsPage() {
               Отмена
             </Button>
             <Button onClick={handleUpdateDeal} disabled={isLoading}>
-              {isLoading ? "Обновление..." : isSales ? "Отправить на подтверждение" : "Обновить сделку"}
+              {isLoading ? "Обновление..." : "Обновить сделку"}
             </Button>
           </DialogFooter>
         </DialogContent>

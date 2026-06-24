@@ -1461,8 +1461,9 @@ useEffect(() => {
       payload.diseases_last3_years = clientFormData.diseases_last3_years || "";
     }
 
-    // Visa and sales users: send to admin approval feed
-    if (userRole === 'visa' || userRole === 'sales') {
+    // Отдел продаж создаёт клиентов напрямую, но редактирование требует подтверждения админа.
+    // Визовый отдел — через подтверждение и при создании, и при редактировании.
+    if (userRole === 'visa' || (userRole === 'sales' && editingClient)) {
       try {
         if (editingClient) {
           await FeedAPI.createFeedEvent({
@@ -2532,7 +2533,7 @@ useEffect(() => {
           <DialogFooter className="pt-3">
             <Button variant="outline" onClick={() => setIsFormOpen(false)}>Отмена</Button>
             <Button onClick={handleSubmit}>
-              {userRole === 'sales' ? 'Отправить на подтверждение' : 'Сохранить'}
+              {userRole === 'sales' && editingClient ? 'Отправить на подтверждение' : 'Сохранить'}
             </Button>
           </DialogFooter>
         </DialogContent>
