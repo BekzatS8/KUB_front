@@ -622,16 +622,10 @@ export default function ClientsPage() {
 
   const { toast } = useToast();
   // Remove useMemo - get fresh user data every time
-  const [clientView, setClientView] = useState<"all" | "my">(() => {
-    // Initialize with correct view based on user role
-    const currentUser = getCurrentUser();
-    const role = currentUser?.role;
-    const isSales =
-      (role as any) === 'sales' ||
-      role?.code === 'sales' ||
-      Number(role?.id || currentUser?.role_id || 0) === 10;
-    return isSales ? 'my' : 'all';
-  });
+  // Sales теперь работает с общей базой клиентов (как visa/partner), поэтому
+  // вид по умолчанию — "all" для всех ролей. Переключатель "Мои/Все" остаётся
+  // доступен всем как удобный фильтр.
+  const [clientView, setClientView] = useState<"all" | "my">("all");
   
   // State for fresh user data from API
   const [freshUserData, setFreshUserData] = useState<any>(null);
@@ -644,25 +638,12 @@ export default function ClientsPage() {
   const canEdit = user && hasPermission(userRole, ["clients:write"]);
   const canDelete = user && hasPermission(userRole, ["clients:write"]);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('Clients page debug:', {
-      user: user,
-      userRole: userRole,
-      canCreate,
-      canEdit,
-      canDelete
-    });
-  }, [user, userRole, canCreate, canEdit, canDelete]);
-
   // Fetch fresh user data on mount
   useEffect(() => {
     const fetchFreshUserData = async () => {
       try {
-        console.log('Fetching fresh user data...');
         const userData = await AuthAPI.getMe();
-        console.log('Fresh user data received:', userData);
-        
+
         // Transform API response to match User interface
         const transformedUser = {
           id: String(userData.id),
@@ -689,9 +670,8 @@ export default function ClientsPage() {
           status: 'active'
         };
         
-        console.log('Transformed user data:', transformedUser);
         setFreshUserData(transformedUser);
-        
+
         // Update localStorage with fresh data
         setCurrentUser(transformedUser);
       } catch (error) {
@@ -703,15 +683,6 @@ export default function ClientsPage() {
   }, []); // Run once on mount
 
   const fetchClients = async () => {
-    console.log('=== FETCH CLIENTS DEBUG ===');
-    console.log('fetchClients called with:', {
-      userRole: user?.role,
-      clientView,
-      currentPage,
-      searchTerm,
-      isLoading
-    });
-
     setIsLoading(true);
     setError("");
     try {
@@ -724,93 +695,21 @@ export default function ClientsPage() {
       params.sort_by = sortBy;
       params.order = sortOrder;
 
-      // Prevent sales users from accessing full client list - AGGRESSIVE FIX
-      const currentUser = getCurrentUser(); // Get fresh user data
-      const currentRoleCode = getRoleCode(currentUser) || getRoleCode(user);
-      let effectiveView = currentRoleCode === 'sales' ? 'my' : clientView;
+      // Sales работает с общей базой (как visa/partner): эндпоинт выбирается по
+      // переключателю clientView, без принудительного "my".
+      const effectiveView = clientView;
 
-      // DOUBLE SAFEGUARD: If user is sales, ALWAYS use 'my' view regardless of state
-      if (currentRoleCode === 'sales') {
-        effectiveView = 'my';
-        console.log('SAFEGUARD: Forced to my view for sales user');
-      }
-
-      console.log('fetchClients API call:', {
-        userRole: currentUser?.role,
-        userId: currentUser?.role_id,
-        clientView,
-        effectiveView,
-        endpoint: effectiveView === "all" ? '/clients' : '/clients/my',
-        params,
-        currentRoleCode,
-        'effectiveView === "all"': effectiveView === "all",
-        'calling listClients?': effectiveView === "all"
-      });
-
-      // Check auth token
-      const authToken = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-      console.log('Auth token present:', !!authToken);
-      console.log('Auth token (first 20 chars):', authToken?.substring(0, 20) + '...');
-
-      // Try to decode JWT to check user_id
-      if (authToken) {
-        try {
-          const base64Url = authToken.split('.')[1];
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-          const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-          }).join(''));
-          const decoded = JSON.parse(jsonPayload);
-          console.log('Decoded JWT payload:', {
-            user_id: decoded.user_id,
-            role_id: decoded.role_id,
-            exp: decoded.exp,
-            iat: decoded.iat
-          });
-        } catch (e) {
-          console.log('Failed to decode JWT:', e);
-        }
-      }
-
-      // Use proper API based on user role
-      console.log('Choosing API endpoint based on role:', {
-        currentUserRole: currentUser?.role,
-        isSales: currentRoleCode === 'sales',
-        willCall: currentRoleCode === 'sales' ? 'listMyClients' : 'listClients'
-      });
-
-      // More robust role check - handle different formats and undefined roles
-      const userRole = currentUser?.role;
-      const userId = currentUser?.role_id;
-      const isSalesRole = currentRoleCode === 'sales';
-
-      console.log('Final role check:', { isSalesRole, userRole: currentUser?.role, userId: currentUser?.role_id });
-
-      // AGGRESSIVE SAFEGUARD: If we get 403 on listClients, fallback to listMyClients
+      // Endpoint выбирается по виду: "my" → свои клиенты, иначе общая база.
       let res;
       try {
-        if (isSalesRole) {
-          console.log('Using listMyClients for sales user');
+        if (effectiveView === 'my') {
           res = await ClientAPI.listMyClients(params);
         } else {
-          console.log('Trying listClients for non-sales user');
           res = await ClientAPI.listClients(params);
         }
       } catch (error: any) {
-        console.log('listClients failed, falling back to listMyClients:', error?.message);
-        console.log('Error details:', {
-          status: error?.response?.status,
-          statusText: error?.response?.statusText,
-          data: error?.response?.data,
-          code: error?.code
-        });
         res = await ClientAPI.listMyClients(params);
       }
-
-      console.log('API call completed - used fallback endpoint');
-
-      console.log('API response:', res);
-      console.log('Response type:', Array.isArray(res) ? 'array' : 'object');
 
       let data;
       if ((res as any)?.items && Array.isArray((res as any).items)) {
@@ -825,28 +724,10 @@ export default function ClientsPage() {
       let total = (res as any)?.pagination?.total || (res as any)?.total || data.length;
       let totalPagesFromBackend = (res as any)?.pagination?.total_pages || Math.ceil(total / limit);
 
-      console.log('Processed data:', {
-        dataLength: data.length,
-        total,
-        totalPagesFromBackend,
-        isArray: Array.isArray(data),
-        firstItem: data[0]
-      });
-
       setClients(data);
       setTotalClients(total);
       setTotalPages(totalPagesFromBackend);
-
-      console.log('State updated - clients count:', data.length);
     } catch (err: any) {
-      console.error('fetchClients error:', err);
-      console.error('Error details:', {
-        status: err?.response?.status,
-        statusText: err?.response?.statusText,
-        data: err?.response?.data,
-        code: err?.code,
-        message: err?.message
-      });
       setError(err?.message || "Ошибка при загрузке клиентов");
       toast({
         variant: "destructive",
@@ -855,31 +736,12 @@ export default function ClientsPage() {
       });
     } finally {
       setIsLoading(false);
-      console.log('fetchClients completed');
     }
   };
 
   const handleRefresh = () => {
-    console.log('handleRefresh called:', { 
-      user: user?.role, 
-      clientView,
-      userLoaded: !!user 
-    });
-    
     // Ensure user is loaded before refreshing
-    if (!user) {
-      console.log('User not loaded, skipping refresh');
-      return;
-    }
-    
-    // Force correct view for sales users
-    if (getRoleCode(user) === 'sales' && clientView === 'all') {
-      console.log('Sales user with all view, switching to my view');
-      setClientView('my');
-      return; // Let the effect handle the fetch
-    }
-    
-    console.log('Proceeding with fetchClients');
+    if (!user) return;
     fetchClients();
   };
 
@@ -890,35 +752,9 @@ export default function ClientsPage() {
   };
 
   useEffect(() => {
-    console.log('=== USEEFFECT 0: Initial User Check ===');
-    const currentUser = getCurrentUser();
-    console.log('Initial user check:', currentUser);
-    
-    if (getRoleCode(currentUser) === 'sales' && clientView === 'all') {
-      console.log('Sales user detected - forcing my view');
-      setClientView('my');
-    }
-  }, []); // Run once on mount
-
-useEffect(() => {
-    console.log('=== USEEFFECT 1: User/Role Change ===');
-    console.log('User:', user);
-    console.log('Client view:', clientView);
-    if (getRoleCode(user) === 'sales' && clientView === 'all') {
-      console.log('Sales user detected - forcing my view');
-      setClientView('my');
-    }
-  }, [user]); // Remove clientView from dependencies to prevent infinite loop
-
-  useEffect(() => {
-    console.log('=== USEEFFECT 2: Main Fetch Trigger ===');
-    console.log('Dependencies:', { clientView, currentPage, user });
     // Only fetch clients if we have a user and proper view state
     if (user) {
-      console.log('User exists - calling fetchClients');
       fetchClients();
-    } else {
-      console.log('No user - skipping fetchClients');
     }
   }, [clientView, currentPage, clientTypeFilter, hasDealsFilter, dealStatusGroupFilter, archiveFilter, sortBy, sortOrder]); // Remove user from deps - we get fresh data in fetchClients
 
@@ -928,10 +764,7 @@ useEffect(() => {
   }, [clientTypeFilter, hasDealsFilter, dealStatusGroupFilter, archiveFilter, sortBy, sortOrder]);
 
   useEffect(() => {
-    console.log('=== USEEFFECT 3: Search Debounce ===');
-    console.log('Search term changed:', searchTerm);
     const timer = setTimeout(() => {
-      console.log('Debounce trigger - calling fetchClients');
       fetchClients(); // Always call fetchClients - it will get fresh user data
     }, 500);
     return () => clearTimeout(timer);
@@ -1158,6 +991,27 @@ useEffect(() => {
 
   const handleDeleteConfirm = async () => {
     if (!clientToDelete) return;
+    // Руководство удаляет клиентов только с подтверждением админа (заявка в ленту)
+    if (userRole === 'management') {
+      try {
+        await FeedAPI.createFeedEvent({
+          type: 'pending_delete_client',
+          payload: {
+            name: (clientToDelete as any).name || '',
+            last_name: (clientToDelete as any).last_name || '',
+            first_name: (clientToDelete as any).first_name || '',
+            middle_name: (clientToDelete as any).middle_name || '',
+          },
+          resource_id: clientToDelete.id,
+        });
+        toast({ title: "Запрос отправлен", description: "Запрос на удаление клиента отправлен администратору на подтверждение." });
+      } catch (err: any) {
+        toast({ variant: "destructive", title: "Ошибка", description: `Ошибка отправки запроса: ${err?.message || 'Unknown error'}` });
+      } finally {
+        setClientToDelete(null);
+      }
+      return;
+    }
     try {
       await ClientAPI.deleteClient(clientToDelete.id.toString());
       toast({ title: "Успех", description: "Клиент успешно удален." });
@@ -1222,6 +1076,11 @@ useEffect(() => {
   };
 
   const isAdmin = getRoleCode(user) === 'system_admin';
+  const isManagement = getRoleCode(user) === 'management';
+  // Отдел продаж и партнёрский отдел не архивируют клиентов (как и лиды/сделки) —
+  // «полная отмена прав на какое-либо удаление» по ТЗ.
+  const isSales = getRoleCode(user) === 'sales';
+  const isPartner = getRoleCode(user) === 'partner';
 
   const requiredClientFieldLabels: Record<string, string> = {
     client_type: "Тип лица",
@@ -1466,17 +1325,12 @@ useEffect(() => {
     // Создание клиента: ОП и Руководство — напрямую, ВО и ПО — запрещено (кнопка скрыта).
     if (editingClient && (userRole === 'sales' || userRole === 'visa' || userRole === 'partner' || userRole === 'management')) {
       try {
-        if (editingClient) {
-          await FeedAPI.createFeedEvent({
-            type: 'pending_edit_client',
-            payload,
-            resource_id: editingClient.id,
-          });
-          toast({ title: "Запрос отправлен", description: "Запрос на редактирование клиента отправлен администратору на подтверждение." });
-        } else {
-          await FeedAPI.createFeedEvent({ type: 'pending_create_client', payload });
-          toast({ title: "Запрос отправлен", description: "Запрос на создание клиента отправлен администратору на подтверждение." });
-        }
+        await FeedAPI.createFeedEvent({
+          type: 'pending_edit_client',
+          payload,
+          resource_id: editingClient.id,
+        });
+        toast({ title: "Запрос отправлен", description: "Запрос на редактирование клиента отправлен администратору на подтверждение." });
         setIsFormOpen(false);
         resetForm();
       } catch (err: any) {
@@ -1625,18 +1479,16 @@ useEffect(() => {
           </p>
         </div>
         <div className="flex items-center gap-2">
-            {/* View toggle - only show for non-sales users */}
-            {getRoleCode(user) !== 'sales' && (
-              <CustomSelect
-                value={clientView}
-                onChange={(value) => setClientView(value as "all" | "my")}
-                placeholder="Режим просмотра"
-                options={[
-                  { value: "all", label: "Все клиенты" },
-                  { value: "my", label: "Мои клиенты" },
-                ]}
-              />
-            )}
+            {/* View toggle — доступен всем ролям, включая sales (общая база + фильтр "Мои") */}
+            <CustomSelect
+              value={clientView}
+              onChange={(value) => setClientView(value as "all" | "my")}
+              placeholder="Режим просмотра"
+              options={[
+                { value: "all", label: "Все клиенты" },
+                { value: "my", label: "Мои клиенты" },
+              ]}
+            />
             <Button onClick={handleRefresh} variant="outline">
               <RefreshCw className="h-4 w-4 mr-2" />
               Обновить
@@ -1737,15 +1589,13 @@ useEffect(() => {
                     ]}
                   />
                 </div>
-                {getRoleCode(user) !== 'sales' && (
-                  <Button
-                    variant={clientView === "all" ? "secondary" : "outline"}
-                    onClick={() => setClientView("all")}
-                    className="whitespace-nowrap"
-                  >
-                    Все клиенты
-                  </Button>
-                )}
+                <Button
+                  variant={clientView === "all" ? "secondary" : "outline"}
+                  onClick={() => setClientView("all")}
+                  className="whitespace-nowrap"
+                >
+                  Все клиенты
+                </Button>
                 <Button
                   variant={clientView === "my" ? "secondary" : "outline"}
                   onClick={() => setClientView("my")}
@@ -1866,7 +1716,7 @@ useEffect(() => {
                               </Button>
                             )}
 
-                            {canEdit && (isArchived ? (
+                            {canEdit && !isSales && !isPartner && (isArchived ? (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1894,14 +1744,14 @@ useEffect(() => {
                               </Button>
                             ))}
 
-                            {isAdmin && (
+                            {(isAdmin || isManagement) && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    title="Удалить"
+                                    title={isManagement ? "Удалить (с подтверждением админа)" : "Удалить"}
                                     onClick={() => handleDeleteClick(client)}
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -1911,12 +1761,16 @@ useEffect(() => {
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Удалить клиента?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Запись будет удалена без возможности восстановления.
+                                      {isManagement
+                                        ? "Запрос на удаление клиента будет отправлен администратору на подтверждение."
+                                        : "Запись будет удалена без возможности восстановления."}
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
                                     <AlertDialogCancel onClick={() => setClientToDelete(null)}>Отмена</AlertDialogCancel>
-                                    <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">Удалить</AlertDialogAction>
+                                    <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+                                      {isManagement ? "Отправить на подтверждение" : "Удалить"}
+                                    </AlertDialogAction>
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>

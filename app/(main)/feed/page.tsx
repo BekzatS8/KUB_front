@@ -49,10 +49,16 @@ import { Toaster } from "@/components/ui/sonner"
 const EVENT_TYPE_LABELS: Record<FeedEventType, string> = {
   pending_create_lead: "Создание лида",
   pending_edit_lead: "Редактирование лида",
+  pending_delete_lead: "Удаление лида",
   pending_create_deal: "Создание сделки",
   pending_edit_deal: "Редактирование сделки",
+  pending_delete_deal: "Удаление сделки",
   pending_create_client: "Создание клиента",
   pending_edit_client: "Редактирование клиента",
+  pending_delete_client: "Удаление клиента",
+  pending_create_document: "Создание документа",
+  pending_edit_document: "Редактирование документа",
+  pending_delete_document: "Удаление документа",
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -77,15 +83,22 @@ function formatPayloadPreview(type: FeedEventType, payload: Record<string, any>)
   switch (type) {
     case "pending_create_lead":
     case "pending_edit_lead":
+    case "pending_delete_lead":
       return payload.title || "Без названия"
     case "pending_create_deal":
     case "pending_edit_deal":
+    case "pending_delete_deal":
       return `${Number(payload.amount || 0).toLocaleString()} ${payload.currency || "KZT"}`
     case "pending_create_client":
-    case "pending_edit_client": {
+    case "pending_edit_client":
+    case "pending_delete_client": {
       const name = [payload.last_name, payload.first_name, payload.middle_name].filter(Boolean).join(" ")
       return name || payload.name || payload.legal_profile?.company_name || "Без имени"
     }
+    case "pending_create_document":
+    case "pending_edit_document":
+    case "pending_delete_document":
+      return payload.title || (payload.doc_type ? `Тип: ${payload.doc_type}` : "Документ")
     default:
       return ""
   }
@@ -93,7 +106,7 @@ function formatPayloadPreview(type: FeedEventType, payload: Record<string, any>)
 
 // ─── Category definitions ─────────────────────────────────────────────────────
 
-type CategoryId = "leads" | "deals" | "clients" | "users"
+type CategoryId = "leads" | "deals" | "clients" | "documents" | "users"
 
 const CATEGORY_META: Record<CategoryId, {
   label: string
@@ -122,6 +135,13 @@ const CATEGORY_META: Record<CategoryId, {
     headerBg: "bg-teal-50 border-teal-100",
     iconBg: "bg-teal-100",
     iconColor: "text-teal-700",
+  },
+  documents: {
+    label: "Документы",
+    icon: <FileText className="h-4 w-4" />,
+    headerBg: "bg-indigo-50 border-indigo-100",
+    iconBg: "bg-indigo-100",
+    iconColor: "text-indigo-700",
   },
   users: {
     label: "Управление пользователями",
@@ -292,6 +312,7 @@ export default function FeedPage() {
   const leadEvents = events.filter((e) => e.type.includes("lead"))
   const dealEvents = events.filter((e) => e.type.includes("deal"))
   const clientEvents = events.filter((e) => e.type.includes("client"))
+  const documentEvents = events.filter((e) => e.type.includes("document"))
 
   // Apply statusFilter client-side to user requests (API returns all)
   const filteredUserRequests = statusFilter === "all"
@@ -310,6 +331,7 @@ export default function FeedPage() {
     ...(leadEvents.length ? [{ id: "leads" as CategoryId, items: leadEvents, kind: "feed" as const }] : []),
     ...(dealEvents.length ? [{ id: "deals" as CategoryId, items: dealEvents, kind: "feed" as const }] : []),
     ...(clientEvents.length ? [{ id: "clients" as CategoryId, items: clientEvents, kind: "feed" as const }] : []),
+    ...(documentEvents.length ? [{ id: "documents" as CategoryId, items: documentEvents, kind: "feed" as const }] : []),
     ...((isAdmin || isHROrLegal || roleCode === "management") && filteredUserRequests.length
       ? [{ id: "users" as CategoryId, items: filteredUserRequests, kind: "user" as const }]
       : []),

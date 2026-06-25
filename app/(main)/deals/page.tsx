@@ -389,8 +389,9 @@ export default function DealsPage() {
         userRole
       });
 
-      // Backend allows the full deals endpoint for every non-sales role; sales must use /deals/my.
-      const effectiveView = userRole === 'sales' ? 'my' : 'all';
+      // Все роли используют ролевой эндпоинт /deals (ListForRole). Для sales это
+      // сделки своего отдела+филиала (ScopeKindBranch), а не все сделки компании.
+      const effectiveView = 'all';
 
       console.log('fetchDeals called:', {
         userRole,
@@ -1026,7 +1027,22 @@ export default function DealsPage() {
   };
 
   // Handle delete deal
-  const handleDeleteDeal = async (dealId: string) => {
+  const handleDeleteDeal = async (dealId: string, dealInfo?: { amount?: number; currency?: string }) => {
+    // Руководство удаляет сделки только с подтверждением админа (заявка в ленту)
+    if (getRoleCode(user) === 'management') {
+      try {
+        await FeedAPI.createFeedEvent({
+          type: 'pending_delete_deal',
+          payload: { amount: dealInfo?.amount ?? 0, currency: dealInfo?.currency ?? 'KZT' },
+          resource_id: Number(dealId),
+        });
+        toast.success("Запрос на удаление сделки отправлен администратору на подтверждение");
+      } catch (err: any) {
+        toast.error(err?.response?.data?.message || err?.message || "Ошибка отправки запроса");
+      }
+      return;
+    }
+
     try {
       setIsLoading(true);
       const { delete_deal } = await import("@/src/api/deals.api");
@@ -1730,14 +1746,14 @@ export default function DealsPage() {
                                 <Archive className="h-4 w-4" />
                               </Button>
                             ))}
-                            {isAdmin && (
+                            {(isAdmin || isManagement) && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    title="Удалить"
+                                    title={isManagement ? "Удалить (с подтверждением админа)" : "Удалить"}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
@@ -1746,16 +1762,18 @@ export default function DealsPage() {
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Удалить сделку?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Запись будет удалена без возможности восстановления.
+                                      {isManagement
+                                        ? "Запрос на удаление сделки будет отправлен администратору на подтверждение."
+                                        : "Запись будет удалена без возможности восстановления."}
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Отмена</AlertDialogCancel>
                                     <AlertDialogAction
-                                      onClick={() => handleDeleteDeal(deal.id)}
+                                      onClick={() => handleDeleteDeal(deal.id, { amount: Number(deal.amount), currency: deal.currency })}
                                       className="bg-red-600 hover:bg-red-700"
                                     >
-                                      Удалить
+                                      {isManagement ? "Отправить на подтверждение" : "Удалить"}
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
@@ -2278,19 +2296,21 @@ export default function DealsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Удалить сделку?</AlertDialogTitle>
             <AlertDialogDescription>
-              Запись будет удалена без возможности восстановления.
+              {isManagement
+                ? "Запрос на удаление сделки будет отправлен администратору на подтверждение."
+                : "Запись будет удалена без возможности восстановления."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Отмена</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (dealToDelete) handleDeleteDeal(dealToDelete.id);
+                if (dealToDelete) handleDeleteDeal(dealToDelete.id, { amount: Number(dealToDelete.amount), currency: dealToDelete.currency });
                 setDealToDelete(null);
               }}
               className="bg-red-600 hover:bg-red-700"
             >
-              Удалить
+              {isManagement ? "Отправить на подтверждение" : "Удалить"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

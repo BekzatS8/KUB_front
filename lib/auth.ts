@@ -178,7 +178,7 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'settings:read',
       'settings:write',
     ],
-    leadership: [
+    management: [
       // Руководство: CanViewLeadershipData, CanViewAllBusinessData, CanProcessDocuments, CanWorkWithLeads
       'users:read',
       'leads:read',
@@ -194,9 +194,10 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'analytics:read',
       'analytics:write',
     ],
-    control: [
-      // Отдел контроля: наблюдатель — read-only for leads/deals/clients/tasks
-      // + document writes for own dept (свои документы/отчёты)
+    quality_control: [
+      // Отдел контроля качества (ОКК): наблюдатель по лидам/сделкам/задачам/клиентам,
+      // НО работает со своими документами своего отдела (просмотр/скачивание/отправка/
+      // архив). Создание документа идёт через одобрение администратора (Лента).
       'leads:read',
       'deals:read',
       'clients:read',
@@ -220,9 +221,9 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'documents:write',
     ],
     visa: [
+      // визовый отдел: лиды/клиенты/задачи; сделок нет; документы — просмотр+отправка
       'leads:read',
       'leads:write',
-      'deals:read',
       'clients:read',
       'clients:write',
       'tasks:read',
@@ -231,23 +232,28 @@ export function hasPermission(userRole: string | undefined, requiredPermissions:
       'documents:write',
     ],
     partner: [
+      // партнёрский отдел: лиды/клиенты/задачи; сделок нет; документы — только просмотр
       'leads:read',
       'leads:write',
-      'deals:read',
       'clients:read',
       'clients:write',
       'tasks:read',
       'tasks:write',
       'documents:read',
-      'documents:write',
     ],
     hr: [
+      // Отдел кадров: профиль сотрудников (просмотр/создание/редактирование/
+      // удаление/блокировка через подтверждение админа), задачи, документы отдела
+      'users:read',
+      'users:write',
       'tasks:read',
       'tasks:write',
       'documents:read',
       'documents:write',
     ],
     legal: [
+      'users:read',
+      'users:write',
       'tasks:read',
       'tasks:write',
       'documents:read',

@@ -124,12 +124,10 @@ export default function LeadsPage() {
   const [branchFilter, setBranchFilter] = useState<number | undefined>(undefined);
   const [availableBranches, setAvailableBranches] = useState<{ id: number, name: string }[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
-  const [view, setView] = useState<"all" | "my">(() => {
-    // Default to "my" only for sales users, others get "all"
-    const user = getCurrentUser();
-    const userRole = user ? getRoleCode(user) : undefined;
-    return userRole === 'sales' ? 'my' : 'all';
-  });
+  // Все роли по умолчанию видят "Все" (для sales это лиды своего отдела+филиала по
+  // воронкам — backend ListForRole/ScopeKindBranch). "Мои" — переключатель: только
+  // лиды, где пользователь является владельцем.
+  const [view, setView] = useState<"all" | "my">("all");
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -325,23 +323,6 @@ export default function LeadsPage() {
     fetchUserData();
   }, []);
 
-  // Force sales users to use "my" view - immediate check
-  useEffect(() => {
-    const userRole = getRoleCode(user);
-    if (userRole === 'sales' && view === 'all') {
-      setView('my');
-    }
-  }, [user, view]);
-
-  // Additional safety check - force sales users immediately on mount
-  useEffect(() => {
-    const currentUser = getCurrentUser();
-    const userRole = getRoleCode(currentUser);
-    if (userRole === 'sales') {
-      setView('my');
-    }
-  }, []);
-
   const [users, setUsers] = useState<any[]>([]);
 
   const searchParams = useSearchParams();
@@ -395,13 +376,11 @@ export default function LeadsPage() {
   }, [statusGroupFilter, archiveFilter, sortBy, sortOrder, branchFilter]);
 
   const fetchLeads = async () => {
-    console.log('fetchLeads called with view:', view, 'user:', user);
     setIsLoading(true);
     try {
-      // Default to "my" view only for sales users
-      const userRole = getRoleCode(user);
-      const shouldUseMyView = view === "my" || userRole === 'sales';
-      const fetchFn = shouldUseMyView ? leadsApi.list_my_leads : leadsApi.list_leads;
+      // "Все" → list_leads (ListForRole: для sales это лиды своего отдела+филиала).
+      // "Мои" → list_my_leads (только лиды, где пользователь — владелец).
+      const fetchFn = view === "my" ? leadsApi.list_my_leads : leadsApi.list_leads;
       const params: any = { page: currentPage, size: limit };
       if (searchTerm) params.q = searchTerm;
       if (statusGroupFilter !== "all") params.status_group = statusGroupFilter;
@@ -429,13 +408,6 @@ export default function LeadsPage() {
       setTotalPages(totalPagesFromBackend);
       setError("");
     } catch (err: any) {
-      console.log('Error in fetchLeads:', err);
-      // If we get a 403 error, always switch to "my" view
-      if (err?.response?.status === 403 && getRoleCode(user) === 'sales') {
-        console.log('403 error detected, switching to "my" leads view...');
-        setView('my');
-        return; // The useEffect will trigger fetchLeads again with the new view
-      }
       setError(err?.message || "Ошибка при загрузке лидов");
     } finally {
       setIsLoading(false);
@@ -492,10 +464,8 @@ export default function LeadsPage() {
   }, [user]);
 
   useEffect(() => {
-    console.log('useEffect triggered - user:', user, 'view:', view);
     const timer = setTimeout(() => {
       // Always try to fetch leads - let the API handle permissions
-      console.log('Calling fetchLeads regardless of user data');
       fetchLeads();
     }, 300);
     return () => clearTimeout(timer);
@@ -528,53 +498,32 @@ export default function LeadsPage() {
   };
 
   const handleCreateLead = async () => {
-    console.log('handleCreateLead called');
-    
-    // Debug user data
     const currentUser = getCurrentUser();
-    console.log('getCurrentUser() result:', currentUser);
-    console.log('localStorage user data:', localStorage.getItem('current_user'));
-    
     let user = currentUser;
-    
+
     // If no user from getCurrentUser, try to get from localStorage directly
     if (!user) {
-      console.log('No user found, checking localStorage directly...');
       const lsUser = localStorage.getItem('current_user');
-      console.log('Raw localStorage data:', lsUser);
       if (lsUser) {
         try {
           const parsedUser = JSON.parse(lsUser);
-          console.log('Parsed user from localStorage:', parsedUser);
           if (parsedUser) {
             user = parsedUser;
-            console.log('Using parsed user, continuing...');
           }
         } catch (e) {
           console.error('Failed to parse user from localStorage:', e);
         }
       }
     }
-    
-    // TEMPORARY: For testing, create a mock user if still no user
-    if (!user) {
-      console.log('Still no user found, creating mock user for testing...');
-      user = {
-        id: '1',
-        role: { id: 50, code: 'system_admin', legacy_name: 'admin' },
-        full_name: 'Test User',
-        email: 'test@example.com'
-      };
-      console.log('Using mock user:', user);
-    }
-    
-    console.log('Final user object:', user);
-    console.log('New lead data:', newLead);
-    
+
     return createLeadWithUser(user);
   };
 
   const createLeadWithUser = async (user: any) => {
+    if (!user) {
+      toast.error('Не удалось определить пользователя. Войдите в систему заново.');
+      return;
+    }
     if (!newLead.title.trim()) {
       alert('Пожалуйста, введите название лида');
       return;
@@ -641,7 +590,22 @@ export default function LeadsPage() {
     }
   };
 
-  const handleDeleteLead = async (leadId: number) => {
+  const handleDeleteLead = async (leadId: number, leadTitle?: string) => {
+    // Руководство удаляет лиды только с подтверждением админа (заявка в ленту)
+    if (getRoleCode(user) === 'management') {
+      try {
+        await FeedAPI.createFeedEvent({
+          type: 'pending_delete_lead',
+          payload: { title: leadTitle || '' },
+          resource_id: leadId,
+        });
+        toast.success('Запрос на удаление лида отправлен администратору на подтверждение');
+      } catch (err: any) {
+        toast.error(`Ошибка отправки запроса: ${err?.message || 'Unknown error'}`);
+      }
+      return;
+    }
+
     try {
       await leadsApi.delete_lead(undefined, { id: leadId });
       setLeads((prev) => (prev || []).filter((l) => l.id !== leadId));
@@ -1128,7 +1092,7 @@ export default function LeadsPage() {
                                 <ChevronsRight className="h-4 w-4" />
                               </Button>
                             )}
-                            {canWrite && !isSales && (isArchived ? (
+                            {canWrite && !isSales && !isPartner && (isArchived ? (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1155,14 +1119,14 @@ export default function LeadsPage() {
                                 <Archive className="h-4 w-4" />
                               </Button>
                             ))}
-                            {isAdmin && (
+                            {(isAdmin || isManagement) && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    title="Удалить"
+                                    title={isManagement ? "Удалить (с подтверждением админа)" : "Удалить"}
                                     disabled={lead.status === 'cancelled'}
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -1172,12 +1136,16 @@ export default function LeadsPage() {
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Удалить лид?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Запись будет удалена без возможности восстановления.
+                                      {isManagement
+                                        ? "Запрос на удаление лида будет отправлен администратору на подтверждение."
+                                        : "Запись будет удалена без возможности восстановления."}
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Отмена</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleDeleteLead(lead.id)} className="bg-red-600 hover:bg-red-700">Удалить</AlertDialogAction>
+                                    <AlertDialogAction onClick={() => handleDeleteLead(lead.id, lead.title)} className="bg-red-600 hover:bg-red-700">
+                                      {isManagement ? "Отправить на подтверждение" : "Удалить"}
+                                    </AlertDialogAction>
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>

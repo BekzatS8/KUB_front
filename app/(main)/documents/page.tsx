@@ -109,6 +109,7 @@ import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import * as AuthAPI from "@/src/api/auth.api"
 import * as ClientAPI from "@/src/api/clients.api"
 import * as DealsAPI from "@/src/api/deals.api"
+import * as FeedAPI from "@/src/api/feed.api"
 import {
     getDocuments,
     getDocumentsByDeal,
@@ -423,6 +424,9 @@ export default function DocumentsPage() {
     const roleCode = getRoleCode(user)
     const isHR = roleCode === 'hr'
     const isLegal = roleCode === 'legal'
+    // ОКК (отдел контроля качества): создание документа уходит на одобрение
+    // администратору через Ленту (feed_events), а не напрямую.
+    const isQC = roleCode === 'quality_control'
     const canUploadOwn = isHR || isLegal
 
     // Map department query param to document scope filter (admin viewing dept groups)
@@ -433,18 +437,26 @@ export default function DocumentsPage() {
     // Role-based fallback when permissions API hasn't loaded yet
     const docPermFallback: Record<string, string[]> = {
         system_admin: ['documents.view','documents.create','documents.update','documents.delete','documents.send','documents.download'],
-        management: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
-        quality_control: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
-        sales: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
+        // management: добавлять/редактировать/отправлять свои документы; скачивание запрещено (см. матрицу ролей)
+        management: ['documents.view','documents.create','documents.update','documents.send'],
+        // quality_control (ОКК): работает со своими документами своего отдела —
+        // просмотр, скачивание, отправка, архив/сабмит. Создание (documents.create)
+        // НЕ выдаётся: новый документ создаётся через одобрение администратора.
+        quality_control: ['documents.view','documents.update','documents.send','documents.download'],
+        // sales: только просмотр + отправка (backend: documents.view, documents.send)
+        sales: ['documents.view','documents.send'],
         visa: ['documents.view','documents.send'],
         partner: ['documents.view'],
-        hr: ['documents.view','documents.create','documents.update','documents.download'],
-        legal: ['documents.view','documents.create','documents.update','documents.download'],
+        // hr/legal: полный набор включая отправку на подпись (backend имеет documents.send)
+        hr: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
+        legal: ['documents.view','documents.create','documents.update','documents.send','documents.download'],
     }
     const docPermSet: Set<string> = myPermissions.size > 0
         ? myPermissions
         : new Set(docPermFallback[getRoleCode(user) || ''] || [])
-    const canCreateDocs = docPermSet.has('documents.create')
+    // ОКК не имеет documents.create (создание идёт через одобрение), но кнопка
+    // «Создать документ» ему показывается — submit роутится в Ленту на одобрение.
+    const canCreateDocs = docPermSet.has('documents.create') || isQC
     const canDownloadDocs = docPermSet.has('documents.download')
     const canSendDocs = docPermSet.has('documents.send')
     const canUpdateDocs = docPermSet.has('documents.update')
@@ -835,6 +847,23 @@ export default function DocumentsPage() {
         setActionLoading(true)
         setCreateError(null)
         try {
+            // ОКК не создаёт документ напрямую — запрос уходит на одобрение
+            // администратору в Ленту; документ создаётся после approve.
+            if (isQC) {
+                await FeedAPI.createFeedEvent({
+                    type: 'pending_create_document',
+                    payload: {
+                        client_id: Number(createForm.client_id),
+                        client_type: createForm.client_type,
+                        deal_id: Number(createForm.deal_id),
+                        doc_type: createForm.doc_type,
+                        extra: createForm.extra,
+                    },
+                })
+                toast.success("Запрос на создание документа отправлен администратору на одобрение")
+                setIsCreateOpen(false)
+                return
+            }
             await createDocumentFromClient({
                 client_id: Number(createForm.client_id),
                 client_type: createForm.client_type,
@@ -857,6 +886,25 @@ export default function DocumentsPage() {
         if (!deleteId) return
         setActionLoading(true)
         try {
+            // HR не удаляет напрямую — запрос уходит администратору в Ленту.
+            if (canRequestDocDelete) {
+                const doc = documents.find((d) => d.id === deleteId)
+                await FeedAPI.createFeedEvent({
+                    type: 'pending_delete_document',
+                    resource_id: deleteId,
+                    payload: {
+                        doc_id: deleteId,
+                        doc_type: doc?.doc_type,
+                        title: doc?.title,
+                        scope: doc?.scope,
+                    },
+                })
+                toast.success("Запрос на удаление документа отправлен администратору на одобрение")
+                setIsDeleteOpen(false)
+                setDeleteId(null)
+                setActionLoading(false)
+                return
+            }
             await deleteDocument(deleteId)
             toast.success("Документ успешно удален")
             await fetchDocuments()
@@ -909,6 +957,11 @@ export default function DocumentsPage() {
 
     // admin role code from backend is 'admin'; normalizeRoleCode maps it to 'system_admin'
     const isAdmin = getRoleCode(user) === 'system_admin' || docPermSet.has('documents.delete');
+    // HR не может удалять документы напрямую (нет documents.delete) — заявка на
+    // удаление уходит администратору в Ленту (pending_delete_document), документ
+    // удаляется после approve. Кнопка «Удалить» при этом показывается.
+    const canRequestDocDelete = isHR && !isAdmin;
+    const canDeleteDocs = isAdmin || canRequestDocDelete;
 
     // ─── Load data on mount and when filters change ───────────────
 
@@ -1682,7 +1735,7 @@ export default function DocumentsPage() {
                                                                             Архивировать
                                                                         </DropdownMenuItem>
                                                                     )}
-                                                                    {isAdmin && (
+                                                                    {canDeleteDocs && (
                                                                         <>
                                                                             <DropdownMenuSeparator />
                                                                             <DropdownMenuItem
@@ -1690,7 +1743,7 @@ export default function DocumentsPage() {
                                                                                 className="text-red-600"
                                                                             >
                                                                                 <Trash2 className="h-4 w-4 mr-2" />
-                                                                                Удалить
+                                                                                {canRequestDocDelete ? "Удалить (запрос админу)" : "Удалить"}
                                                                             </DropdownMenuItem>
                                                                         </>
                                                                     )}
@@ -1993,15 +2046,17 @@ export default function DocumentsPage() {
             <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Удалить документ?</AlertDialogTitle>
+                        <AlertDialogTitle>{canRequestDocDelete ? "Запросить удаление документа?" : "Удалить документ?"}</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Это действие нельзя отменить. Если данные в документе неверны — удалите его и создайте новый.
+                            {canRequestDocDelete
+                                ? "Запрос на удаление будет отправлен администратору на одобрение. Документ удалится только после подтверждения."
+                                : "Это действие нельзя отменить. Если данные в документе неверны — удалите его и создайте новый."}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Отмена</AlertDialogCancel>
                         <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
-                            Удалить
+                            {canRequestDocDelete ? "Отправить запрос" : "Удалить"}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

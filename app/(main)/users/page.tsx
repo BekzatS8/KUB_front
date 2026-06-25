@@ -57,7 +57,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Check, ChevronsUpDown, Search, Plus, Edit, Trash2, Users, UserCheck, Shield, RefreshCw, Eye, KeyRound } from "lucide-react";
+import { Check, ChevronsUpDown, Search, Plus, Edit, Trash2, Users, UserCheck, Shield, RefreshCw, Eye, KeyRound, Ban, CircleCheck } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import * as UserAPI from "@/src/api/users.api";
@@ -233,6 +233,9 @@ export default function UsersPage() {
   const canCreate = Boolean(permissionScopes["users.create"]);
   const canEdit = Boolean(permissionScopes["users.update"]);
   const canDelete = Boolean(permissionScopes["users.delete"]);
+  // Блокировка пользователя выполняется напрямую (без подтверждения админа) —
+  // HR/юрист/руководство/админ имеют users.block.
+  const canBlock = Boolean(permissionScopes["users.block"]);
   const canChangePassword = currentUser?.role?.id === Roles.SYSTEM_ADMIN || currentUser?.role?.id === Roles.MANAGEMENT;
   // HR, юрист и руководство управляют пользователями только через заявку на подтверждение админу
   const userActionsNeedApproval = [Roles.HR, Roles.LEGAL, Roles.MANAGEMENT].includes(currentUser?.role?.id as number);
@@ -423,6 +426,25 @@ export default function UsersPage() {
       toast({ variant: "destructive", title: "Ошибка", description: err?.message || "Не удалось изменить пароль." });
     } finally {
       setPasswordChangeLoading(false);
+    }
+  };
+
+  const handleToggleBlock = async (user: Models.User) => {
+    try {
+      if (user.is_active) {
+        await UserAPI.blockUser(String(user.id));
+        toast({ title: "Пользователь заблокирован", description: `${getUserFullName(user)} больше не может входить в систему.` });
+      } else {
+        await UserAPI.unblockUser(String(user.id));
+        toast({ title: "Пользователь разблокирован", description: `${getUserFullName(user)} снова имеет доступ.` });
+      }
+      void fetchUsersAndStats();
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: err?.message || "Не удалось изменить статус пользователя.",
+      });
     }
   };
 
@@ -696,9 +718,14 @@ export default function UsersPage() {
                         </div>
                       </TableCell>
                       <TableCell className="px-4 align-top">
-                        <Badge variant={user.is_verified ? "default" : "outline"}>
-                          {user.is_verified ? "Подтвержден" : "Не подтвержден"}
-                        </Badge>
+                        <div className="flex flex-col items-start gap-1">
+                          <Badge variant={user.is_verified ? "default" : "outline"}>
+                            {user.is_verified ? "Подтвержден" : "Не подтвержден"}
+                          </Badge>
+                          {!user.is_active && (
+                            <Badge variant="destructive">Заблокирован</Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="px-4 align-top text-right">
                         <div className="flex flex-wrap items-center justify-end gap-1">
@@ -732,6 +759,29 @@ export default function UsersPage() {
                             >
                               <KeyRound className="h-4 w-4" />
                             </Button>
+                          )}
+                          {canBlock && String(user.id) !== String(currentUser?.id) && (
+                            user.is_active ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-amber-600 hover:text-amber-700"
+                                title="Заблокировать"
+                                onClick={() => handleToggleBlock(user)}
+                              >
+                                <Ban className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-green-600 hover:text-green-700"
+                                title="Разблокировать"
+                                onClick={() => handleToggleBlock(user)}
+                              >
+                                <CircleCheck className="h-4 w-4" />
+                              </Button>
+                            )
                           )}
                           {canDelete && (
                             <Button

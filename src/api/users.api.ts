@@ -75,6 +75,24 @@ export async function deleteUser(id: string): Promise<{ pending?: boolean; messa
   }
 }
 
+export async function blockUser(id: string): Promise<Models.User> {
+  try {
+    const res = await api.post(`/users/${id}/block`);
+    return res.data;
+  } catch (error: any) {
+    throw new Error(translateUserError(error, 'Не удалось заблокировать пользователя.'));
+  }
+}
+
+export async function unblockUser(id: string): Promise<Models.User> {
+  try {
+    const res = await api.post(`/users/${id}/unblock`);
+    return res.data;
+  } catch (error: any) {
+    throw new Error(translateUserError(error, 'Не удалось разблокировать пользователя.'));
+  }
+}
+
 export async function changeUserPassword(id: string, password: string): Promise<void> {
   try {
     await api.put(`/users/${id}/password`, { password });
