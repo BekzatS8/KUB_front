@@ -1723,7 +1723,7 @@ export default function DealsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8"
+                                className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
                                 onClick={() => {
                                   setDealToArchive(deal);
                                   setIsUnarchiveDialogOpen(true);
@@ -1735,15 +1735,16 @@ export default function DealsPage() {
                             ) : (
                               <Button
                                 variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
+                                size="sm"
+                                className="h-8 px-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                                 onClick={() => {
                                   setDealToArchive(deal);
                                   setIsArchiveDialogOpen(true);
                                 }}
-                                title="Архивировать"
+                                title="В архив"
                               >
-                                <Archive className="h-4 w-4" />
+                                <Archive className="h-4 w-4 mr-1" />
+                                <span className="hidden sm:inline text-xs">В архив</span>
                               </Button>
                             ))}
                             {(isAdmin || isManagement) && (

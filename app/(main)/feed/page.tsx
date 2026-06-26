@@ -166,7 +166,7 @@ export default function FeedPage() {
   const [user, setUser] = useState<any>(null)
   const [events, setEvents] = useState<FeedEvent[]>([])
   const [feedLoading, setFeedLoading] = useState(true)
-  const [statusFilter, setStatusFilter] = useState("pending")
+  const [statusFilter, setStatusFilter] = useState("all")
 
   const [selectedEvent, setSelectedEvent] = useState<FeedEvent | null>(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)

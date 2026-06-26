@@ -206,6 +206,7 @@ function ComboboxSelect({
 
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked">("all");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [userFormData, setUserFormData] = useState<
     Models.CreateUserRequest | Models.UpdateUserRequest
@@ -560,7 +561,11 @@ export default function UsersPage() {
   };
 
   const filteredUsers = users.filter((user) => {
+    if (statusFilter === "active" && !user.is_active) return false;
+    if (statusFilter === "blocked" && user.is_active) return false;
+
     const query = searchTerm.trim().toLowerCase();
+    if (!query) return true;
     const searchableText = [
       getUserFullName(user),
       user.email,
@@ -641,8 +646,25 @@ export default function UsersPage() {
                 {users?.length ? `Найдено ${filteredUsers?.length || 0} из ${users.length} пользователей` : "Пользователи не найдены"}
               </CardDescription>
             </div>
-            <div className="w-1/3">
-              <div className="relative">
+            <div className="flex items-center gap-3">
+              <div className="flex rounded-md border overflow-hidden">
+                {(["all", "active", "blocked"] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setStatusFilter(f)}
+                    className={cn(
+                      "px-3 py-1.5 text-sm font-medium transition-colors",
+                      statusFilter === f
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-background text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    {f === "all" ? "Все" : f === "active" ? "Активные" : "Заблокированные"}
+                  </button>
+                ))}
+              </div>
+              <div className="relative w-64">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   placeholder="Введите данные для поиска..."

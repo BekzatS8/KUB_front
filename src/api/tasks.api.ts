@@ -60,3 +60,10 @@ export async function unarchive_task(payload?: void, params?: Record<string, any
   const res = await api.post(`/tasks/${params?.id}/unarchive`)
   return res.data
 }
+
+export async function getMyNewTaskCount(userId: number): Promise<number> {
+  const res = await api.get(`/tasks`, {
+    params: { paginate: true, status: 'new', per_page: 1, assignee_id: userId },
+  })
+  return res.data?.pagination?.total ?? 0
+}

@@ -35,6 +35,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { getMe } from "@/src/api/auth.api";
 import { getMyPermissions } from "@/src/api/permissions.api";
+import { getChats } from "@/src/api/chat.api";
+import { getMyNewTaskCount } from "@/src/api/tasks.api";
 import type { Auth_Login_Response } from "@/src/models/Auth.model";
 import type { PermissionsMe } from "@/src/models/permissions.model";
 import { getRoleName } from "@/src/models/roles.enum";
@@ -297,6 +299,8 @@ export function RoleBasedSidebar() {
   const [isLoading, setIsLoading] = useState(true);
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [currentDept, setCurrentDept] = useState<string | null>(null);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [taskNewCount, setTaskNewCount] = useState(0);
   const pathname = usePathname();
 
   // Track department query param reactively
@@ -329,6 +333,33 @@ export function RoleBasedSidebar() {
     load();
     return () => { cancelled = true; };
   }, []);
+
+  // Fetch total unread chat count once user is loaded
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    getChats()
+      .then((chats) => {
+        if (cancelled) return;
+        const total = (Array.isArray(chats) ? chats : []).reduce(
+          (sum, c) => sum + (c.unread_count || 0),
+          0
+        );
+        setChatUnreadCount(total);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user]);
+
+  // Fetch new task count assigned to current user
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    getMyNewTaskCount(user.id)
+      .then((count) => { if (!cancelled) setTaskNewCount(count); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user]);
 
   const roleCode = roleCodeFromUser(user);
 
@@ -527,6 +558,10 @@ export function RoleBasedSidebar() {
               );
             }
 
+            const isChatItem = entry.href === "/chat";
+            const isTaskItem = entry.href === "/tasks";
+            const unread = isChatItem ? chatUnreadCount : isTaskItem ? taskNewCount : 0;
+
             return (
               <Link
                 key={`item-${entry.href}-${entry.title}`}
@@ -540,8 +575,18 @@ export function RoleBasedSidebar() {
                   isCollapsed && "justify-center px-2"
                 )}
               >
-                <entry.icon className={cn("h-5 w-5 shrink-0", active ? "text-white" : "text-slate-500")} />
-                {!isCollapsed && <span className="min-w-0 truncate">{entry.title}</span>}
+                <span className="relative shrink-0">
+                  <entry.icon className={cn("h-5 w-5", active ? "text-white" : "text-slate-500")} />
+                  {isCollapsed && unread > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-red-500" />
+                  )}
+                </span>
+                {!isCollapsed && <span className="min-w-0 flex-1 truncate">{entry.title}</span>}
+                {!isCollapsed && unread > 0 && (
+                  <span className="shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                    {unread > 99 ? "99+" : unread}
+                  </span>
+                )}
               </Link>
             );
           }

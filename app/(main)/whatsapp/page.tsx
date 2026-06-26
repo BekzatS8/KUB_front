@@ -29,15 +29,15 @@ const getWidgetErrorMessage = (error: any) => {
     return "Нет доступа или истекла сессия";
   }
   if (status === 404) {
-    return "Канал не найден в Wazzup";
+    return "Канал не найден. Проверьте настройки интеграции";
   }
   if (status === 500 || status === 502 || status === 503) {
-    return "Ошибка сервера Wazzup-интеграции";
+    return "Ошибка сервера интеграции";
   }
   if (error?.code === "NETWORK_ERROR" || error?.code === "ECONNABORTED") {
     return "Ошибка сети. Проверьте подключение";
   }
-  return "Не удалось открыть Wazzup iframe";
+  return "Не удалось открыть мессенджер";
 };
 
 export default function MessengerPage() {
@@ -65,7 +65,7 @@ export default function MessengerPage() {
 
       if (!nextUrl) {
         setWidgetState("error");
-        setWidgetError("Wazzup iframe URL не получен");
+        setWidgetError("URL мессенджера не получен");
         return;
       }
 
@@ -113,7 +113,7 @@ export default function MessengerPage() {
         <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center rounded-lg border bg-white shadow-sm">
           <div className="text-center">
             <RefreshCw className="mx-auto mb-4 h-8 w-8 animate-spin text-blue-600" />
-            <p className="text-slate-600">Загрузка Wazzup...</p>
+            <p className="text-slate-600">Загрузка мессенджера...</p>
           </div>
         </div>
       );
@@ -125,15 +125,15 @@ export default function MessengerPage() {
           <div className="max-w-md text-center">
             <AlertCircle className="mx-auto mb-4 h-12 w-12 text-amber-500" />
             <h2 className="mb-2 text-lg font-semibold text-slate-900">
-              Не удалось открыть Wazzup iframe
+              Не удалось открыть мессенджер
             </h2>
             <p className="mb-5 text-sm text-slate-600">
-              {widgetError || "Не удалось открыть Wazzup. Проверьте интеграцию."}
+              {widgetError || "Не удалось открыть мессенджер. Проверьте интеграцию."}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               <Button variant="outline" onClick={() => setIsSetupModalOpen(true)}>
                 <Settings className="mr-2 h-4 w-4" />
-                Настроить Wazzup
+                Настройки интеграции
               </Button>
               <Button onClick={refreshWidget}>
                 <RefreshCw className="mr-2 h-4 w-4" />
@@ -151,7 +151,7 @@ export default function MessengerPage() {
           key={iframeUrl}
           src={iframeUrl}
           className="h-full w-full border-0"
-          title="Wazzup Messenger"
+          title="Мессенджер"
           allow="microphone *; clipboard-write *"
           onError={refreshWidget}
         />
@@ -165,7 +165,7 @@ export default function MessengerPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Мессенджер</h1>
           <p className="text-sm text-slate-600">
-            WhatsApp, Telegram и Instagram через Wazzup
+            WhatsApp, Telegram и Instagram
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -175,7 +175,7 @@ export default function MessengerPage() {
           </Button>
           <Button onClick={() => setIsSetupModalOpen(true)}>
             <Settings className="mr-2 h-4 w-4" />
-            Wazzup
+            Настройки
           </Button>
         </div>
       </div>
@@ -185,9 +185,9 @@ export default function MessengerPage() {
       <Dialog open={isSetupModalOpen} onOpenChange={setIsSetupModalOpen}>
         <DialogContent className="w-[calc(100vw-1rem)] max-w-lg">
           <DialogHeader>
-            <DialogTitle>Настройка Wazzup</DialogTitle>
+            <DialogTitle>Настройка интеграции</DialogTitle>
             <DialogDescription>
-              Подключение используется для WhatsApp, Telegram и Instagram. Сами каналы добавляются в личном кабинете Wazzup.
+              Подключение используется для WhatsApp, Telegram и Instagram. Сами каналы добавляются в личном кабинете сервиса.
             </DialogDescription>
           </DialogHeader>
 

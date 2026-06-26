@@ -1662,7 +1662,11 @@ export default function DocumentsPage() {
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="px-4 align-top">
-                                                    {doc.sign_status ? (
+                                                    {doc.status === "signed" ? (
+                                                        <Badge className="bg-green-100 text-green-800 text-xs">
+                                                            Подписан
+                                                        </Badge>
+                                                    ) : doc.sign_status ? (
                                                         <Badge className={`${signStatusColors[doc.sign_status] || "bg-gray-100 text-gray-700"} text-xs`}>
                                                             {signStatusLabels[doc.sign_status] || doc.sign_status}
                                                         </Badge>
@@ -1950,13 +1954,19 @@ export default function DocumentsPage() {
                                         {format(new Date(selectedDoc.created_at), "dd.MM.yyyy HH:mm", { locale: ru })}
                                     </p>
                                 </div>
-                                {selectedDoc.sign_status && (
+                                {(selectedDoc.sign_status || selectedDoc.status === "signed") && (
                                     <div>
                                         <Label className="text-sm text-gray-500">Подписание</Label>
                                         <div className="mt-1">
-                                            <Badge className={`${signStatusColors[selectedDoc.sign_status] || "bg-gray-100"} text-xs`}>
-                                                {signStatusLabels[selectedDoc.sign_status] || selectedDoc.sign_status}
-                                            </Badge>
+                                            {selectedDoc.status === "signed" ? (
+                                                <Badge className="bg-green-100 text-green-800 text-xs">
+                                                    Подписан
+                                                </Badge>
+                                            ) : (
+                                                <Badge className={`${signStatusColors[selectedDoc.sign_status!] || "bg-gray-100"} text-xs`}>
+                                                    {signStatusLabels[selectedDoc.sign_status!] || selectedDoc.sign_status}
+                                                </Badge>
+                                            )}
                                         </div>
                                     </div>
                                 )}
