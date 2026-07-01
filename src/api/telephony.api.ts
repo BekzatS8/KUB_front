@@ -48,6 +48,15 @@ export const getLeadCalls = async (
   return response.data;
 };
 
+export const syncCalls = async (
+  sinceUnix?: number,
+): Promise<{ status: string; processed: number }> => {
+  const response = await api.post('/api/v1/telephony/sync', null, {
+    params: sinceUnix ? { since: sinceUnix } : {},
+  });
+  return response.data;
+};
+
 export const initiateCall = async (
   phone: string,
   managerId?: number,

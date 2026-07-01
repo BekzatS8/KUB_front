@@ -4,6 +4,7 @@ export type Tasks_Create_task_Request = {
   entity_id: number
   entity_type: string
   assignee_id: number
+  assignee_ids?: number[]
   due_date: string
   priority: string
 }
@@ -20,6 +21,7 @@ export type Tasks_Update_task_Request = {
   entity_id: number
   entity_type: string
   assignee_id: number
+  assignee_ids?: number[]
   due_date: string
   priority: string
 }
@@ -42,6 +44,7 @@ export interface Task {
   entity_id: number
   entity_type: string
   assignee_id: number
+  assignee_ids?: number[]
   due_date: string
   priority: string
   status: string

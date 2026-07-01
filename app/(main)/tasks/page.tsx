@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { PaginationControls } from "@/components/ui/pagination-controls"
 import {
@@ -172,6 +172,22 @@ function ComboboxSelect({
   disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  // Позволяем прокручивать список колёсиком мыши.
+  // Комбобокс порталится наружу диалога, а его блокировка прокрутки
+  // (react-remove-scroll) вешает wheel-обработчик на document и через
+  // preventDefault гасит прокрутку внешних элементов. Останавливаем
+  // всплытие события нативно (до document), чтобы нативный скролл списка
+  // отработал.
+  useEffect(() => {
+    if (!open) return
+    const el = listRef.current
+    if (!el) return
+    const stopWheel = (e: WheelEvent) => e.stopPropagation()
+    el.addEventListener("wheel", stopWheel)
+    return () => el.removeEventListener("wheel", stopWheel)
+  }, [open])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -197,7 +213,7 @@ function ComboboxSelect({
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
-          <CommandList>
+          <CommandList ref={listRef}>
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
@@ -213,6 +229,98 @@ function ComboboxSelect({
                     className={cn(
                       "mr-2 h-4 w-4",
                       value?.toString() === option.value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {option.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ─── Multi Combobox Component ────────────────────────────────────
+
+function MultiComboboxSelect({
+  values,
+  onChange,
+  options,
+  placeholder = "Выберите...",
+  searchPlaceholder = "Поиск...",
+  emptyText = "Ничего не найдено",
+  disabled = false,
+}: {
+  values: string[]
+  onChange: (values: string[]) => void
+  options: { value: string; label: string }[]
+  placeholder?: string
+  searchPlaceholder?: string
+  emptyText?: string
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  // Прокрутка колёсиком внутри диалога (см. ComboboxSelect).
+  useEffect(() => {
+    if (!open) return
+    const el = listRef.current
+    if (!el) return
+    const stopWheel = (e: WheelEvent) => e.stopPropagation()
+    el.addEventListener("wheel", stopWheel)
+    return () => el.removeEventListener("wheel", stopWheel)
+  }, [open])
+
+  const toggle = (val: string) => {
+    if (values.includes(val)) {
+      onChange(values.filter((v) => v !== val))
+    } else {
+      onChange([...values, val])
+    }
+  }
+
+  const selectedLabels = values
+    .map((v) => options.find((o) => o.value === v)?.label)
+    .filter(Boolean) as string[]
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "w-full justify-between font-normal bg-background px-3 py-2 text-sm border-input border rounded-xl h-auto min-h-10 hover:bg-accent hover:text-accent-foreground",
+            selectedLabels.length === 0 && "text-muted-foreground"
+          )}
+          disabled={disabled}
+        >
+          <span className="truncate text-left">
+            {selectedLabels.length > 0 ? selectedLabels.join(", ") : placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput placeholder={searchPlaceholder} />
+          <CommandList ref={listRef}>
+            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => (
+                <CommandItem
+                  key={option.value}
+                  value={option.label}
+                  onSelect={() => toggle(option.value)}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      values.includes(option.value) ? "opacity-100" : "opacity-0"
                     )}
                   />
                   {option.label}
@@ -290,7 +398,7 @@ export default function TasksPage() {
   const emptyForm = {
     title: "",
     description: "",
-    assignee_id: undefined as number | undefined,
+    assignee_ids: [] as number[],
     priority: "normal" as TaskPriority,
     entity_type: "" as EntityType,
     entity_id: undefined as number | undefined,
@@ -530,10 +638,36 @@ export default function TasksPage() {
   }
 
   // Helper functions
+  const formatUserName = (user: any) => {
+    if (!user) return "Неизвестен"
+    const full = (user.full_name || `${user.first_name || ""} ${user.last_name || ""}`).trim()
+    return full || user.company_name || user.email || `Пользователь #${user.id}`
+  }
+
   const getUserLabel = (userId: string | number) => {
     const user = users.find((u) => u.id.toString() === userId.toString())
-    return user ? (user.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : (user.company_name || user.email)) : "Неизвестен"
+    return user ? formatUserName(user) : "Неизвестен"
   }
+
+  // Список исполнителей задачи (с обратной совместимостью со старым assignee_id)
+  const getTaskAssigneeIds = (task: any): number[] => {
+    if (Array.isArray(task?.assignee_ids) && task.assignee_ids.length) {
+      return task.assignee_ids.map((id: any) => Number(id))
+    }
+    return task?.assignee_id ? [Number(task.assignee_id)] : []
+  }
+
+  const getAssigneesLabel = (task: any) => {
+    const ids = getTaskAssigneeIds(task)
+    if (!ids.length) return "Не назначен"
+    return ids.map((id) => getUserLabel(id)).join(", ")
+  }
+
+  // Опции исполнителей для селектов
+  const assigneeOptions = users.map((u) => ({
+    value: u.id.toString(),
+    label: formatUserName(u),
+  }))
 
   const getEntityLabel = (entityId: string, entityType: string) => {
     if (entityType === "deal") {
@@ -563,7 +697,7 @@ export default function TasksPage() {
     setFormData({
       title: task.title || "",
       description: task.description || "",
-      assignee_id: task.assignee_id ? Number(task.assignee_id) : undefined,
+      assignee_ids: getTaskAssigneeIds(task),
       priority: task.priority || "normal",
       entity_type: task.entity_type || "",
       entity_id: task.entity_id ? Number(task.entity_id) : undefined,
@@ -584,7 +718,8 @@ export default function TasksPage() {
       const payload = {
         title: formData.title,
         description: formData.description,
-        assignee_id: formData.assignee_id || 0,
+        assignee_id: formData.assignee_ids[0] || 0,
+        assignee_ids: formData.assignee_ids,
         priority: formData.priority,
         entity_type: formData.entity_type,
         entity_id: formData.entity_id || 0,
@@ -995,10 +1130,7 @@ export default function TasksPage() {
                       placeholder="Исполнитель"
                       searchPlaceholder="Поиск пользователя..."
                       emptyText="Пользователь не найден"
-                      options={users.map((user) => ({
-                        value: user.id.toString(),
-                        label: user.full_name || `Пользователь #${user.id}`
-                      }))}
+                      options={assigneeOptions}
                     />
                   </div>
                   <div className="w-full sm:w-48 overflow-visible">
@@ -1008,10 +1140,7 @@ export default function TasksPage() {
                       placeholder="Создатель"
                       searchPlaceholder="Поиск пользователя..."
                       emptyText="Пользователь не найден"
-                      options={users.map((user) => ({
-                        value: user.id.toString(),
-                        label: user.full_name || `Пользователь #${user.id}`
-                      }))}
+                      options={assigneeOptions}
                     />
                   </div>
                   <div className="w-full sm:w-48 overflow-visible">
@@ -1119,7 +1248,7 @@ export default function TasksPage() {
                         </TableCell>
                         <TableCell className="px-4 align-top text-sm">
                           <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
-                            {task.assignee_id ? getUserLabel(task.assignee_id) : "Не назначен"}
+                            {getAssigneesLabel(task)}
                           </div>
                         </TableCell>
                         <TableCell className="px-4 align-top text-sm">
@@ -1284,16 +1413,13 @@ export default function TasksPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Исполнитель</Label>
-              <ComboboxSelect
-                value={formData.assignee_id?.toString() || ""}
-                onChange={(val) => setFormData({ ...formData, assignee_id: val ? Number(val) : undefined })}
-                placeholder="Выберите исполнителя"
+              <Label>Исполнители</Label>
+              <MultiComboboxSelect
+                values={formData.assignee_ids.map((id) => id.toString())}
+                onChange={(vals) => setFormData({ ...formData, assignee_ids: vals.map((v) => Number(v)) })}
+                placeholder="Выберите исполнителей"
                 searchPlaceholder="Поиск сотрудника..."
-                options={users.map((u) => ({
-                  value: u.id.toString(),
-                  label: u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : (u.company_name || u.email),
-                }))}
+                options={assigneeOptions}
               />
             </div>
 
@@ -1398,8 +1524,8 @@ export default function TasksPage() {
                   </div>
                 </div>
                 <div>
-                  <Label className="text-sm text-gray-500">Исполнитель</Label>
-                  <p className="font-medium">{viewTask.assignee_id ? getUserLabel(viewTask.assignee_id) : "Не назначен"}</p>
+                  <Label className="text-sm text-gray-500">Исполнители</Label>
+                  <p className="font-medium">{getAssigneesLabel(viewTask)}</p>
                 </div>
                 <div>
                   <Label className="text-sm text-gray-500">Объект</Label>
@@ -1510,10 +1636,7 @@ export default function TasksPage() {
                 onChange={setAssignUserId}
                 placeholder="Выберите сотрудника"
                 searchPlaceholder="Поиск..."
-                options={users.map((u) => ({
-                  value: u.id.toString(),
-                  label: u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : (u.company_name || u.email),
-                }))}
+                options={assigneeOptions}
               />
             </div>
             <div className="space-y-2">

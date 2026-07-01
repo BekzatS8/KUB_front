@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Phone, PhoneIncoming, PhoneMissed, PhoneOff } from "lucide-react";
-import { getCalls } from "@/src/api/telephony.api";
+import { getCalls, syncCalls } from "@/src/api/telephony.api";
 import type { TelephonyCall, TelephonyCallListFilter, CallStatus } from "@/src/models/telephony.model";
 
 const STATUS_LABELS: Record<CallStatus | string, string> = {
@@ -158,6 +158,8 @@ export default function TelephonyPage() {
   const [statsLoading, setStatsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   const [filter, setFilter] = useState<TelephonyCallListFilter>({
     phone: "",
@@ -206,6 +208,25 @@ export default function TelephonyPage() {
     }
   }, [filter]);
 
+  const handleSync = useCallback(async () => {
+    setSyncing(true);
+    setSyncMsg(null);
+    setError(null);
+    try {
+      const res = await syncCalls();
+      setSyncMsg(`Загружено из Binotel: ${res.processed}`);
+      await Promise.all([load(), loadStats()]);
+    } catch (e: any) {
+      setError(
+        e?.response?.data?.error ??
+          e?.message ??
+          "Не удалось синхронизировать с Binotel",
+      );
+    } finally {
+      setSyncing(false);
+    }
+  }, [load, loadStats]);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -223,6 +244,13 @@ export default function TelephonyPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Телефония</h1>
           <p className="text-sm text-slate-500">История звонков Binotel</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {syncMsg && <span className="text-sm text-slate-500">{syncMsg}</span>}
+          <Button onClick={handleSync} disabled={syncing}>
+            <Phone className="w-4 h-4 mr-2" />
+            {syncing ? "Синхронизация…" : "Обновить из Binotel"}
+          </Button>
         </div>
       </div>
 
