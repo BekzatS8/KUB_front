@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { PaginationControls } from "@/components/ui/pagination-controls"
 import {
@@ -154,6 +154,32 @@ const priorityColors: Record<TaskPriority, string> = {
 
 // ─── Combobox Component ──────────────────────────────────────────
 
+// useWheelScrollRef возвращает callback-ref для скроллируемого контейнера
+// (например, CommandList) внутри поповера, который порталится наружу диалога.
+// Блокировка прокрутки диалога (react-remove-scroll) вешает wheel-обработчик на
+// document и через preventDefault гасит прокрутку внешних элементов, из-за чего
+// список не листается колёсиком. Здесь мы вешаем НЕпассивный нативный обработчик
+// прямо на узел (callback-ref срабатывает ровно когда список смонтирован) и
+// прокручиваем его вручную, гарантированно перекрывая блокировку.
+function useWheelScrollRef() {
+  const cleanupRef = useRef<(() => void) | null>(null)
+  return useCallback((node: HTMLDivElement | null) => {
+    if (cleanupRef.current) {
+      cleanupRef.current()
+      cleanupRef.current = null
+    }
+    if (!node) return
+    const onWheel = (e: WheelEvent) => {
+      if (node.scrollHeight <= node.clientHeight) return
+      e.preventDefault()
+      e.stopPropagation()
+      node.scrollTop += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY
+    }
+    node.addEventListener("wheel", onWheel, { passive: false })
+    cleanupRef.current = () => node.removeEventListener("wheel", onWheel)
+  }, [])
+}
+
 function ComboboxSelect({
   value,
   onChange,
@@ -172,22 +198,7 @@ function ComboboxSelect({
   disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
-  const listRef = useRef<HTMLDivElement>(null)
-
-  // Позволяем прокручивать список колёсиком мыши.
-  // Комбобокс порталится наружу диалога, а его блокировка прокрутки
-  // (react-remove-scroll) вешает wheel-обработчик на document и через
-  // preventDefault гасит прокрутку внешних элементов. Останавливаем
-  // всплытие события нативно (до document), чтобы нативный скролл списка
-  // отработал.
-  useEffect(() => {
-    if (!open) return
-    const el = listRef.current
-    if (!el) return
-    const stopWheel = (e: WheelEvent) => e.stopPropagation()
-    el.addEventListener("wheel", stopWheel)
-    return () => el.removeEventListener("wheel", stopWheel)
-  }, [open])
+  const listRef = useWheelScrollRef()
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -262,17 +273,7 @@ function MultiComboboxSelect({
   disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
-  const listRef = useRef<HTMLDivElement>(null)
-
-  // Прокрутка колёсиком внутри диалога (см. ComboboxSelect).
-  useEffect(() => {
-    if (!open) return
-    const el = listRef.current
-    if (!el) return
-    const stopWheel = (e: WheelEvent) => e.stopPropagation()
-    el.addEventListener("wheel", stopWheel)
-    return () => el.removeEventListener("wheel", stopWheel)
-  }, [open])
+  const listRef = useWheelScrollRef()
 
   const toggle = (val: string) => {
     if (values.includes(val)) {
