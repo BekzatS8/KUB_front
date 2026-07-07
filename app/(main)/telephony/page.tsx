@@ -20,8 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Phone, PhoneIncoming, PhoneMissed, PhoneOff } from "lucide-react";
-import { getCalls, syncCalls } from "@/src/api/telephony.api";
+import { Phone, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing } from "lucide-react";
+import { getCalls, syncCalls, initiateCall } from "@/src/api/telephony.api";
 import type { TelephonyCall, TelephonyCallListFilter, CallStatus } from "@/src/models/telephony.model";
 
 const STATUS_LABELS: Record<CallStatus | string, string> = {
@@ -140,7 +140,7 @@ function TableSkeleton() {
     <TableBody>
       {Array.from({ length: 8 }).map((_, i) => (
         <TableRow key={i}>
-          {Array.from({ length: 9 }).map((_, j) => (
+          {Array.from({ length: 10 }).map((_, j) => (
             <TableCell key={j}>
               <Skeleton className="h-4 w-full" />
             </TableCell>
@@ -160,6 +160,8 @@ export default function TelephonyPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [callingId, setCallingId] = useState<number | null>(null);
+  const [callMsg, setCallMsg] = useState<string | null>(null);
 
   const [filter, setFilter] = useState<TelephonyCallListFilter>({
     phone: "",
@@ -227,6 +229,26 @@ export default function TelephonyPage() {
     }
   }, [load, loadStats]);
 
+  const handleCall = useCallback(async (call: TelephonyCall) => {
+    const phone = call.phone || call.normalized_phone;
+    if (!phone) return;
+    setCallingId(call.id);
+    setCallMsg(null);
+    setError(null);
+    try {
+      await initiateCall(phone);
+      setCallMsg(`Звоним на ${phone}… ответьте на своём телефоне.`);
+    } catch (e: any) {
+      setError(
+        e?.response?.data?.error ??
+          e?.message ??
+          "Не удалось инициировать звонок",
+      );
+    } finally {
+      setCallingId(null);
+    }
+  }, []);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -246,6 +268,7 @@ export default function TelephonyPage() {
           <p className="text-sm text-slate-500">История звонков Binotel</p>
         </div>
         <div className="flex items-center gap-3">
+          {callMsg && <span className="text-sm text-emerald-600">{callMsg}</span>}
           {syncMsg && <span className="text-sm text-slate-500">{syncMsg}</span>}
           <Button onClick={handleSync} disabled={syncing}>
             <Phone className="w-4 h-4 mr-2" />
@@ -370,6 +393,7 @@ export default function TelephonyPage() {
                 <TableHead>Менеджер</TableHead>
                 <TableHead>Длительность</TableHead>
                 <TableHead>Запись</TableHead>
+                <TableHead className="text-right">Действия</TableHead>
               </TableRow>
             </TableHeader>
             {loading ? (
@@ -379,7 +403,7 @@ export default function TelephonyPage() {
                 {calls.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={9}
+                      colSpan={10}
                       className="py-12 text-center text-slate-400"
                     >
                       <PhoneOff className="w-8 h-8 mx-auto mb-2 opacity-40" />
@@ -411,6 +435,13 @@ export default function TelephonyPage() {
                         >
                           {call.client_name ?? `#${call.client_id}`}
                         </Link>
+                      ) : call.binotel_customer_name ? (
+                        <span
+                          className="text-slate-700"
+                          title="Имя из адресной книги Binotel"
+                        >
+                          {call.binotel_customer_name}
+                        </span>
                       ) : (
                         "—"
                       )}
@@ -446,6 +477,21 @@ export default function TelephonyPage() {
                       ) : (
                         "—"
                       )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={
+                          callingId === call.id ||
+                          !(call.phone || call.normalized_phone)
+                        }
+                        onClick={() => handleCall(call)}
+                        title="Позвонить на этот номер через Binotel"
+                      >
+                        <PhoneOutgoing className="w-4 h-4 mr-1" />
+                        {callingId === call.id ? "Звоним…" : "Позвонить"}
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

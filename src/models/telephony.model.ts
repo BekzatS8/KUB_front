@@ -28,6 +28,8 @@ export interface TelephonyCall {
   recording_url?: string;
   created_at: string;
   updated_at: string;
+  // имя из адресной книги Binotel (customerData.name)
+  binotel_customer_name?: string;
   // joined fields (from API response)
   client_name?: string;
   lead_title?: string;
