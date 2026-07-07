@@ -77,6 +77,7 @@ const EMPTY_USER: Models.CreateUserRequest = {
   email: "",
   password: "",
   phone: "",
+  internal_phone: "",
   iin: "",
   address: "",
   extra_info: "",
@@ -206,7 +207,7 @@ function ComboboxSelect({
 
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked" | "deleted">("all");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [userFormData, setUserFormData] = useState<
     Models.CreateUserRequest | Models.UpdateUserRequest
@@ -220,6 +221,10 @@ export default function UsersPage() {
 
   const [users, setUsers] = useState<Models.User[]>([]);
   const [stats, setStats] = useState({ total: 0, admin: 0, manager: 0, user: 0 });
+  // счётчики по всем ролям для компактных кликабельных плиток (ТЗ п.7.3)
+  const [roleCounts, setRoleCounts] = useState<Record<number, number>>({});
+  const [roleFilter, setRoleFilter] = useState<number | null>(null);
+  const [branchViewFilter, setBranchViewFilter] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -251,25 +256,35 @@ export default function UsersPage() {
     setIsLoading(true);
     setError("");
     try {
-      const usersResponse = await UserAPI.listUsers(currentPage, limit);
+      // сервер отдаёт активных по умолчанию; заблокированные/удалённые
+      // приходят только по явному статусу (ТЗ п.7.2)
+      const usersResponse = await UserAPI.listUsers(currentPage, limit, statusFilter);
       const usersData = Array.isArray(usersResponse) ? usersResponse : (usersResponse as any).data || [];
       const totalFromResponse = (usersResponse as any).total;
       setUsers(usersData);
 
       // Stats fetched independently — 403 on any stat does not break the user list
-      const [totalResult, adminResult, managerResult, userResult] = await Promise.allSettled([
+      const statRoles = [
+        Roles.SYSTEM_ADMIN, Roles.MANAGEMENT, Roles.SALES, Roles.VISA,
+        Roles.PARTNER, Roles.HR, Roles.LEGAL, Roles.QUALITY_CONTROL,
+      ];
+      const [totalResult, ...roleResults] = await Promise.allSettled([
         UserAPI.getUsersCount(),
-        UserAPI.getUsersCountByRole(Roles.SYSTEM_ADMIN),
-        UserAPI.getUsersCountByRole(Roles.MANAGEMENT),
-        UserAPI.getUsersCountByRole(Roles.SALES),
+        ...statRoles.map((r) => UserAPI.getUsersCountByRole(r)),
       ]);
 
+      const counts: Record<number, number> = {};
+      statRoles.forEach((r, i) => {
+        const res = roleResults[i];
+        counts[r] = res.status === "fulfilled" ? (res.value as any).count : 0;
+      });
+      setRoleCounts(counts);
       setStats({
         total: totalFromResponse ??
-          (totalResult.status === "fulfilled" ? totalResult.value.count : usersData.length),
-        admin: adminResult.status === "fulfilled" ? adminResult.value.count : 0,
-        manager: managerResult.status === "fulfilled" ? managerResult.value.count : 0,
-        user: userResult.status === "fulfilled" ? userResult.value.count : 0,
+          (totalResult.status === "fulfilled" ? (totalResult.value as any).count : usersData.length),
+        admin: counts[Roles.SYSTEM_ADMIN] || 0,
+        manager: counts[Roles.MANAGEMENT] || 0,
+        user: counts[Roles.SALES] || 0,
       });
     } catch (err: any) {
       const errorMessage = err?.message || "Ошибка при загрузке пользователей";
@@ -286,7 +301,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     void fetchUsersAndStats();
-  }, [currentPage]);
+  }, [currentPage, statusFilter]);
 
   useEffect(() => {
     getMyPermissions()
@@ -379,6 +394,7 @@ export default function UsersPage() {
       middle_name: user.middle_name,
       email: user.email,
       phone: user.phone,
+      internal_phone: (user as any).internal_phone || "",
       iin: user.iin || user.bin_iin || "",
       address: user.address || "",
       extra_info: user.extra_info || "",
@@ -505,6 +521,7 @@ export default function UsersPage() {
         middle_name: middleName,
         email,
         phone,
+        internal_phone: String((userFormData as any).internal_phone || "").trim(),
         iin,
         bin_iin: iin,
         address,
@@ -563,6 +580,10 @@ export default function UsersPage() {
   const filteredUsers = users.filter((user) => {
     if (statusFilter === "active" && !user.is_active) return false;
     if (statusFilter === "blocked" && user.is_active) return false;
+    // для "deleted" сервер уже вернул только удалённых
+    // фильтры по роли (клик по плитке) и филиалу (ТЗ п.7.3)
+    if (roleFilter !== null && user.role?.id !== roleFilter) return false;
+    if (branchViewFilter && String(user.branch?.id || "") !== branchViewFilter) return false;
 
     const query = searchTerm.trim().toLowerCase();
     if (!query) return true;
@@ -606,35 +627,57 @@ export default function UsersPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 px-2">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Всего</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{stats.total}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Администраторы</CardTitle>
-            <Shield className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{stats.admin}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Менеджеры</CardTitle>
-            <UserCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{stats.manager}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Пользователи</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{stats.user}</div></CardContent>
-        </Card>
+      {/* Компактные кликабельные плитки по ролям (ТЗ п.7.3): клик — фильтр списка */}
+      <div className="flex flex-wrap gap-2 mb-4 px-2">
+        <button
+          type="button"
+          onClick={() => setRoleFilter(null)}
+          className={cn(
+            "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors",
+            roleFilter === null ? "border-blue-600 bg-blue-50 text-blue-700" : "bg-white hover:bg-slate-50"
+          )}
+        >
+          <Users className="h-4 w-4" />
+          Всего
+          <span className="font-bold">{stats.total}</span>
+        </button>
+        {[
+          { id: Roles.SYSTEM_ADMIN, label: "Администраторы" },
+          { id: Roles.MANAGEMENT, label: "Руководство" },
+          { id: Roles.SALES, label: "Менеджеры (МОП)" },
+          { id: Roles.VISA, label: "Визовый отдел" },
+          { id: Roles.PARTNER, label: "Партнёрский" },
+          { id: Roles.HR, label: "Отдел кадров" },
+          { id: Roles.LEGAL, label: "Юристы" },
+          { id: Roles.QUALITY_CONTROL, label: "Контроль качества" },
+        ].map((r) => (
+          <button
+            key={r.id}
+            type="button"
+            onClick={() => setRoleFilter(roleFilter === r.id ? null : r.id)}
+            title={`Показать: ${r.label}`}
+            className={cn(
+              "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors",
+              roleFilter === r.id ? "border-blue-600 bg-blue-50 text-blue-700" : "bg-white hover:bg-slate-50"
+            )}
+          >
+            {r.label}
+            <span className="font-bold">{roleCounts[r.id] ?? 0}</span>
+          </button>
+        ))}
+        {availableBranches.length > 0 && (
+          <select
+            value={branchViewFilter}
+            onChange={(e) => setBranchViewFilter(e.target.value)}
+            className="ml-auto rounded-lg border bg-white px-3 py-1.5 text-sm"
+            title="Фильтр по филиалу"
+          >
+            <option value="">Все филиалы</option>
+            {availableBranches.map((b) => (
+              <option key={b.id} value={String(b.id)}>{b.name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       <Card>
@@ -648,7 +691,7 @@ export default function UsersPage() {
             </div>
             <div className="flex items-center gap-3">
               <div className="flex rounded-md border overflow-hidden">
-                {(["all", "active", "blocked"] as const).map((f) => (
+                {(["all", "active", "blocked", "deleted"] as const).map((f) => (
                   <button
                     key={f}
                     type="button"
@@ -660,7 +703,13 @@ export default function UsersPage() {
                         : "bg-background text-muted-foreground hover:bg-muted"
                     )}
                   >
-                    {f === "all" ? "Все" : f === "active" ? "Активные" : "Заблокированные"}
+                    {f === "all"
+                      ? "Все"
+                      : f === "active"
+                        ? "Активные"
+                        : f === "blocked"
+                          ? "Заблокированные"
+                          : "Удалённые"}
                   </button>
                 ))}
               </div>
@@ -894,6 +943,18 @@ export default function UsersPage() {
                   onChange={handleFormChange}
                 />
                 <p className="text-xs text-muted-foreground">Формат: +77001234567</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="internal_phone">Внутренний номер (Binotel)</Label>
+                <Input
+                  id="internal_phone"
+                  placeholder="Например: 113"
+                  value={(userFormData as any).internal_phone || ""}
+                  onChange={handleFormChange}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Внутренний номер сотрудника в Binotel — по нему звонки привязываются к менеджеру
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="role_id">Роль *</Label>

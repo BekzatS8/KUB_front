@@ -57,6 +57,8 @@ export interface CreateUserRequest {
   email: string;
   password?: string;
   phone?: string;
+  /** внутренний номер Binotel — привязка звонков к менеджеру (ТЗ п.5.2) */
+  internal_phone?: string;
   iin?: string;
   address?: string;
   extra_info?: string;
@@ -74,6 +76,7 @@ export interface CreateUserRequest {
 }
 
 export interface UpdateUserRequest {
+  internal_phone?: string;
   first_name?: string;
   last_name?: string;
   middle_name?: string;

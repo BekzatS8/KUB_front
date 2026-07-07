@@ -43,7 +43,8 @@ export interface Document {
 }
 
 export type Documents_UploadWithMeta_Request = {
-  scope: 'hr' | 'legal';
+  // scope отдела (ТЗ п.2.1): каждый отдел загружает документы в свой scope
+  scope: 'hr' | 'legal' | 'sales' | 'visa' | 'partner' | 'quality_control' | 'management';
   title: string;
   description?: string;
   target_user_id?: number;

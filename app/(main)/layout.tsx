@@ -1,6 +1,7 @@
 "use client";
 
 import { RoleBasedSidebar } from "@/components/role-based-sidebar";
+import { TaskNotifications } from "@/components/task-notifications";
 
 export default function MainLayout({
   children,
@@ -15,6 +16,8 @@ export default function MainLayout({
           <div className="p-6 min-h-full">{children}</div>
         </main>
       </div>
+      {/* Назойливые напоминания о задачах (ТЗ п.4.1) */}
+      <TaskNotifications />
     </div>
   );
 }

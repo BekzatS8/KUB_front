@@ -808,9 +808,10 @@ export default function DealsPage() {
       client_type: deal.client_type || getClientType(dealClient) || "individual",
       owner_id: deal.owner_id || (user?.id ? parseInt(user.id) : 0),
       amount: Number(deal.amount) || 0,
+      prepayment: Number(deal.prepayment) || 0,
       currency: deal.currency || "KZT",
       status: deal.status || "new",
-    });
+    } as any);
     setIsEditDialogOpen(true);
   };
 
@@ -947,6 +948,7 @@ export default function DealsPage() {
       owner_id: newDeal.owner_id ? Number(newDeal.owner_id) : undefined,
       funnel_id: newDeal.funnel_id ? Number(newDeal.funnel_id) : undefined,
       amount: Number(newDeal.amount),
+      prepayment: Number((newDeal as any).prepayment || 0),
       currency: newDeal.currency || "KZT",
       status: newDeal.status || "new",
     };
@@ -984,6 +986,7 @@ export default function DealsPage() {
       client_type: editDeal.client_type || "individual",
       owner_id: editDeal.owner_id ? Number(editDeal.owner_id) : undefined,
       amount: Number(editDeal.amount),
+      prepayment: Number((editDeal as any).prepayment || 0),
       currency: editDeal.currency || "KZT",
       status: editDeal.status || "new",
     };
@@ -1309,6 +1312,37 @@ export default function DealsPage() {
               </Button>
             </div>
           )}
+          {/* Быстрые списки: Отказники — повторная обработка отказов;
+              Архив — завершённые «Работа выполнена» (ТЗ п.1.5) */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={() => {
+              setViewMode("table");
+              setArchiveFilter("active");
+              setStatusFilter("all");
+              setStatusGroupFilter("closed");
+            }}
+          >
+            Отказники
+          </Button>
+          {isElevatedRole() && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => {
+                setViewMode("table");
+                setStatusFilter("all");
+                setStatusGroupFilter("all");
+                setArchiveFilter("archived");
+              }}
+            >
+              <Archive className="h-4 w-4 mr-1.5" />
+              Архив
+            </Button>
+          )}
           <Button
             variant="outline"
             size="icon"
@@ -1388,53 +1422,52 @@ export default function DealsPage() {
         </Card>
       </div>
 
-      {/* Kanban view */}
+      {/* Kanban view: все доступные воронки вертикальным списком (ТЗ п.1.3) */}
       {viewMode === "kanban" && canViewFunnels && (
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <CardTitle>Воронка продаж</CardTitle>
-                <CardDescription>Перетащите карточку, чтобы изменить этап сделки</CardDescription>
-              </div>
-              {funnels.length > 1 && (
-                <div className="w-full sm:w-64">
-                  <CustomSelect
-                    value={selectedFunnelId ? String(selectedFunnelId) : ""}
-                    onChange={(value) => setSelectedFunnelId(Number(value))}
-                    placeholder="Выберите воронку"
-                    className="w-full"
-                    options={funnels.map((f) => ({ value: String(f.id), label: f.name }))}
-                  />
-                </div>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {selectedFunnelId ? (
-              <KanbanBoard
-                funnelId={selectedFunnelId}
-                canMove={canWrite}
-                onDealClick={(deal: FunnelBoardDeal) => openViewDialog(deal)}
-                refreshKey={kanbanRefreshKey}
-                canWrite={canWrite}
-                isSales={isSales}
-                isAdmin={isAdmin}
-                onEdit={(deal: FunnelBoardDeal) => openEditDialog(deal)}
-                onArchive={(deal: FunnelBoardDeal) => {
-                  setDealToArchive(deal);
-                  setIsArchiveDialogOpen(true);
-                }}
-                onDelete={(deal: FunnelBoardDeal) => {
-                  setDealToDelete(deal);
-                  setIsDeleteDialogOpen(true);
-                }}
-              />
-            ) : (
+        funnels.length > 0 ? (
+          funnels.map((funnel) => (
+            <Card key={funnel.id} className="mb-6">
+              <CardHeader>
+                <CardTitle>{funnel.name}</CardTitle>
+                <CardDescription>
+                  Перетащите карточку, чтобы изменить этап
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <KanbanBoard
+                  funnelId={funnel.id}
+                  canMove={canWrite}
+                  onDealClick={(deal: FunnelBoardDeal) => {
+                    if (deal.kind === "lead") {
+                      router.push(`/leads/${deal.id}`);
+                    } else {
+                      openViewDialog(deal);
+                    }
+                  }}
+                  refreshKey={kanbanRefreshKey}
+                  canWrite={canWrite}
+                  isSales={isSales}
+                  isAdmin={isAdmin}
+                  onEdit={(deal: FunnelBoardDeal) => openEditDialog(deal)}
+                  onArchive={(deal: FunnelBoardDeal) => {
+                    setDealToArchive(deal);
+                    setIsArchiveDialogOpen(true);
+                  }}
+                  onDelete={(deal: FunnelBoardDeal) => {
+                    setDealToDelete(deal);
+                    setIsDeleteDialogOpen(true);
+                  }}
+                />
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <Card className="mb-6">
+            <CardContent className="py-8">
               <p className="text-sm text-gray-500">Нет доступных воронок</p>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )
       )}
 
       {/* Filters */}
@@ -1492,6 +1525,7 @@ export default function DealsPage() {
                   <ArchiveFilter
                     value={archiveFilter}
                     onChange={setArchiveFilter}
+                    showTrash={isAdmin}
                   />
                 </div>
                 <div className="w-full sm:w-48 overflow-visible">
@@ -1719,6 +1753,28 @@ export default function DealsPage() {
                                 <RefreshCw className="h-4 w-4" />
                               </Button>
                             )}
+                            {/* Восстановление из корзины (ТЗ п.7.1) */}
+                            {isAdmin && archiveFilter === "deleted" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                onClick={async () => {
+                                  try {
+                                    const { restore_deal } = await import("@/src/api/deals.api");
+                                    await restore_deal(undefined, { id: deal.id });
+                                    toast.success("Сделка восстановлена из корзины");
+                                    fetchDeals();
+                                  } catch (err: any) {
+                                    toast.error(err?.message || "Не удалось восстановить сделку");
+                                  }
+                                }}
+                                title="Восстановить из корзины"
+                              >
+                                <ArchiveRestore className="h-4 w-4 mr-1" />
+                                <span className="hidden sm:inline text-xs">Восстановить</span>
+                              </Button>
+                            )}
                             {canWrite && !isSales && (isArchived ? (
                               <Button
                                 variant="ghost"
@@ -1918,6 +1974,26 @@ export default function DealsPage() {
               />
             </div>
 
+            {/* Первоначальный взнос и остаток (ТЗ п.2.5) */}
+            <div className="space-y-2">
+              <Label htmlFor="prepayment">Первоначальный взнос</Label>
+              <Input
+                id="prepayment"
+                type="number"
+                placeholder="0"
+                value={(newDeal as any).prepayment ?? ""}
+                onChange={(e) =>
+                  setNewDeal({ ...newDeal, prepayment: Number(e.target.value) } as any)
+                }
+              />
+              {Number(newDeal.amount) > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Остаток:{" "}
+                  {Math.max(0, Number(newDeal.amount) - Number((newDeal as any).prepayment || 0)).toLocaleString("ru-RU")}
+                </p>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="currency">Валюта *</Label>
               <CustomSelect
@@ -2058,6 +2134,26 @@ export default function DealsPage() {
                   setEditDeal({ ...editDeal, amount: Number(e.target.value) })
                 }
               />
+            </div>
+
+            {/* Первоначальный взнос и остаток (ТЗ п.2.5) */}
+            <div className="space-y-2">
+              <Label htmlFor="edit_prepayment">Первоначальный взнос</Label>
+              <Input
+                id="edit_prepayment"
+                type="number"
+                placeholder="0"
+                value={(editDeal as any).prepayment ?? ""}
+                onChange={(e) =>
+                  setEditDeal({ ...editDeal, prepayment: Number(e.target.value) } as any)
+                }
+              />
+              {Number(editDeal.amount) > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Остаток:{" "}
+                  {Math.max(0, Number(editDeal.amount) - Number((editDeal as any).prepayment || 0)).toLocaleString("ru-RU")}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

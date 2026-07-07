@@ -247,3 +247,15 @@ export async function uploadDocumentWithMeta(payload: Models.Documents_UploadWit
   })
   return res.data
 }
+
+// Корзина (ТЗ п.7.1)
+export async function restoreDocument(id: number): Promise<any> {
+  const res = await api.post(`/documents/${id}/restore`)
+  return res.data
+}
+
+// Список доступных шаблонов документов (ТЗ п.2.4)
+export async function listDocumentTypes(): Promise<Array<{ doc_type: string; title_ru: string; format?: string }>> {
+  const res = await api.get('/documents/types')
+  return res.data
+}

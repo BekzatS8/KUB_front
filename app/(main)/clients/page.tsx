@@ -1502,6 +1502,21 @@ export default function ClientsPage() {
           </div>
       </div>
 
+      {/* Поиск по базе клиентов — всегда на виду (ТЗ 04.07.2026, п.8.1) */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Поиск: фамилия, имя, телефон, ИИН/БИН, страна оформления..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       <CollapsibleFilter defaultOpen={false}>
         <Card className="overflow-visible">
           <CardContent className="p-4 overflow-visible">
@@ -1533,6 +1548,7 @@ export default function ClientsPage() {
                   <ArchiveFilter
                     value={archiveFilter}
                     onChange={setArchiveFilter}
+                    showTrash={isAdmin}
                   />
                 </div>
                 <div className="w-48 overflow-visible">
@@ -1632,9 +1648,8 @@ export default function ClientsPage() {
                 <TableRow>
                   <TableHead className="px-4">ID</TableHead>
                   <TableHead className="px-4">ФИО</TableHead>
-                  <TableHead className="px-4">Тип</TableHead>
+                  <TableHead className="px-2 w-16">Тип</TableHead>
                   <TableHead className="px-4">БИН/ИИН</TableHead>
-                  <TableHead className="px-4">Контакт</TableHead>
                   <TableHead className="px-4">Телефон</TableHead>
                   <TableHead className="px-4 text-right">Действия</TableHead>
                 </TableRow>
@@ -1642,13 +1657,13 @@ export default function ClientsPage() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       <Spinner />
                     </TableCell>
                   </TableRow>
                 ) : (!clients || clients.length === 0) ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       Клиенты не найдены.
                     </TableCell>
                   </TableRow>
@@ -1675,10 +1690,14 @@ export default function ClientsPage() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="px-4 align-top">
+                        <TableCell className="px-2 align-top">
+                          {/* компактные ФЛ/ЮЛ вместо длинных подписей (ТЗ п.8.2) */}
                           <div className="flex flex-col items-start gap-1">
-                            <Badge variant={client.client_type === "legal" ? "default" : "secondary"}>
-                              {client.client_type === "legal" ? "Юридическое лицо" : "Физическое лицо"}
+                            <Badge
+                              variant={client.client_type === "legal" ? "default" : "secondary"}
+                              title={client.client_type === "legal" ? "Юридическое лицо" : "Физическое лицо"}
+                            >
+                              {client.client_type === "legal" ? "ЮЛ" : "ФЛ"}
                             </Badge>
                             {isArchived && (
                               <Badge className="bg-gray-100 text-gray-800 text-xs">Архив</Badge>
@@ -1686,11 +1705,6 @@ export default function ClientsPage() {
                           </div>
                         </TableCell>
                         <TableCell className="px-4 align-top break-words">{client.bin_iin || client.iin || '-'}</TableCell>
-                        <TableCell className="px-4 align-top">
-                          <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
-                            {client.client_type === "legal" ? (client.contact_info || '-') : (client.email || '-')}
-                          </div>
-                        </TableCell>
                         <TableCell className="px-4 align-top break-words">{client.phone || '-'}</TableCell>
                         <TableCell className="px-4 align-top text-right">
                           <div className="flex flex-wrap items-center justify-end gap-1">
@@ -1716,6 +1730,26 @@ export default function ClientsPage() {
                               </Button>
                             )}
 
+                            {/* Восстановление из корзины (ТЗ п.7.1) */}
+                            {isAdmin && archiveFilter === "deleted" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                title="Восстановить из корзины"
+                                onClick={async () => {
+                                  try {
+                                    await ClientAPI.restoreClient(client.id);
+                                    toast({ title: "Клиент восстановлен из корзины" });
+                                    handleRefresh();
+                                  } catch (err: any) {
+                                    toast({ variant: "destructive", title: "Ошибка", description: err?.message || "Не удалось восстановить клиента" });
+                                  }
+                                }}
+                              >
+                                <ArchiveRestore className="h-4 w-4" />
+                              </Button>
+                            )}
                             {canEdit && !isSales && !isPartner && (isArchived ? (
                               <Button
                                 variant="ghost"

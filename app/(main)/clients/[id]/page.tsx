@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import {
   ArrowLeft, User, FileText, Phone, Activity, Building2, MapPin,
   CreditCard, Briefcase, Heart,
-  Edit, MoreHorizontal, Eye,
+  Edit, MoreHorizontal, Eye, Send,
   Download, RefreshCw, Upload, AlertCircle, History, RotateCcw, Camera, X,
   Search, PlayCircle, TrendingUp, PhoneCall,
 } from "lucide-react"
@@ -27,6 +27,7 @@ import { useToast } from "@/components/ui/use-toast"
 
 import * as ClientAPI from "@/src/api/clients.api"
 import { getClientCalls, initiateCall } from "@/src/api/telephony.api"
+import { sendWazzupMessage } from "@/src/api/integrations_wazzup.api"
 import * as DocAPI from "@/src/api/documents.api"
 import { list_deals } from "@/src/api/deals.api"
 import type { Deal } from "@/src/models/deals.model"
@@ -568,6 +569,92 @@ function DocumentsSection({ client }: { client: Client }) {
     setIsPdfViewerOpen(true)
   }
 
+  // Отправка документа клиенту в WhatsApp (ТЗ п.2.3): генерируем публичную
+  // ссылку и шлём её в чат клиента через Wazzup
+  const handleSendToWhatsApp = async (doc: Document) => {
+    const phone = (client.phone || (client as any).primary_phone || "").replace(/\D/g, "")
+    if (!phone) {
+      toast({ variant: "destructive", title: "У клиента не указан телефон" })
+      return
+    }
+    try {
+      const { url } = await DocAPI.generateSignLink(doc.id)
+      const title = (doc as any).title || DOC_TYPE_LABELS[doc.doc_type] || doc.doc_type || `Документ #${doc.id}`
+      await sendWazzupMessage(phone, `Здравствуйте! Направляем вам документ «${title}»: ${url}`)
+      toast({ title: "Документ отправлен клиенту в WhatsApp" })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Не удалось отправить",
+        description: err?.response?.data?.error || err?.message || "Проверьте интеграцию WhatsApp и статус документа",
+      })
+    }
+  }
+
+  // ── Массовое формирование документов из шаблонов (ТЗ п.2.4) ──
+  // Менеджер отмечает галочками нужные шаблоны (договор 50/50, анкета,
+  // заявления...), документы формируются автоматически с данными клиента.
+  const [isGenerateOpen, setIsGenerateOpen] = useState(false)
+  const [docTypes, setDocTypes] = useState<Array<{ doc_type: string; title_ru: string }>>([])
+  const [docTypesLoading, setDocTypesLoading] = useState(false)
+  const [selectedTypes, setSelectedTypes] = useState<Record<string, boolean>>({})
+  const [generating, setGenerating] = useState(false)
+
+  const openGenerateDialog = async () => {
+    setIsGenerateOpen(true)
+    if (docTypes.length === 0) {
+      setDocTypesLoading(true)
+      try {
+        const types = await DocAPI.listDocumentTypes()
+        setDocTypes(Array.isArray(types) ? types : [])
+      } catch {
+        toast({ title: "Ошибка", description: "Не удалось загрузить список шаблонов", variant: "destructive" })
+      } finally {
+        setDocTypesLoading(false)
+      }
+    }
+  }
+
+  const handleGenerateSelected = async () => {
+    const chosen = Object.keys(selectedTypes).filter((k) => selectedTypes[k])
+    if (chosen.length === 0) {
+      toast({ title: "Выберите хотя бы один шаблон" })
+      return
+    }
+    setGenerating(true)
+    let ok = 0
+    const failed: string[] = []
+    for (const docType of chosen) {
+      try {
+        await DocAPI.createDocumentFromClient({
+          client_id: client.id,
+          client_type: (client.client_type as any) || "individual",
+          deal_id: 0, // сервер возьмёт последнюю сделку клиента
+          doc_type: docType,
+          extra: {},
+        } as any)
+        ok++
+      } catch {
+        const spec = docTypes.find((t) => t.doc_type === docType)
+        failed.push(spec?.title_ru || docType)
+      }
+    }
+    setGenerating(false)
+    if (ok > 0) {
+      toast({ title: `Сформировано документов: ${ok}` })
+      setSelectedTypes({})
+      setIsGenerateOpen(false)
+      loadDocs()
+    }
+    if (failed.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Не удалось сформировать",
+        description: `${failed.join(", ")}. Проверьте, что у клиента заполнены обязательные поля и есть сделка.`,
+      })
+    }
+  }
+
   const handleDownloadDocument = async (doc: Document, format: "pdf" | "docx") => {
     try {
       const blob = await DocAPI.downloadDocument(doc.id, format)
@@ -618,10 +705,69 @@ function DocumentsSection({ client }: { client: Client }) {
         <Button variant="outline" size="sm" onClick={loadDocs}>
           <RefreshCw className="w-4 h-4" />
         </Button>
+        <Button size="sm" onClick={openGenerateDialog}>
+          <FileText className="w-4 h-4 mr-1.5" />
+          Сформировать документы
+        </Button>
         <span className="text-sm text-muted-foreground ml-auto">
           {total} {total === 1 ? "документ" : total < 5 ? "документа" : "документов"}
         </span>
       </div>
+
+      {/* Диалог массового формирования документов (ТЗ п.2.4) */}
+      <Dialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Сформировать документы</DialogTitle>
+            <DialogDescription>
+              Отметьте шаблоны — документы сформируются автоматически с данными клиента.
+              Позже можно вернуться и добавить ещё (заявления, соглашения и т.д.).
+            </DialogDescription>
+          </DialogHeader>
+          {docTypesLoading ? (
+            <div className="py-6 text-center">
+              <RefreshCw className="w-5 h-5 animate-spin mx-auto text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="max-h-80 space-y-1 overflow-y-auto">
+              {docTypes.map((t) => (
+                <label
+                  key={t.doc_type}
+                  className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-slate-50"
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={!!selectedTypes[t.doc_type]}
+                    onChange={(e) =>
+                      setSelectedTypes((prev) => ({ ...prev, [t.doc_type]: e.target.checked }))
+                    }
+                  />
+                  <span className="text-sm">{t.title_ru || t.doc_type}</span>
+                </label>
+              ))}
+              {docTypes.length === 0 && (
+                <p className="py-4 text-center text-sm text-muted-foreground">Шаблоны не найдены</p>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setIsGenerateOpen(false)} disabled={generating}>
+              Отмена
+            </Button>
+            <Button onClick={handleGenerateSelected} disabled={generating || docTypesLoading}>
+              {generating ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Формирование...
+                </>
+              ) : (
+                "Сформировать"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Document list */}
       {loading ? (
@@ -685,6 +831,10 @@ function DocumentsSection({ client }: { client: Client }) {
                     </DropdownMenuSub>
                     <DropdownMenuItem onClick={() => loadVersions(doc)}>
                       <History className="w-4 h-4 mr-2" /> История версий
+                    </DropdownMenuItem>
+                    {/* Отправка клиенту в WhatsApp (ТЗ п.2.3) */}
+                    <DropdownMenuItem onClick={() => handleSendToWhatsApp(doc)}>
+                      <Send className="w-4 h-4 mr-2" /> Отправить в WhatsApp
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

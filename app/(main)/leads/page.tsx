@@ -952,6 +952,7 @@ export default function LeadsPage() {
                   <ArchiveFilter
                     value={archiveFilter}
                     onChange={setArchiveFilter}
+                    showTrash={isAdmin}
                   />
                 </div>
                 <div className="w-full sm:w-48 overflow-visible">
@@ -1090,6 +1091,27 @@ export default function LeadsPage() {
                                 title="Конвертировать"
                               >
                                 <ChevronsRight className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {/* Восстановление из корзины (ТЗ п.7.1) */}
+                            {isAdmin && archiveFilter === "deleted" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                title="Восстановить из корзины"
+                                onClick={async () => {
+                                  try {
+                                    const { restore_lead } = await import("@/src/api/leads.api");
+                                    await restore_lead(undefined, { id: lead.id });
+                                    toast.success("Лид восстановлен из корзины");
+                                    fetchLeads();
+                                  } catch (err: any) {
+                                    toast.error(err?.message || "Не удалось восстановить лид");
+                                  }
+                                }}
+                              >
+                                <ArchiveRestore className="h-4 w-4" />
                               </Button>
                             )}
                             {canWrite && !isSales && !isPartner && (isArchived ? (

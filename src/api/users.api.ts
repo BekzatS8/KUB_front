@@ -44,10 +44,12 @@ export async function getUsersCountByRole(roleId: number): Promise<Models.UserCo
   return res.data;
 }
 
-export async function listUsers(page?: number, limit?: number): Promise<Models.User[] | { data: Models.User[], total: number }> {
+export async function listUsers(page?: number, limit?: number, status?: string): Promise<Models.User[] | { data: Models.User[], total: number }> {
   const params: any = {};
   if (page) params.page = page;
   if (limit) params.limit = limit;
+  // active (по умолчанию) / blocked / deleted / all — ТЗ п.7.2
+  if (status) params.status = status;
   const res = await api.get('/users', { params });
   return res.data;
 }

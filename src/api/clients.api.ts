@@ -388,3 +388,9 @@ export async function createClientDocument(clientId: string, payload: { deal_id?
     throw new Error(extractClientErrorMessage(error, 'Не удалось создать документ.'))
   }
 }
+
+// Корзина (ТЗ п.7.1)
+export async function restoreClient(id: string | number): Promise<any> {
+  const res = await api.post(`/clients/${id}/restore`)
+  return res.data
+}

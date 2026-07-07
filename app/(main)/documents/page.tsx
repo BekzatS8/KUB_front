@@ -427,11 +427,23 @@ export default function DocumentsPage() {
     // ОКК (отдел контроля качества): создание документа уходит на одобрение
     // администратору через Ленту (feed_events), а не напрямую.
     const isQC = roleCode === 'quality_control'
-    const canUploadOwn = isHR || isLegal
+    // Загрузка своих документов/отчётов доступна каждому отделу в свой scope
+    // (ТЗ п.2.1/3); у КК создание уходит на одобрение через Ленту
+    const canUploadOwn = ['hr', 'legal', 'sales', 'visa', 'partner', 'management', 'system_admin'].includes(roleCode || '')
 
     // Map department query param to document scope filter (admin viewing dept groups)
+    // Все отделы имеют свой scope (ТЗ п.2.1/2.2) — раньше маппились только
+    // hr/legal, из-за чего пункты «Документы» других отделов не переключались.
     const departmentParam = searchParams.get('department')
-    const departmentScopeMap: Record<string, string> = { hr: 'hr', legal: 'legal' }
+    const departmentScopeMap: Record<string, string> = {
+        hr: 'hr',
+        legal: 'legal',
+        sales: 'sales',
+        visa: 'visa',
+        partner: 'partner',
+        quality_control: 'quality_control',
+        management: 'management',
+    }
     const departmentScope = departmentParam ? (departmentScopeMap[departmentParam] ?? null) : null
 
     // Role-based fallback when permissions API hasn't loaded yet
@@ -623,118 +635,31 @@ export default function DocumentsPage() {
     const fetchDocuments = async () => {
         setLoading(true)
         try {
-            const userRole = getRoleCode(user);
-            const isSales = userRole === 'sales';
+            // Все роли используют общий эндпоинт: бэкенд сам изолирует документы
+            // по отделам (sales видит scope 'sales'+'deal' и т.д., ТЗ п.2.1/2.2)
+            const params: any = { page: currentPage, size: size }
+            if (searchTerm) params.q = searchTerm
+            if (statusFilter) params.status = statusFilter
+            if (docTypeFilter) params.doc_type = docTypeFilter
+            if (dealIdFilter) params.deal_id = dealIdFilter
+            if (clientIdFilter) params.client_id = clientIdFilter
+            if (clientTypeFilter) params.client_type = clientTypeFilter
+            if (archiveFilter !== "active") params.archive = archiveFilter
+            params.sort_by = sortBy
+            params.order = sortOrder
+            // When admin opens a department group (e.g. ?department=hr), scope-filter to that dept
+            if (departmentScope) params.scope = departmentScope
+            // Legal "Документы юристов" mode: show only docs created by legal staff
+            if (isLegal && legalOnlyMode) params.creator_role_id = 90
 
-            // Sales users can only access documents via deal endpoint
-            if (isSales) {
-                if (selectedDealId) {
-                    // Fetch documents for the selected deal
-                    const params: any = { page: currentPage, size: size }
-                    if (searchTerm) params.q = searchTerm
+            const res = await getDocuments(params)
+            let data = extractList<any>(res)
+            let total = getTotalFromResponse(res, data.length)
+            const totalPagesFromBackend = getTotalPagesFromResponse(res, total, size)
 
-                    const res = await getDocumentsByDeal(selectedDealId, params)
-                    let data = extractList<any>(res)
-                    const total = getTotalFromResponse(res, data.length)
-                    const totalPagesFromBackend = getTotalPagesFromResponse(res, total, size)
-
-                    // Client-side filtering as fallback if backend doesn't support search
-                    if (searchTerm) {
-                        const term = searchTerm.toLowerCase()
-                        data = data.filter((doc: any) =>
-                            doc.doc_type?.toLowerCase().includes(term) ||
-                            doc.id?.toString().includes(term)
-                        )
-                    }
-
-                    // Filter by archive status on frontend
-                    if (archiveFilter !== "active") {
-                        if (archiveFilter === "archived") {
-                            data = data.filter((doc: any) => doc.is_archived)
-                        } else {
-                            data = data.filter((doc: any) => !doc.is_archived)
-                        }
-                    }
-
-                    setDocuments(data)
-                    setTotalDocuments(total)
-                    setTotalPages(totalPagesFromBackend)
-                } else {
-                    // Sales user without selected deal - fetch their deals first, then documents
-                    const dealsRes = await DealsAPI.list_my_deals(undefined, {})
-                    const userDeals = extractList<any>(dealsRes)
-                    
-                    // Filter out archived deals
-                    const nonArchivedDeals = userDeals.filter((d: any) => !d.is_archived)
-                    
-                    if (nonArchivedDeals.length === 0) {
-                        setDocuments([])
-                        setTotalDocuments(0)
-                        return
-                    }
-
-                    // Fetch documents for each deal
-                    const allDocs: any[] = []
-                    for (const deal of nonArchivedDeals) {
-                        try {
-                            const dealDocs = await getDocumentsByDeal(deal.id, {})
-                            const docs = extractList<any>(dealDocs)
-                            allDocs.push(...docs)
-                        } catch (err) {
-                            console.error(`Error fetching documents for deal ${deal.id}:`, err)
-                        }
-                    }
-
-                    // Apply filters on frontend
-                    let filteredDocs = allDocs
-                    
-                    // Apply search filter
-                    if (searchTerm) {
-                        const term = searchTerm.toLowerCase()
-                        filteredDocs = filteredDocs.filter((doc: any) => 
-                            doc.doc_type?.toLowerCase().includes(term) ||
-                            doc.id?.toString().includes(term)
-                        )
-                    }
-                    
-                    // Filter by archive status
-                    if (archiveFilter !== "active") {
-                        if (archiveFilter === "archived") {
-                            filteredDocs = filteredDocs.filter((doc: any) => doc.is_archived)
-                        } else {
-                            filteredDocs = filteredDocs.filter((doc: any) => !doc.is_archived)
-                        }
-                    }
-
-                    setDocuments(filteredDocs)
-                    setTotalDocuments(filteredDocs.length)
-                }
-            } else {
-                // Non-sales users can use the general endpoint
-                const params: any = { page: currentPage, size: size }
-                if (searchTerm) params.q = searchTerm
-                if (statusFilter) params.status = statusFilter
-                if (docTypeFilter) params.doc_type = docTypeFilter
-                if (dealIdFilter) params.deal_id = dealIdFilter
-                if (clientIdFilter) params.client_id = clientIdFilter
-                if (clientTypeFilter) params.client_type = clientTypeFilter
-                if (archiveFilter !== "active") params.archive = archiveFilter
-                params.sort_by = sortBy
-                params.order = sortOrder
-                // When admin opens a department group (e.g. ?department=hr), scope-filter to that dept
-                if (departmentScope) params.scope = departmentScope
-                // Legal "Документы юристов" mode: show only docs created by legal staff
-                if (isLegal && legalOnlyMode) params.creator_role_id = 90
-
-                const res = await getDocuments(params)
-                let data = extractList<any>(res)
-                let total = getTotalFromResponse(res, data.length)
-                const totalPagesFromBackend = getTotalPagesFromResponse(res, total, size)
-
-                setDocuments(data)
-                setTotalDocuments(total)
-                setTotalPages(totalPagesFromBackend)
-            }
+            setDocuments(data)
+            setTotalDocuments(total)
+            setTotalPages(totalPagesFromBackend)
         } catch (err: any) {
             console.error("Error loading documents:", err)
             toast.error(err?.message || "Ошибка при загрузке документов")
@@ -1405,6 +1330,7 @@ export default function DocumentsPage() {
                                         <ArchiveFilter
                                             value={archiveFilter}
                                             onChange={setArchiveFilter}
+                                            showTrash={isAdmin}
                                         />
                                     </div>
                                 </div>
@@ -1474,36 +1400,8 @@ export default function DocumentsPage() {
                 </CollapsibleFilter>
             </div>
 
-            {/* Deal Filter for Sales Users */}
-            {getRoleCode(currentUser) === 'sales' && (
-                <div className="mx-6 mb-6">
-                    <div className="flex items-center gap-4">
-                        <div className="flex-1 max-w-sm">
-                            <Label htmlFor="deal-filter">Фильтр по сделке</Label>
-                            <ComboboxSelect
-                                value={selectedDealId || ""}
-                                onChange={(val) => setSelectedDealId(val ? Number(val) : null)}
-                                options={dealOptions}
-                                placeholder="Выберите сделку..."
-                                searchPlaceholder="Поиск сделки..."
-                                emptyText="Сделки не найдены"
-                            />
-                        </div>
-                        <div className="flex items-end">
-                            <Button
-                                variant="outline"
-                                onClick={() => setSelectedDealId(null)}
-                                disabled={!selectedDealId}
-                            >
-                                Сбросить
-                            </Button>
-                        </div>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                        Пользователям отдела продаж доступны только документы по их сделкам
-                    </p>
-                </div>
-            )}
+            {/* «Фильтр по сделке» для менеджеров убран (ТЗ п.2.3) — бэкенд
+                сам отдаёт менеджеру документы его отдела и его сделок */}
 
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 mx-6">
@@ -1576,6 +1474,7 @@ export default function DocumentsPage() {
                             <ArchiveFilter
                                 value={archiveFilter}
                                 onChange={setArchiveFilter}
+                                showTrash={isAdmin}
                             />
                         </div>
                     </div>
@@ -1725,6 +1624,27 @@ export default function DocumentsPage() {
                                                                 </DropdownMenuItem>
                                                             )}
 
+                                                            {/* Восстановление из корзины (ТЗ п.7.1) */}
+                                                            {isAdmin && archiveFilter === "deleted" && (
+                                                                <>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        onClick={async () => {
+                                                                            try {
+                                                                                const { restoreDocument } = await import("@/src/api/documents.api")
+                                                                                await restoreDocument(doc.id)
+                                                                                toast.success("Документ восстановлен из корзины")
+                                                                                fetchDocuments()
+                                                                            } catch (err: any) {
+                                                                                toast.error(err?.message || "Не удалось восстановить документ")
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        <ArchiveRestore className="h-4 w-4 mr-2" />
+                                                                        Восстановить из корзины
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
                                                             {canArchive && (
                                                                 <>
                                                                     <DropdownMenuSeparator />
@@ -2336,7 +2256,18 @@ export default function DocumentsPage() {
                 open={uploadOwnOpen}
                 onClose={() => setUploadOwnOpen(false)}
                 onSuccess={() => { setUploadOwnOpen(false); fetchDocuments() }}
-                scope={isHR ? 'hr' : 'legal'}
+                scope={(
+                    {
+                        hr: 'hr',
+                        legal: 'legal',
+                        sales: 'sales',
+                        visa: 'visa',
+                        partner: 'partner',
+                        quality_control: 'quality_control',
+                        management: 'management',
+                        system_admin: 'management',
+                    } as const
+                )[roleCode || ''] || 'management'}
             />
         </>
     )

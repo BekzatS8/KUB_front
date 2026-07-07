@@ -55,3 +55,17 @@ export async function unarchive_lead(payload?: void, params?: Record<string, any
   const res = await api.post(`/leads/${params?.id}/unarchive`)
   return res.data
 }
+
+export async function move_lead_stage(
+  payload: { stage_id: number },
+  params?: Record<string, any>
+): Promise<any> {
+  const res = await api.post(`/leads/${params?.id}/move`, payload)
+  return res.data
+}
+
+// Корзина (ТЗ п.7.1)
+export async function restore_lead(payload?: void, params?: Record<string, any>): Promise<any> {
+  const res = await api.post(`/leads/${params?.id}/restore`)
+  return res.data
+}

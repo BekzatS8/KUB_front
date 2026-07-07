@@ -14,7 +14,8 @@ interface Props {
   open: boolean
   onClose: () => void
   onSuccess: () => void
-  scope: 'hr' | 'legal'
+  // scope отдела, в который загружается документ (ТЗ п.2.1)
+  scope: 'hr' | 'legal' | 'sales' | 'visa' | 'partner' | 'quality_control' | 'management'
 }
 
 function formatBytes(bytes: number): string {

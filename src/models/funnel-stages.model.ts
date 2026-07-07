@@ -27,8 +27,12 @@ export interface UpsertFunnelStageRequest {
   is_active?: boolean
 }
 
+export type FunnelBoardCardKind = "deal" | "lead"
+
 export interface FunnelBoardDeal {
   id: number
+  /** "deal" — сделка, "lead" — необработанный лид на доске (ТЗ п.1.1) */
+  kind: FunnelBoardCardKind
   lead_id: number
   funnel_id?: number | null
   stage_id?: number | null
@@ -41,6 +45,8 @@ export interface FunnelBoardDeal {
   amount: number
   currency: string
   status: string
+  phone?: string
+  source?: string
   created_at: string
 }
 

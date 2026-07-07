@@ -73,17 +73,33 @@ type NavEntry = NavItem | NavGroup;
 const MENU: NavEntry[] = [
   // ── Flat items ────────────────────────────────────────────────────────────
   {
+    // Лента — инструмент админа/руководства: заявки на подтверждение и события.
+    // У менеджеров скрыта (ТЗ п.6.1)
     type: "item", title: "Лента", href: "/feed", icon: Rss,
     permission: "feed.view",
+    roles: ["admin", "management"],
   },
   {
     type: "item", title: "Отчеты", href: "/analytics", icon: BarChart3,
     permission: "reports.view",
   },
   {
+    // Личный отчёт-таблица сотрудника (ТЗ п.3) — замена Excel на Яндекс.Диске
+    type: "item", title: "Мой отчёт", href: "/reports/my", icon: ClipboardList,
+    roles: ["sales", "visa", "partner", "quality_control", "hr", "legal"],
+  },
+  {
+    // Отчёты всех сотрудников — руководству/админу/КК (ТЗ п.3)
+    type: "item", title: "Отчёты сотрудников", href: "/reports/team", icon: ClipboardList,
+    roles: ["admin", "management", "quality_control"],
+  },
+  {
+    // У отдела продаж раздел «Лиды» убран (ТЗ п.1.2): новые лиды падают
+    // карточками в воронку на странице «Сделки», менеджеры разбирают их там.
+    // Визовый/партнёрский пока работают с лидами через этот раздел.
     type: "item", title: "Лиды", href: "/leads", icon: Target,
     permission: "leads.view",
-    roles: ["sales", "visa", "partner", "quality_control", "management"],
+    roles: ["visa", "partner", "quality_control", "management"],
   },
   {
     type: "item", title: "Сделки", href: "/deals", icon: Handshake,
@@ -361,6 +377,16 @@ export function RoleBasedSidebar() {
     return () => { cancelled = true; };
   }, [user]);
 
+  // Live-обновление бейджа «Задачи» от поллера уведомлений (ТЗ п.4.1)
+  useEffect(() => {
+    const onCount = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (typeof detail?.count === "number") setTaskNewCount(detail.count);
+    };
+    window.addEventListener("kub:task-open-count", onCount);
+    return () => window.removeEventListener("kub:task-open-count", onCount);
+  }, []);
+
   const roleCode = roleCodeFromUser(user);
 
   const permissionSet = useMemo<Set<string>>(() => {
@@ -480,8 +506,10 @@ export function RoleBasedSidebar() {
         <div className="flex items-center justify-between">
           {!isCollapsed && (
             <div className="flex items-center gap-3">
+              {/* Логотип без шестерёнки: сотрудники принимали её за кнопку
+                  настроек и постоянно нажимали (ТЗ п.7.4) */}
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 shadow-md">
-                <Settings className="h-5 w-5 text-white" />
+                <Building2 className="h-5 w-5 text-white" />
               </div>
               <span className="text-lg font-bold text-slate-900">KUB CRM</span>
             </div>

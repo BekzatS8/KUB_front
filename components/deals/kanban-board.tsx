@@ -18,9 +18,10 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Building2, User, RefreshCw, Pencil, Archive, Trash2 } from "lucide-react";
+import { Building2, User, RefreshCw, Pencil, Archive, Trash2, MessageCircle, Phone } from "lucide-react";
 import * as FunnelStagesAPI from "@/src/api/funnel-stages.api";
 import { move_deal_stage } from "@/src/api/deals.api";
+import { move_lead_stage } from "@/src/api/leads.api";
 import type {
   FunnelBoard,
   FunnelBoardColumn,
@@ -34,6 +35,19 @@ const STATUS_LABELS: Record<string, string> = {
   won: "Выиграна",
   lost: "Проиграна",
   cancelled: "Отменена",
+};
+
+const LEAD_STATUS_LABELS: Record<string, string> = {
+  new: "Новый лид",
+  in_progress: "Лид в работе",
+  confirmed: "Лид подтверждён",
+  cancelled: "Отказ",
+};
+
+const LEAD_SOURCE_LABELS: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  telegram: "Telegram",
+  instagram: "Instagram",
 };
 
 const STATUS_CLASSNAMES: Record<string, string> = {
@@ -77,14 +91,16 @@ function DealCard({
   isSales,
   isAdmin,
 }: DealCardProps & { overlay?: boolean }) {
+  const isLead = deal.kind === "lead";
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `deal-${deal.id}`,
+    id: `${isLead ? "lead" : "deal"}-${deal.id}`,
     disabled,
   });
 
-  const showEdit = !overlay && canWrite && onEdit;
-  const showArchive = !overlay && canWrite && !isSales && onArchive;
-  const showDelete = !overlay && isAdmin && onDelete;
+  // Lead cards are managed from the lead view — no deal edit/archive actions.
+  const showEdit = !overlay && !isLead && canWrite && onEdit;
+  const showArchive = !overlay && !isLead && canWrite && !isSales && onArchive;
+  const showDelete = !overlay && !isLead && isAdmin && onDelete;
   const hasActions = showEdit || showArchive || showDelete;
 
   // Prevent drag/card-click from firing when interacting with action buttons.
@@ -144,22 +160,56 @@ function DealCard({
       )}
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-mono text-gray-400">#{deal.id}</span>
-        <Badge className={cn("text-xs", STATUS_CLASSNAMES[deal.status] || "bg-gray-100 text-gray-800")}>
-          {STATUS_LABELS[deal.status] || deal.status}
-        </Badge>
+        {isLead ? (
+          <Badge className="text-xs bg-amber-100 text-amber-800">
+            {LEAD_STATUS_LABELS[deal.status] || "Лид"}
+          </Badge>
+        ) : (
+          <Badge className={cn("text-xs", STATUS_CLASSNAMES[deal.status] || "bg-gray-100 text-gray-800")}>
+            {STATUS_LABELS[deal.status] || deal.status}
+          </Badge>
+        )}
       </div>
       <div className="mt-2 flex items-center gap-1.5 text-sm font-medium text-gray-900">
-        <Building2 className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-        <span className="truncate">{deal.client_name || `Клиент #${deal.client_id}`}</span>
+        {isLead ? (
+          <MessageCircle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+        ) : (
+          <Building2 className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+        )}
+        <span className="truncate">
+          {deal.client_name || (isLead ? `Лид #${deal.id}` : `Клиент #${deal.client_id}`)}
+        </span>
       </div>
-      <div className="mt-1 text-sm font-semibold text-gray-800">
-        {formatAmount(deal.amount, deal.currency)}
-      </div>
-      {deal.owner_name && (
+      {isLead ? (
+        <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-600">
+          {deal.phone && (
+            <span className="inline-flex items-center gap-1">
+              <Phone className="h-3 w-3 shrink-0 text-gray-400" />
+              +{deal.phone}
+            </span>
+          )}
+          {deal.source && (
+            <span className="text-gray-400">
+              {LEAD_SOURCE_LABELS[deal.source] || deal.source}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="mt-1 text-sm font-semibold text-gray-800">
+          {formatAmount(deal.amount, deal.currency)}
+        </div>
+      )}
+      {deal.owner_name ? (
         <div className="mt-1.5 flex items-center gap-1.5 text-xs text-gray-500">
           <User className="h-3 w-3 shrink-0" />
           <span className="truncate">{deal.owner_name}</span>
         </div>
+      ) : (
+        isLead && (
+          <div className="mt-1.5 text-xs font-medium text-amber-600">
+            Не разобран — перетащите, чтобы взять в работу
+          </div>
+        )
       )}
     </div>
   );
@@ -216,7 +266,13 @@ function Column({ column, onDealClick, canMove, ...actions }: ColumnProps) {
           <div className="py-6 text-center text-xs text-gray-400">Нет сделок</div>
         ) : (
           column.deals.map((deal) => (
-            <DealCard key={deal.id} deal={deal} onClick={onDealClick} disabled={!canMove} {...actions} />
+            <DealCard
+              key={`${deal.kind || "deal"}-${deal.id}`}
+              deal={deal}
+              onClick={onDealClick}
+              disabled={!canMove}
+              {...actions}
+            />
           ))
         )}
       </div>
@@ -270,9 +326,19 @@ export function KanbanBoard({
     [board]
   );
 
+  // Card drag ids are "deal-X" / "lead-X"; parse back to kind + numeric id.
+  const parseCardId = (raw: string): { kind: "deal" | "lead"; id: number } | null => {
+    const m = raw.match(/^(deal|lead)-(\d+)$/);
+    if (!m) return null;
+    return { kind: m[1] as "deal" | "lead", id: Number(m[2]) };
+  };
+
+  const matchCard = (d: FunnelBoardDeal, kind: string, id: number) =>
+    (d.kind || "deal") === kind && d.id === id;
+
   const handleDragStart = (event: DragStartEvent) => {
-    const dealId = Number(String(event.active.id).replace("deal-", ""));
-    const deal = allDeals.find((d) => d.id === dealId) || null;
+    const parsed = parseCardId(String(event.active.id));
+    const deal = parsed ? allDeals.find((d) => matchCard(d, parsed.kind, parsed.id)) || null : null;
     setActiveDeal(deal);
   };
 
@@ -281,25 +347,32 @@ export function KanbanBoard({
     setActiveDeal(null);
     if (!over || !board) return;
 
-    const dealId = Number(String(active.id).replace("deal-", ""));
+    const parsed = parseCardId(String(active.id));
+    if (!parsed) return;
     const overId = String(over.id);
 
     // over can be either the column droppable ("stage-X") or another card
-    // ("deal-X") when the card is on top of the column's droppable area.
-    // In both cases we resolve the target stage.
+    // ("deal-X"/"lead-X") when the card is on top of the column's droppable
+    // area. In both cases we resolve the target stage.
     let targetStageId: number | null = null;
     if (overId.startsWith("stage-") && overId !== "stage-none") {
       targetStageId = Number(overId.replace("stage-", ""));
-    } else if (overId.startsWith("deal-")) {
-      const overDealId = Number(overId.replace("deal-", ""));
-      const overColumn = board.columns.find((c) => c.deals.some((d) => d.id === overDealId));
-      if (overColumn?.stage) targetStageId = overColumn.stage.id;
+    } else {
+      const overParsed = parseCardId(overId);
+      if (overParsed) {
+        const overColumn = board.columns.find((c) =>
+          c.deals.some((d) => matchCard(d, overParsed.kind, overParsed.id))
+        );
+        if (overColumn?.stage) targetStageId = overColumn.stage.id;
+      }
     }
 
     if (!targetStageId) return;
 
-    const sourceColumn = board.columns.find((c) => c.deals.some((d) => d.id === dealId));
-    const deal = sourceColumn?.deals.find((d) => d.id === dealId);
+    const sourceColumn = board.columns.find((c) =>
+      c.deals.some((d) => matchCard(d, parsed.kind, parsed.id))
+    );
+    const deal = sourceColumn?.deals.find((d) => matchCard(d, parsed.kind, parsed.id));
     if (!deal || !sourceColumn) return;
     if (sourceColumn.stage?.id === targetStageId) return;
 
@@ -307,15 +380,16 @@ export function KanbanBoard({
     if (!targetColumn) return;
 
     // Derive the status the server will assign so the optimistic card badge is correct.
-    const VALID_DEAL_STATUSES = ["new", "in_progress", "negotiation", "won", "lost", "cancelled"];
     let optimisticStatus = deal.status;
     if (targetColumn.stage) {
       const s = targetColumn.stage;
-      if (s.type === "won") {
+      if (parsed.kind === "lead") {
+        optimisticStatus = s.type === "lost" ? "cancelled" : deal.status === "new" ? "in_progress" : deal.status;
+      } else if (s.type === "won") {
         optimisticStatus = "won";
       } else if (s.type === "lost") {
         optimisticStatus = "lost";
-      } else if (VALID_DEAL_STATUSES.includes(s.code)) {
+      } else if (["new", "in_progress", "negotiation", "won", "lost", "cancelled"].includes(s.code)) {
         optimisticStatus = s.code;
       } else {
         optimisticStatus = "in_progress";
@@ -327,7 +401,7 @@ export function KanbanBoard({
     const optimisticDeal: FunnelBoardDeal = { ...deal, stage_id: targetStageId, status: optimisticStatus };
     const newColumns = board.columns.map((col) => {
       if (col === sourceColumn) {
-        const deals = col.deals.filter((d) => d.id !== dealId);
+        const deals = col.deals.filter((d) => !matchCard(d, parsed.kind, parsed.id));
         return { ...col, deals, count: deals.length, total_amount: deals.reduce((s, d) => s + Number(d.amount || 0), 0) };
       }
       if (col === targetColumn) {
@@ -338,16 +412,22 @@ export function KanbanBoard({
     });
     setBoard({ ...board, columns: newColumns });
 
-    move_deal_stage({ stage_id: targetStageId }, { id: dealId })
+    const moveRequest =
+      parsed.kind === "lead"
+        ? move_lead_stage({ stage_id: targetStageId }, { id: parsed.id })
+        : move_deal_stage({ stage_id: targetStageId }, { id: parsed.id });
+
+    moveRequest
       .then(() => {
-        toast.success("Сделка перемещена");
-        // Reload board to get the real status change from backend
-        // (won/lost/in_progress is set server-side based on stage.type)
+        toast.success(parsed.kind === "lead" ? "Лид перемещён" : "Сделка перемещена");
+        // Reload board to get the real status/owner change from backend
+        // (won/lost/in_progress is set server-side based on stage.type;
+        // unassigned leads get claimed by the mover)
         loadBoard();
       })
       .catch((err: any) => {
-        console.error("Error moving deal:", err);
-        toast.error(err?.response?.data?.message || err?.message || "Ошибка при перемещении сделки");
+        console.error("Error moving card:", err);
+        toast.error(err?.response?.data?.message || err?.message || "Ошибка при перемещении");
         setBoard(previousBoard);
       });
   };

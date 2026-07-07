@@ -67,3 +67,14 @@ export async function getMyNewTaskCount(userId: number): Promise<number> {
   })
   return res.data?.pagination?.total ?? 0
 }
+
+// Назойливые уведомления о задачах (ТЗ 04.07.2026, п.4.1)
+export async function get_task_notifications(): Promise<{ open_count: number; due: any[] }> {
+  const res = await api.get(`/tasks/notifications`)
+  return res.data
+}
+
+export async function ack_task_notifications(payload: { task_ids: number[] }): Promise<any> {
+  const res = await api.post(`/tasks/notifications/ack`, payload)
+  return res.data
+}

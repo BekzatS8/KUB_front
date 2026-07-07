@@ -82,3 +82,8 @@ export async function get_deal_history(
   const res = await api.get(`/deals/${params?.id}/history`)
   return res.data
 }
+// Корзина (ТЗ п.7.1)
+export async function restore_deal(payload?: void, params?: Record<string, any>): Promise<any> {
+  const res = await api.post(`/deals/${params?.id}/restore`)
+  return res.data
+}
