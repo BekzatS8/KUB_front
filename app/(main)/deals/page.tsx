@@ -138,6 +138,10 @@ export default function DealsPage() {
   // Kanban view state
   const [viewMode, setViewMode] = useState<"kanban" | "table">("table");
   const [canViewFunnels, setCanViewFunnels] = useState(false);
+  // Роли визового/партнёрского отдела видят канбан (funnels.view), но НЕ имеют
+  // deals.view — список сделок им отдаёт 403. Держим флаг, чтобы не грузить
+  // сделки и не показывать «Access forbidden» (обратная связь 10.07.2026).
+  const [canViewDeals, setCanViewDeals] = useState(true);
   const [funnels, setFunnels] = useState<Funnel[]>([]);
   const [selectedFunnelId, setSelectedFunnelId] = useState<number | null>(null);
   const [kanbanRefreshKey, setKanbanRefreshKey] = useState(0);
@@ -220,6 +224,7 @@ export default function DealsPage() {
         const permissionData = await getMyPermissions();
         const canView = Boolean(permissionData?.scopes?.["funnels.view"]);
         setCanViewFunnels(canView);
+        setCanViewDeals(Boolean(permissionData?.scopes?.["deals.view"]));
         if (!canView) return;
 
         const funnelData = await FunnelsAPI.listFunnels();
@@ -360,6 +365,15 @@ export default function DealsPage() {
   }, [statusFilter, statusGroupFilter, archiveFilter, amountMin, amountMax, currencyFilter, clientFilter, sortBy, sortOrder, branchFilter]);
 
   const fetchDeals = async () => {
+    // У ролей без deals.view (визовый/партнёрский отдел) списка сделок нет —
+    // они работают в канбане лидов. Не дёргаем /deals, чтобы не ловить 403.
+    if (!canViewDeals) {
+      setDeals([]);
+      setTotalDeals(0);
+      setTotalPages(1);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const { list_deals, list_my_deals } = await import("@/src/api/deals.api");
@@ -425,8 +439,22 @@ export default function DealsPage() {
       setTotalPages(totalPagesFromBackend);
     } catch (err: any) {
       console.error("Error loading deals:", err);
-      setError(err?.message || "Ошибка при загрузке сделок");
-      toast.error("Ошибка при загрузке сделок");
+      // 403 = у роли нет доступа к списку сделок (визовый/партнёрский отдел).
+      // Это не ошибка страницы — они видят канбан лидов, поэтому просто
+      // очищаем список без блокирующего баннера «Access forbidden».
+      const isForbidden =
+        err?.response?.status === 403 ||
+        err?.status === 403 ||
+        /forbidden|permission/i.test(err?.message || "");
+      if (isForbidden) {
+        setCanViewDeals(false);
+        setDeals([]);
+        setTotalDeals(0);
+        setTotalPages(1);
+      } else {
+        setError(err?.message || "Ошибка при загрузке сделок");
+        toast.error("Ошибка при загрузке сделок");
+      }
     } finally {
       setIsLoading(false);
     }

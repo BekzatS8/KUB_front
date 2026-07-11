@@ -255,11 +255,17 @@ api.interceptors.response.use(
       }
     }
 
-    // Handle 403 Forbidden errors
+    // Handle 403 Forbidden errors.
+    // Preserve the original response/status on the rejected error (как для 400),
+    // чтобы вызывающий код мог отличить 403 и, например, показать канбан вместо
+    // блокирующей ошибки (визовый/партнёрский отдел без deals.view).
     if (status === 403) {
       console.error('Access forbidden - insufficient permissions');
       const message = error?.response?.data?.message || 'Access forbidden. You do not have permission to perform this action.';
-      return Promise.reject(new Error(message));
+      const forbiddenError = new Error(message);
+      (forbiddenError as any).response = error.response;
+      (forbiddenError as any).status = 403;
+      return Promise.reject(forbiddenError);
     }
 
     // Handle network errors
