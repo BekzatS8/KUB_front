@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, Phone, RefreshCw, Settings } from "lucide-react";
-import { toast } from "sonner";
-import { initiateCall } from "@/src/api/telephony.api";
+import { AlertCircle, RefreshCw, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -51,28 +49,6 @@ export default function MessengerPage() {
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
   const [isSetupLoading, setIsSetupLoading] = useState(false);
 
-  // Быстрый звонок через Binotel (ТЗ п.5.1): менеджер копирует номер из чата,
-  // жмёт «Позвонить» — звонок уходит сразу, без ручного набора на телефоне
-  const [quickDialPhone, setQuickDialPhone] = useState("");
-  const [isDialing, setIsDialing] = useState(false);
-
-  const handleQuickDial = async () => {
-    const phone = quickDialPhone.replace(/[^\d+]/g, "");
-    if (phone.replace(/\D/g, "").length < 10) {
-      toast.error("Введите номер телефона полностью");
-      return;
-    }
-    setIsDialing(true);
-    try {
-      await initiateCall(phone);
-      toast.success("Звонок инициирован — ответьте на своём телефоне");
-      setQuickDialPhone("");
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || err?.message || "Не удалось выполнить звонок");
-    } finally {
-      setIsDialing(false);
-    }
-  };
   const [setupError, setSetupError] = useState("");
   const [setupForm, setSetupForm] = useState({
     webhooks_base_url: "https://api.kubcrm.kz",
@@ -194,21 +170,6 @@ export default function MessengerPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Быстрый звонок через Binotel (ТЗ п.5.1) */}
-          <div className="flex items-center gap-1.5">
-            <Input
-              type="tel"
-              placeholder="+7 700 000 00 00"
-              value={quickDialPhone}
-              onChange={(e) => setQuickDialPhone(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleQuickDial()}
-              className="h-9 w-44"
-            />
-            <Button variant="outline" className="h-9" onClick={handleQuickDial} disabled={isDialing}>
-              <Phone className={cn("mr-1.5 h-4 w-4", isDialing && "animate-pulse")} />
-              Позвонить
-            </Button>
-          </div>
           <Button variant="outline" onClick={refreshWidget}>
             <RefreshCw className={cn("mr-2 h-4 w-4", isManualRefresh && "animate-spin")} />
             Обновить
