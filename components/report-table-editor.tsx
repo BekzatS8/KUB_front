@@ -20,9 +20,20 @@ interface Props {
   onSave?: (content: ReportTableContent) => void;
 }
 
+// Ширина колонки подбирается по названию: дата/телефон — узкие, комментарий —
+// широкий, чтобы отчёт читался без лишнего скролла (обратная связь 10.07.2026).
+function columnWidthClass(name: string): string {
+  const n = name.trim().toLowerCase();
+  if (n.includes("коммент")) return "min-w-[280px] w-[40%]";
+  if (n.includes("дата")) return "min-w-[96px] w-[96px]";
+  if (n.includes("телефон") || n.includes("номер")) return "min-w-[120px] w-[130px]";
+  if (n.includes("имя") || n.includes("фио")) return "min-w-[130px] w-[160px]";
+  return "min-w-[110px]";
+}
+
 function normalize(content: ReportTableContent | null | undefined): ReportTableContent {
   const columns =
-    content?.columns?.length ? content.columns : ["Дата", "Имя", "Телефон", "Комментарий", "Статус"];
+    content?.columns?.length ? content.columns : ["Дата", "Имя", "Телефон", "Тип визы", "Комментарий"];
   const rows = (content?.rows || []).map((r) => {
     const row = [...r];
     while (row.length < columns.length) row.push("");
@@ -80,12 +91,12 @@ export function ReportTableEditor({ content, readOnly, saving, onSave }: Props) 
 
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto rounded-lg border bg-white">
+      <div className="max-h-[70vh] overflow-auto rounded-lg border bg-white">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10">
             <tr className="border-b bg-slate-50">
               {data.columns.map((col, ci) => (
-                <th key={ci} className="min-w-[140px] p-1 text-left">
+                <th key={ci} className={`${columnWidthClass(col)} bg-slate-50 p-1 text-left`}>
                   <div className="flex items-center gap-1">
                     <input
                       value={col}

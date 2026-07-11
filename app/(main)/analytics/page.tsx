@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -390,12 +391,14 @@ export default function AnalyticsPage() {
           icon={<TrendingUp className="h-6 w-6" />}
           description="Выиграно / Всего"
         />
-        <KPICard
-          title="Всего лидов"
-          value={totalLeads.toLocaleString()}
-          icon={<Users className="h-6 w-6" />}
-          description="За весь период"
-        />
+        <Link href="/leads" className="block transition-transform hover:scale-[1.01]" title="Открыть список лидов">
+          <KPICard
+            title="Всего лидов"
+            value={totalLeads.toLocaleString()}
+            icon={<Users className="h-6 w-6" />}
+            description="За весь период — открыть список"
+          />
+        </Link>
       </div>
 
       {/* Sales Funnel Status Breakdown */}
@@ -458,13 +461,19 @@ export default function AnalyticsPage() {
                   }, [])
                   .sort((a, b) => b.count - a.count)
                   .map((item) => (
-                    <SourceItem
+                    <Link
                       key={item.source}
-                      source={getSourceDisplayName(item.source)}
-                      count={item.count}
-                      total={data.leads!.items.reduce((sum, i) => sum + i.count, 0)}
-                      icon={getSourceIcon(item.source)}
-                    />
+                      href={`/leads?source=${encodeURIComponent(item.source)}`}
+                      className="block transition-colors hover:bg-muted/40 rounded-lg"
+                      title="Открыть лиды этого источника"
+                    >
+                      <SourceItem
+                        source={getSourceDisplayName(item.source)}
+                        count={item.count}
+                        total={data.leads!.items.reduce((sum, i) => sum + i.count, 0)}
+                        icon={getSourceIcon(item.source)}
+                      />
+                    </Link>
                   ))}
               </div>
             </CardContent>

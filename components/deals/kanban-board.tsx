@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type PointerEvent, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type MouseEvent } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -298,6 +298,39 @@ export function KanbanBoard({
   const [isLoading, setIsLoading] = useState(true);
   const [activeDeal, setActiveDeal] = useState<FunnelBoardDeal | null>(null);
 
+  // Горизонтальный скролл воронки: у высоких колонок нижняя полоса прокрутки
+  // «уезжает» вниз, и до неё приходится листать страницу. Дублируем полосу
+  // сверху и держим её синхронной с доской, чтобы этапы справа были доступны
+  // без прокрутки вниз (обратная связь от заказчика 10.07.2026).
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollWidth, setScrollWidth] = useState(0);
+  const [clientWidth, setClientWidth] = useState(0);
+
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const measure = () => {
+      setScrollWidth(el.scrollWidth);
+      setClientWidth(el.clientWidth);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [board]);
+
+  const syncFromTop = () => {
+    if (boardRef.current && topScrollRef.current) {
+      boardRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+  };
+  const syncFromBoard = () => {
+    if (boardRef.current && topScrollRef.current) {
+      topScrollRef.current.scrollLeft = boardRef.current.scrollLeft;
+    }
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
@@ -453,7 +486,22 @@ export function KanbanBoard({
 
   return (
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      {/* Дублирующая полоса прокрутки сверху — видна только когда доска шире экрана */}
+      {scrollWidth > clientWidth + 1 && (
+        <div
+          ref={topScrollRef}
+          onScroll={syncFromTop}
+          className="sticky top-0 z-20 mb-1 overflow-x-auto"
+          aria-hidden="true"
+        >
+          <div style={{ width: scrollWidth, height: 1 }} />
+        </div>
+      )}
+      <div
+        ref={boardRef}
+        onScroll={syncFromBoard}
+        className="flex gap-3 overflow-x-auto pb-2"
+      >
         {board.columns.map((column) => (
           <Column
             key={column.stage?.id ?? "none"}

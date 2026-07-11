@@ -94,15 +94,19 @@ const MENU: NavEntry[] = [
     roles: ["admin", "management", "quality_control"],
   },
   {
-    // У отдела продаж раздел «Лиды» убран (ТЗ п.1.2): новые лиды падают
-    // карточками в воронку на странице «Сделки», менеджеры разбирают их там.
-    // Визовый/партнёрский пока работают с лидами через этот раздел.
+    // Визовый/партнёрский работают с лидами через плоский список (у них нет
+    // воронки). Отдел продаж/КК/руководство разбирают лиды карточками в воронке
+    // (пункт «Лиды» ниже, href=/deals) — чтобы не было двух «Лиды» в одном меню,
+    // список здесь остаётся только для visa/partner (обратная связь 10.07.2026,
+    // п.3 — раздел воронки должен называться «Лиды», а не «Сделки»).
     type: "item", title: "Лиды", href: "/leads", icon: Target,
     permission: "leads.view",
-    roles: ["visa", "partner", "quality_control", "management"],
+    roles: ["visa", "partner"],
   },
   {
-    type: "item", title: "Сделки", href: "/deals", icon: Handshake,
+    // Воронка лидов (ранее называлась «Сделки»). Сделка = лид, с которым уже
+    // работают/завершён — отдельный список сделок вынесем позже.
+    type: "item", title: "Лиды", href: "/deals", icon: Handshake,
     permission: "deals.view",
     roles: ["sales", "quality_control", "management"],
   },
@@ -154,8 +158,7 @@ const MENU: NavEntry[] = [
     type: "group", title: "Отдел продаж", icon: Target,
     roles: ["admin", "quality_control", "management"],
     children: [
-      { type: "item", title: "Лиды", href: "/leads?department=sales", icon: Target, permission: "leads.view" },
-      { type: "item", title: "Сделки", href: "/deals?department=sales", icon: Handshake, permission: "deals.view" },
+      { type: "item", title: "Лиды", href: "/deals?department=sales", icon: Target, permission: "deals.view" },
       {
         type: "item", title: "Документы", href: "/documents?department=sales", icon: FileText,
         permission: "documents.view",
@@ -212,8 +215,7 @@ const MENU: NavEntry[] = [
     type: "group", title: "Контроль качества", icon: ShieldCheck,
     roles: ["admin"],
     children: [
-      { type: "item", title: "Лиды", href: "/leads?department=quality_control", icon: Target, permission: "leads.view" },
-      { type: "item", title: "Сделки", href: "/deals?department=quality_control", icon: Handshake, permission: "deals.view" },
+      { type: "item", title: "Лиды", href: "/deals?department=quality_control", icon: Target, permission: "deals.view" },
       { type: "item", title: "Документы", href: "/documents?department=quality_control", icon: FileText, permission: "documents.view" },
     ],
   },

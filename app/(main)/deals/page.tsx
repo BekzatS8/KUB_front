@@ -1283,10 +1283,10 @@ export default function DealsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between m-6 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
-            Сделки
+            Лиды
           </h1>
           <p className="text-gray-600">
-            Управление активными сделками
+            Воронка лидов — карточки по этапам
           </p>
         </div>
         <div className="flex items-center gap-2">
