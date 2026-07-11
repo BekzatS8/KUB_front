@@ -234,7 +234,7 @@ function Column({ column, onDealClick, canMove, ...actions }: ColumnProps) {
   return (
     <div className="flex w-72 shrink-0 flex-col rounded-lg border bg-gray-50">
       <div
-        className="rounded-t-lg border-b px-3 py-2"
+        className="sticky top-0 z-10 rounded-t-lg border-b bg-gray-50 px-3 py-2"
         style={{ borderTopColor: color, borderTopWidth: 3 }}
       >
         <div className="flex items-center justify-between gap-2">
@@ -258,7 +258,7 @@ function Column({ column, onDealClick, canMove, ...actions }: ColumnProps) {
       <div
         ref={setNodeRef}
         className={cn(
-          "flex flex-1 flex-col gap-2 overflow-y-auto p-2 transition-colors min-h-[120px]",
+          "flex flex-col gap-2 p-2 transition-colors min-h-[120px]",
           isOver && "bg-blue-50"
         )}
       >
@@ -500,7 +500,7 @@ export function KanbanBoard({
       <div
         ref={boardRef}
         onScroll={syncFromBoard}
-        className="flex gap-3 overflow-x-auto pb-2"
+        className="flex items-start gap-3 overflow-auto pb-2 max-h-[75vh]"
       >
         {board.columns.map((column) => (
           <Column

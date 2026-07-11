@@ -94,21 +94,15 @@ const MENU: NavEntry[] = [
     roles: ["admin", "management", "quality_control"],
   },
   {
-    // Визовый/партнёрский работают с лидами через плоский список (у них нет
-    // воронки). Отдел продаж/КК/руководство разбирают лиды карточками в воронке
-    // (пункт «Лиды» ниже, href=/deals) — чтобы не было двух «Лиды» в одном меню,
-    // список здесь остаётся только для visa/partner (обратная связь 10.07.2026,
-    // п.3 — раздел воронки должен называться «Лиды», а не «Сделки»).
-    type: "item", title: "Лиды", href: "/leads", icon: Target,
-    permission: "leads.view",
-    roles: ["visa", "partner"],
-  },
-  {
-    // Воронка лидов (ранее называлась «Сделки»). Сделка = лид, с которым уже
-    // работают/завершён — отдельный список сделок вынесем позже.
-    type: "item", title: "Лиды", href: "/deals", icon: Handshake,
-    permission: "deals.view",
-    roles: ["sales", "quality_control", "management"],
+    // Воронка лидов (ранее называлась «Сделки»). Все профильные отделы —
+    // отдел продаж, визовый, партнёрский, а также КК/руководство — работают
+    // со своими лидами карточками в канбане на /deals. Бэкенд сам отдаёт только
+    // воронки отдела (funnel_service.List), поэтому каждый видит свой канбан
+    // (обратная связь 10.07.2026, п.2). Право funnels.view есть у всех этих ролей
+    // (у visa/partner нет deals.view — но канбан работает через лиды).
+    type: "item", title: "Лиды", href: "/deals", icon: Target,
+    permission: "funnels.view",
+    roles: ["sales", "visa", "partner", "quality_control", "management"],
   },
   {
     type: "item", title: "Клиенты", href: "/clients", icon: Users,

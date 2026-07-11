@@ -20,25 +20,46 @@ interface Props {
   onSave?: (content: ReportTableContent) => void;
 }
 
-// Ширина колонки подбирается по названию: дата/телефон — узкие, комментарий —
-// широкий, чтобы отчёт читался без лишнего скролла (обратная связь 10.07.2026).
+// Ширина колонки подбирается по названию: дата — шире (чтобы был виден год),
+// телефон — узкий, комментарий — широкий (обратная связь 10.07.2026).
 function columnWidthClass(name: string): string {
   const n = name.trim().toLowerCase();
   if (n.includes("коммент")) return "min-w-[280px] w-[40%]";
-  if (n.includes("дата")) return "min-w-[96px] w-[96px]";
+  if (n.includes("дата")) return "min-w-[128px] w-[140px]";
   if (n.includes("телефон") || n.includes("номер")) return "min-w-[120px] w-[130px]";
   if (n.includes("имя") || n.includes("фио")) return "min-w-[130px] w-[160px]";
   return "min-w-[110px]";
 }
 
-function normalize(content: ReportTableContent | null | undefined): ReportTableContent {
-  const columns =
-    content?.columns?.length ? content.columns : ["Дата", "Имя", "Телефон", "Тип визы", "Комментарий"];
-  const rows = (content?.rows || []).map((r) => {
-    const row = [...r];
-    while (row.length < columns.length) row.push("");
-    return row.slice(0, columns.length);
+// Приведение колонок отчёта к канону (обратная связь 10.07.2026, п.1):
+//  • «Статус» → «Тип визы»;
+//  • «Город» скрываем (удаляем колонку и её ячейки);
+//  • «Комментарий» уводим в самый конец.
+// Применяется и к уже сохранённым отчётам, у которых колонки лежат в БД, а не
+// только к дефолтным — потому что перекладываем и заголовки, и ячейки строк.
+const HIDDEN_COLUMNS = ["город"];
+const RENAME_COLUMNS: Record<string, string> = { "статус": "Тип визы" };
+
+function canonicalizeColumns(srcColumns: string[]): { label: string; srcIndex: number }[] {
+  const kept: { label: string; srcIndex: number }[] = [];
+  const comments: { label: string; srcIndex: number }[] = [];
+  srcColumns.forEach((col, i) => {
+    const key = col.trim().toLowerCase();
+    if (HIDDEN_COLUMNS.includes(key)) return;
+    const label = RENAME_COLUMNS[key] ?? col;
+    const entry = { label, srcIndex: i };
+    if (key.includes("коммент")) comments.push(entry);
+    else kept.push(entry);
   });
+  return [...kept, ...comments];
+}
+
+function normalize(content: ReportTableContent | null | undefined): ReportTableContent {
+  const srcColumns =
+    content?.columns?.length ? content.columns : ["Дата", "Имя", "Телефон", "Тип визы", "Комментарий"];
+  const mapping = canonicalizeColumns(srcColumns);
+  const columns = mapping.map((m) => m.label);
+  const rows = (content?.rows || []).map((r) => mapping.map((m) => r[m.srcIndex] ?? ""));
   return { columns, rows };
 }
 
