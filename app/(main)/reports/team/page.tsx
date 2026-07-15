@@ -2,87 +2,163 @@
 
 /**
  * «Отчёты сотрудников» (ТЗ 04.07.2026, п.3): руководитель/админ/КК открывают
- * отчёт любого сотрудника в один клик — не нужно ждать пересылок в WhatsApp.
+ * отчёты любого сотрудника — не нужно ждать пересылок в WhatsApp.
+ * У сотрудника может быть несколько именованных отчётов, поэтому путь такой:
+ * сотрудник → его отчёты → выбранный отчёт.
  */
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { ArrowLeft, FileSpreadsheet, RefreshCw } from "lucide-react";
+import { ArrowLeft, FileSpreadsheet, RefreshCw, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReportTableEditor } from "@/components/report-table-editor";
 import {
-  getUserReportTable,
-  listReportTables,
+  getReportTable,
+  listReportTableOwners,
+  listUserReportTables,
   type ManagerReport,
+  type ManagerReportOwner,
   type ReportTableContent,
 } from "@/src/api/reports-table.api";
 
 export default function TeamReportsPage() {
-  const [reports, setReports] = useState<ManagerReport[]>([]);
+  const [owners, setOwners] = useState<ManagerReportOwner[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<ManagerReport | null>(null);
-  const [selectedLoading, setSelectedLoading] = useState(false);
+
+  const [owner, setOwner] = useState<ManagerReportOwner | null>(null);
+  const [ownerReports, setOwnerReports] = useState<ManagerReport[]>([]);
+  const [ownerLoading, setOwnerLoading] = useState(false);
+
+  const [report, setReport] = useState<ManagerReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
 
   const load = () => {
     setLoading(true);
-    listReportTables()
-      .then((res) => setReports(res.items || []))
+    listReportTableOwners()
+      .then((res) => setOwners(res.items || []))
       .catch((err: any) => toast.error(err?.message || "Не удалось загрузить список отчётов"))
       .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
 
-  const openReport = async (userId: number) => {
-    setSelectedLoading(true);
+  const openOwner = async (o: ManagerReportOwner) => {
+    setOwner(o);
+    setOwnerLoading(true);
     try {
-      setSelected(await getUserReportTable(userId));
+      const res = await listUserReportTables(o.user_id);
+      setOwnerReports(res.items || []);
     } catch (err: any) {
-      toast.error(err?.message || "Не удалось открыть отчёт");
+      toast.error(err?.message || "Не удалось загрузить отчёты сотрудника");
+      setOwner(null);
     } finally {
-      setSelectedLoading(false);
+      setOwnerLoading(false);
     }
   };
 
-  if (selected || selectedLoading) {
+  const openReport = async (id: number) => {
+    setReportLoading(true);
+    try {
+      setReport(await getReportTable(id));
+    } catch (err: any) {
+      toast.error(err?.message || "Не удалось открыть отчёт");
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  // Уровень 3: сам отчёт
+  if (report || reportLoading) {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => setSelected(null)}>
+          <Button variant="outline" size="sm" onClick={() => setReport(null)}>
             <ArrowLeft className="mr-1.5 h-4 w-4" />
-            К списку
+            К отчётам сотрудника
           </Button>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">
-              Отчёт: {selected?.user_name || "..."}
-            </h1>
-            {selected?.updated_at && (
-              <p className="text-xs text-slate-500">
-                Обновлён {format(new Date(selected.updated_at), "d MMMM yyyy, HH:mm", { locale: ru })}
-              </p>
-            )}
+            <h1 className="text-xl font-bold text-slate-900">{report?.title || "..."}</h1>
+            <p className="text-xs text-slate-500">
+              {report?.user_name}
+              {report?.updated_at && (
+                <> · обновлён {format(new Date(report.updated_at), "d MMMM yyyy, HH:mm", { locale: ru })}</>
+              )}
+            </p>
           </div>
         </div>
-        {selectedLoading ? (
+        {reportLoading || !report ? (
           <Skeleton className="h-64 w-full rounded-lg" />
         ) : (
-          <ReportTableEditor content={selected!.content as ReportTableContent} readOnly />
+          <ReportTableEditor content={report.content as ReportTableContent} readOnly />
         )}
       </div>
     );
   }
 
+  // Уровень 2: список отчётов выбранного сотрудника
+  if (owner) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={() => setOwner(null)}>
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            К сотрудникам
+          </Button>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Отчёты: {owner.user_name}</h1>
+            <p className="text-xs text-slate-500">Выберите отчёт, чтобы открыть</p>
+          </div>
+        </div>
+
+        {ownerLoading ? (
+          <Skeleton className="h-48 w-full rounded-lg" />
+        ) : ownerReports.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center text-slate-500">
+              <FileSpreadsheet className="mx-auto mb-3 h-10 w-10 opacity-40" />
+              У сотрудника нет отчётов
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {ownerReports.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => openReport(r.id)}
+                className="rounded-lg border bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md"
+              >
+                <div className="flex items-center gap-3">
+                  <FileSpreadsheet className="h-8 w-8 shrink-0 text-emerald-600" />
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-slate-900">{r.title}</p>
+                    {r.updated_at && (
+                      <p className="text-xs text-slate-500">
+                        Обновлён {format(new Date(r.updated_at), "d MMM yyyy, HH:mm", { locale: ru })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Уровень 1: сотрудники, которые ведут отчёты
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Отчёты сотрудников</h1>
           <p className="text-sm text-slate-600">
-            Личные отчёты-таблицы менеджеров: нажмите, чтобы открыть
+            Личные отчёты-таблицы менеджеров: выберите сотрудника, затем отчёт
           </p>
         </div>
         <Button variant="outline" onClick={load} disabled={loading}>
@@ -92,7 +168,7 @@ export default function TeamReportsPage() {
 
       {loading ? (
         <Skeleton className="h-48 w-full rounded-lg" />
-      ) : reports.length === 0 ? (
+      ) : owners.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-slate-500">
             <FileSpreadsheet className="mx-auto mb-3 h-10 w-10 opacity-40" />
@@ -101,22 +177,25 @@ export default function TeamReportsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {reports.map((r) => (
+          {owners.map((o) => (
             <button
-              key={r.user_id}
+              key={o.user_id}
               type="button"
-              onClick={() => openReport(r.user_id)}
+              onClick={() => openOwner(o)}
               className="rounded-lg border bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md"
             >
               <div className="flex items-center gap-3">
-                <FileSpreadsheet className="h-8 w-8 shrink-0 text-emerald-600" />
+                <User className="h-8 w-8 shrink-0 text-blue-600" />
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-slate-900">{r.user_name || `Сотрудник #${r.user_id}`}</p>
-                  {r.updated_at && (
-                    <p className="text-xs text-slate-500">
-                      Обновлён {format(new Date(r.updated_at), "d MMM yyyy, HH:mm", { locale: ru })}
-                    </p>
-                  )}
+                  <p className="truncate font-medium text-slate-900">
+                    {o.user_name || `Сотрудник #${o.user_id}`}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {o.report_count} {plural(o.report_count, "отчёт", "отчёта", "отчётов")}
+                    {o.updated_at && (
+                      <> · {format(new Date(o.updated_at), "d MMM yyyy, HH:mm", { locale: ru })}</>
+                    )}
+                  </p>
                 </div>
               </div>
             </button>
@@ -125,4 +204,12 @@ export default function TeamReportsPage() {
       )}
     </div>
   );
+}
+
+function plural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
 }

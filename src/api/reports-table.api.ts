@@ -1,6 +1,8 @@
 import api from './index'
 
-// Личные отчёты-таблицы сотрудников (ТЗ 04.07.2026, п.3)
+// Личные отчёты-таблицы сотрудников (ТЗ 04.07.2026, п.3).
+// У сотрудника может быть несколько именованных отчётов; руководитель выбирает,
+// какой именно отчёт открыть.
 
 export interface ReportTableContent {
   columns: string[]
@@ -8,28 +10,65 @@ export interface ReportTableContent {
 }
 
 export interface ManagerReport {
-  id?: number
+  id: number
   user_id: number
   user_name?: string
-  content: ReportTableContent
-  updated_at?: string | null
+  title: string
+  // в списках content не приходит — только в отчёте, открытом целиком
+  content?: ReportTableContent
+  created_at?: string
+  updated_at?: string
 }
 
-export async function getMyReportTable(): Promise<ManagerReport> {
+// Строка списка «Отчёты сотрудников»: сотрудник и сводка по его отчётам.
+export interface ManagerReportOwner {
+  user_id: number
+  user_name: string
+  report_count: number
+  updated_at: string
+}
+
+export async function listMyReportTables(): Promise<{ items: ManagerReport[]; count: number }> {
   const res = await api.get('/reports/table/my')
   return res.data
 }
 
-export async function saveMyReportTable(content: ReportTableContent): Promise<void> {
-  await api.put('/reports/table/my', { content })
+export async function createMyReportTable(
+  title: string,
+  content?: ReportTableContent,
+): Promise<ManagerReport> {
+  const res = await api.post('/reports/table/my', { title, content })
+  return res.data
 }
 
-export async function listReportTables(): Promise<{ items: ManagerReport[]; count: number }> {
+export async function getMyReportTable(id: number): Promise<ManagerReport> {
+  const res = await api.get(`/reports/table/my/${id}`)
+  return res.data
+}
+
+export async function saveMyReportTable(
+  id: number,
+  content: ReportTableContent,
+  title?: string,
+): Promise<void> {
+  await api.put(`/reports/table/my/${id}`, { content, title })
+}
+
+export async function deleteMyReportTable(id: number): Promise<void> {
+  await api.delete(`/reports/table/my/${id}`)
+}
+
+export async function listReportTableOwners(): Promise<{ items: ManagerReportOwner[]; count: number }> {
   const res = await api.get('/reports/table')
   return res.data
 }
 
-export async function getUserReportTable(userId: number): Promise<ManagerReport> {
+export async function listUserReportTables(userId: number): Promise<{ items: ManagerReport[]; count: number }> {
   const res = await api.get(`/reports/table/user/${userId}`)
+  return res.data
+}
+
+export async function getReportTable(id: number): Promise<ManagerReport> {
+  const res = await api.get(`/reports/table/report/${id}`)
   return res.data
 }

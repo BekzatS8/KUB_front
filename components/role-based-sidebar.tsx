@@ -84,8 +84,8 @@ const MENU: NavEntry[] = [
     permission: "reports.view",
   },
   {
-    // Личный отчёт-таблица сотрудника (ТЗ п.3) — замена Excel на Яндекс.Диске
-    type: "item", title: "Мой отчёт", href: "/reports/my", icon: ClipboardList,
+    // Личные отчёты-таблицы сотрудника (ТЗ п.3) — замена Excel на Яндекс.Диске
+    type: "item", title: "Мои отчёты", href: "/reports/my", icon: ClipboardList,
     roles: ["sales", "visa", "partner", "quality_control", "hr", "legal"],
   },
   {
