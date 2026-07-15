@@ -152,6 +152,8 @@ const MENU: NavEntry[] = [
       { type: "item", title: "Организация", href: "/settings/organization", icon: Settings, permission: "branches.view" },
       { type: "item", title: "Филиалы", href: "/branches", icon: Building2, permission: "branches.view" },
       { type: "item", title: "Воронки", href: "/settings/funnels", icon: GitBranch, permission: "funnels.view" },
+      // раскладка шаблонов документов по отделам
+      { type: "item", title: "Шаблоны документов", href: "/settings/document-templates", icon: FileText, permission: "documents.update" },
       { type: "item", title: "Переходы между воронками", href: "/settings/funnel-transitions", icon: ArrowRightLeft, permission: "funnels.update" },
       { type: "item", title: "Пользователи", href: "/users", icon: UserCheck, permission: "users.view" },
     ],

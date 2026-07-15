@@ -254,8 +254,22 @@ export async function restoreDocument(id: number): Promise<any> {
   return res.data
 }
 
-// Список доступных шаблонов документов (ТЗ п.2.4)
-export async function listDocumentTypes(): Promise<Array<{ doc_type: string; title_ru: string; format?: string }>> {
-  const res = await api.get('/documents/types')
+// Шаблоны документов (ТЗ п.2.4). По шаблону генерируется документ клиента.
+export interface DocumentTemplate {
+  doc_type: string
+  title_ru: string
+  format?: string
+  /** Отделы, которым доступен шаблон (раскладку задаёт админ, миграция 071) */
+  departments?: string[]
+}
+
+// scope задан — только шаблоны этого отдела; без него — весь реестр
+export async function listDocumentTypes(scope?: string): Promise<DocumentTemplate[]> {
+  const res = await api.get('/documents/types', { params: scope ? { scope } : undefined })
   return res.data
+}
+
+/** Задать отделы шаблона (только админ). Пустой список убирает шаблон отовсюду. */
+export async function setTemplateDepartments(docType: string, scopes: string[]): Promise<void> {
+  await api.put(`/documents/types/${docType}/departments`, { scopes })
 }

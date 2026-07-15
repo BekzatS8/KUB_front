@@ -130,8 +130,9 @@ import {
     generateSignLink,
     startSign,
     getSignHistory,
+    listDocumentTypes,
 } from "@/src/api/documents.api"
-import type { SignHistoryEvent } from "@/src/api/documents.api"
+import type { DocumentTemplate, SignHistoryEvent } from "@/src/api/documents.api"
 import type { Document, DocType, DocStatus, SignStatus } from "@/src/models/documents.model"
 import { PdfViewer } from "@/components/ui/pdf-viewer-simple"
 import { SendForSignatureModal } from "@/components/send-for-signature-modal"
@@ -450,7 +451,14 @@ export default function DocumentsPage() {
     const initialDeptScope =
         (availableDeptScopes.find((s) => s === departmentParam) ?? availableDeptScopes[0]) ?? null
 
-    const [docSection, setDocSection] = useState<'department' | 'client'>('department')
+    // Открываемся на документах клиентов: договоры и расписки создаются со
+    // scope 'deal' (document_repository: scope == "" → "deal"), поэтому все
+    // реальные данные лежат там. Документы отдела загружают руками, их пока
+    // единицы — стартовать с пустой вкладки нельзя. Ссылка с ?department=
+    // открывает сразу отдел.
+    const [docSection, setDocSection] = useState<'department' | 'client'>(
+        departmentParam ? 'department' : 'client'
+    )
     const [deptScope, setDeptScope] = useState<DocumentDepartmentScope | null>(null)
 
     // Роль приезжает асинхронно (getMe), поэтому начальное значение выставляем,
@@ -460,14 +468,34 @@ export default function DocumentsPage() {
         if (deptScope === null && initialDeptScope) setDeptScope(initialDeptScope)
     }, [initialDeptScope, deptScope])
 
-    // Отделу без своих документов (таких нет) и ролям без scope 'deal' вкладка
-    // клиентов не нужна — держим их на документах отдела.
-    useEffect(() => {
-        if (!showsClientDocs && docSection === 'client') setDocSection('department')
-    }, [showsClientDocs, docSection])
+    // Ролям без scope 'deal' (кадры, юристы, партнёрский, КК) вкладка клиентов
+    // недоступна — сервер вернул бы 403. Считаем раздел, а не правим состояние
+    // эффектом: пока роль не загрузилась, showsClientDocs === false, и эффект
+    // сбросил бы выбор всем ещё до того, как роль стала известна.
+    const effectiveSection: 'department' | 'client' = showsClientDocs ? docSection : 'department'
 
     // Итоговый scope для запроса: сервер сам проверит, что он разрешён роли.
-    const departmentScope = docSection === 'client' ? 'deal' : deptScope
+    const departmentScope = effectiveSection === 'client' ? 'deal' : deptScope
+
+    // Шаблоны отдела: по ним генерируются документы клиентов. Раскладку по
+    // отделам задаёт админ в Настройках (таблица document_template_departments).
+    const [templates, setTemplates] = useState<DocumentTemplate[]>([])
+    const [templatesLoading, setTemplatesLoading] = useState(false)
+
+    useEffect(() => {
+        if (effectiveSection !== 'department' || !deptScope) return
+        let cancelled = false
+        setTemplatesLoading(true)
+        listDocumentTypes(deptScope)
+            .then((list) => { if (!cancelled) setTemplates(list) })
+            .catch((err: any) => {
+                if (cancelled) return
+                setTemplates([])
+                toast.error(err?.message || 'Не удалось загрузить шаблоны отдела')
+            })
+            .finally(() => { if (!cancelled) setTemplatesLoading(false) })
+        return () => { cancelled = true }
+    }, [effectiveSection, deptScope])
 
     // Role-based fallback when permissions API hasn't loaded yet
     const docPermFallback: Record<string, string[]> = {
@@ -701,12 +729,14 @@ export default function DocumentsPage() {
         }
     }
 
-    const openCreate = () => {
+    // docType задан — открываем генерацию сразу по выбранному шаблону
+    // (карточка на вкладке «Документы отдела»)
+    const openCreate = (docType?: string) => {
         setCreateForm({
             client_id: "",
             client_type: "",
             deal_id: selectedDealId?.toString() || "",
-            doc_type: "contract_paid_full_ru",
+            doc_type: docType || "contract_paid_full_ru",
             extra: {},
         })
         setCreateError(null)
@@ -1257,14 +1287,14 @@ export default function DocumentsPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between m-6 gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">
-                        {docSection === 'client'
+                        {effectiveSection === 'client'
                             ? 'Документы клиентов'
                             : deptScope
                                 ? `Документы — ${departmentScopeLabel(deptScope)}`
                                 : 'Документы'}
                     </h1>
                     <p className="text-gray-600">
-                        {docSection === 'client'
+                        {effectiveSection === 'client'
                             ? 'Договоры и расписки по клиентам и сделкам'
                             : 'Общие документы отдела: шаблоны, прайсы, регламенты'}
                     </p>
@@ -1274,7 +1304,7 @@ export default function DocumentsPage() {
                         <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                     </Button>
                     {canCreateDocs && !isHR && (
-                        <Button onClick={openCreate}>
+                        <Button onClick={() => openCreate()}>
                             <Plus className="h-4 w-4 mr-2" />
                             Создать документ
                         </Button>
@@ -1303,7 +1333,7 @@ export default function DocumentsPage() {
                             onClick={() => setDocSection(tab.key)}
                             className={cn(
                                 "px-4 py-2 text-sm font-medium transition-colors",
-                                docSection === tab.key
+                                effectiveSection === tab.key
                                     ? "bg-primary text-primary-foreground"
                                     : "bg-background text-muted-foreground hover:bg-muted"
                             )}
@@ -1315,7 +1345,7 @@ export default function DocumentsPage() {
             )}
 
             {/* Выбор отдела — только тем, кому доступен не один (админ/руководство) */}
-            {docSection === 'department' && availableDeptScopes.length > 1 && (
+            {effectiveSection === 'department' && availableDeptScopes.length > 1 && (
                 <div className="mx-6 mb-4 flex flex-wrap gap-2">
                     {DEPARTMENT_SCOPES.filter((d) => availableDeptScopes.includes(d.scope)).map((d) => (
                         <button
@@ -1353,6 +1383,60 @@ export default function DocumentsPage() {
                         Документы юристов
                     </Button>
                 </div>
+            )}
+
+            {/* Шаблоны отдела: по ним генерируется документ клиента. Раскладку
+                по отделам админ задаёт в Настройках → Шаблоны документов. */}
+            {effectiveSection === 'department' && (
+                <Card className="mx-6 mb-6">
+                    <CardHeader>
+                        <CardTitle>Шаблоны документов</CardTitle>
+                        <CardDescription>
+                            Выберите шаблон — данные клиента подставятся автоматически, и получится
+                            готовый документ. Он попадёт во вкладку «Документы клиентов».
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {templatesLoading ? (
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                {[0, 1, 2].map((i) => <Skeleton key={i} className="h-20 rounded-lg" />)}
+                            </div>
+                        ) : templates.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                                <FileText className="mb-3 h-10 w-10 text-gray-300" />
+                                <p className="font-medium text-gray-500">
+                                    У этого отдела пока нет шаблонов
+                                </p>
+                                <p className="mt-1 max-w-md text-sm text-gray-400">
+                                    {isAdmin
+                                        ? 'Назначьте шаблоны отделу в Настройках → Шаблоны документов.'
+                                        : 'Попросите администратора назначить шаблоны вашему отделу.'}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                {templates.map((tpl) => (
+                                    <button
+                                        key={tpl.doc_type}
+                                        type="button"
+                                        disabled={!canCreateDocs}
+                                        onClick={() => openCreate(tpl.doc_type)}
+                                        title={canCreateDocs ? 'Создать документ по шаблону' : 'Нет прав на создание документов'}
+                                        className="flex items-start gap-3 rounded-lg border bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:shadow-sm"
+                                    >
+                                        <FileText className="mt-0.5 h-8 w-8 shrink-0 text-blue-600" />
+                                        <div className="min-w-0">
+                                            <p className="font-medium text-slate-900">{tpl.title_ru}</p>
+                                            <p className="mt-0.5 text-xs uppercase text-slate-400">
+                                                {tpl.format || 'docx'}
+                                            </p>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
             )}
 
             {/* Filters */}
@@ -1534,12 +1618,18 @@ export default function DocumentsPage() {
                 </div>
             )}
 
-            {/* Documents Table */}
+            {/* Documents Table. На вкладке отдела остаётся под шаблонами: у
+                кадров, юристов, партнёрского и КК вкладки клиентов нет, и это
+                единственное место, где видны их загруженные документы. */}
             <Card className="mx-6 mb-6">
                 <CardHeader>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
-                            <CardTitle>Список документов</CardTitle>
+                            <CardTitle>
+                                {effectiveSection === 'department'
+                                    ? 'Загруженные документы отдела'
+                                    : 'Список документов'}
+                            </CardTitle>
                             <CardDescription>
                                 {documents.length > 0
                                     ? `Найдено ${totalDocuments} документов`
@@ -1559,8 +1649,28 @@ export default function DocumentsPage() {
                     {!documents || documents.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-center">
                             <FileText className="h-12 w-12 text-gray-300 mb-4" />
-                            <p className="text-gray-500 font-medium text-lg">Документов не найдено</p>
-                            <p className="text-sm text-gray-400 mt-1">Создайте первый документ из шаблона</p>
+                            {effectiveSection === 'department' ? (
+                                <>
+                                    <p className="text-gray-500 font-medium text-lg">
+                                        В этом отделе пока нет общих документов
+                                    </p>
+                                    <p className="mt-1 max-w-md text-sm text-gray-400">
+                                        Сюда загружают файлы для всего отдела — шаблоны, прайсы, регламенты.
+                                        Договоры и расписки по клиентам лежат во вкладке «Документы клиентов».
+                                    </p>
+                                    {canUploadOwn && (
+                                        <Button className="mt-4" variant="outline" onClick={() => setUploadOwnOpen(true)}>
+                                            <Upload className="mr-2 h-4 w-4" />
+                                            Загрузить документ
+                                        </Button>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <p className="text-gray-500 font-medium text-lg">Документов не найдено</p>
+                                    <p className="text-sm text-gray-400 mt-1">Создайте первый документ из шаблона</p>
+                                </>
+                            )}
                         </div>
                     ) : (
                         <div className="overflow-hidden rounded-md border">
