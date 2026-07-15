@@ -273,3 +273,12 @@ export async function listDocumentTypes(scope?: string): Promise<DocumentTemplat
 export async function setTemplateDepartments(docType: string, scopes: string[]): Promise<void> {
   await api.put(`/documents/types/${docType}/departments`, { scopes })
 }
+
+/**
+ * Предпросмотр шаблона: DOCX с подписями полей вместо данных клиента.
+ * Рендерится в браузере (docx-preview), PDF для этого не нужен.
+ */
+export async function previewDocumentTemplate(docType: string): Promise<Blob> {
+  const res = await api.get(`/documents/types/${docType}/preview`, { responseType: 'blob' })
+  return res.data as Blob
+}

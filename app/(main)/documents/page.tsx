@@ -135,6 +135,7 @@ import {
 import type { DocumentTemplate, SignHistoryEvent } from "@/src/api/documents.api"
 import type { Document, DocType, DocStatus, SignStatus } from "@/src/models/documents.model"
 import { PdfViewer } from "@/components/ui/pdf-viewer-simple"
+import { TemplatePreviewModal } from "@/components/template-preview-modal"
 import { SendForSignatureModal } from "@/components/send-for-signature-modal"
 import UploadOwnDocumentModal from "@/components/upload-own-document-modal"
 
@@ -451,14 +452,10 @@ export default function DocumentsPage() {
     const initialDeptScope =
         (availableDeptScopes.find((s) => s === departmentParam) ?? availableDeptScopes[0]) ?? null
 
-    // Открываемся на документах клиентов: договоры и расписки создаются со
-    // scope 'deal' (document_repository: scope == "" → "deal"), поэтому все
-    // реальные данные лежат там. Документы отдела загружают руками, их пока
-    // единицы — стартовать с пустой вкладки нельзя. Ссылка с ?department=
-    // открывает сразу отдел.
-    const [docSection, setDocSection] = useState<'department' | 'client'>(
-        departmentParam ? 'department' : 'client'
-    )
+    // Открываемся на документах отдела: там шаблоны, с которых начинается работа
+    // («выбрал шаблон → создал документ клиенту»). Раньше дефолтом были документы
+    // клиентов, потому что вкладка отдела была пустой — теперь в ней шаблоны.
+    const [docSection, setDocSection] = useState<'department' | 'client'>('department')
     const [deptScope, setDeptScope] = useState<DocumentDepartmentScope | null>(null)
 
     // Роль приезжает асинхронно (getMe), поэтому начальное значение выставляем,
@@ -481,6 +478,8 @@ export default function DocumentsPage() {
     // отделам задаёт админ в Настройках (таблица document_template_departments).
     const [templates, setTemplates] = useState<DocumentTemplate[]>([])
     const [templatesLoading, setTemplatesLoading] = useState(false)
+    // шаблон, открытый в предпросмотре
+    const [previewTpl, setPreviewTpl] = useState<DocumentTemplate | null>(null)
 
     useEffect(() => {
         if (effectiveSection !== 'department' || !deptScope) return
@@ -1416,22 +1415,41 @@ export default function DocumentsPage() {
                         ) : (
                             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
                                 {templates.map((tpl) => (
-                                    <button
+                                    <div
                                         key={tpl.doc_type}
-                                        type="button"
-                                        disabled={!canCreateDocs}
-                                        onClick={() => openCreate(tpl.doc_type)}
-                                        title={canCreateDocs ? 'Создать документ по шаблону' : 'Нет прав на создание документов'}
-                                        className="flex items-start gap-3 rounded-lg border bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:shadow-sm"
+                                        className="flex flex-col rounded-lg border bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
                                     >
-                                        <FileText className="mt-0.5 h-8 w-8 shrink-0 text-blue-600" />
-                                        <div className="min-w-0">
-                                            <p className="font-medium text-slate-900">{tpl.title_ru}</p>
-                                            <p className="mt-0.5 text-xs uppercase text-slate-400">
-                                                {tpl.format || 'docx'}
-                                            </p>
+                                        <div className="flex items-start gap-3">
+                                            <FileText className="mt-0.5 h-8 w-8 shrink-0 text-blue-600" />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-medium text-slate-900">{tpl.title_ru}</p>
+                                                <p className="mt-0.5 text-xs uppercase text-slate-400">
+                                                    {tpl.format || 'docx'}
+                                                </p>
+                                            </div>
                                         </div>
-                                    </button>
+                                        <div className="mt-3 flex gap-2">
+                                            <Button
+                                                size="sm"
+                                                className="flex-1"
+                                                disabled={!canCreateDocs}
+                                                onClick={() => openCreate(tpl.doc_type)}
+                                                title={canCreateDocs ? 'Создать документ по шаблону' : 'Нет прав на создание документов'}
+                                            >
+                                                <Plus className="mr-1.5 h-4 w-4" />
+                                                Создать
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => setPreviewTpl(tpl)}
+                                                title="Посмотреть бланк"
+                                            >
+                                                <Eye className="mr-1.5 h-4 w-4" />
+                                                Предпросмотр
+                                            </Button>
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         )}
@@ -2437,6 +2455,13 @@ export default function DocumentsPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <TemplatePreviewModal
+                open={!!previewTpl}
+                onClose={() => setPreviewTpl(null)}
+                docType={previewTpl?.doc_type ?? null}
+                title={previewTpl?.title_ru}
+            />
 
             {/* Отдел загрузки: у обычной роли он один, админ и руководство
                 выбирают явно — раньше их документы молча падали в 'management' */}
