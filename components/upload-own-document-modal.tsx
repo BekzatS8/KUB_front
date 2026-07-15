@@ -1,11 +1,13 @@
 "use client"
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Upload, FileText, X } from 'lucide-react'
 import { uploadDocumentWithMeta } from '@/src/api/documents.api'
+import { DEPARTMENT_SCOPES, type DocumentDepartmentScope } from '@/src/models/document-scopes'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { CustomSelect } from '@/components/ui/custom-select'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -14,8 +16,10 @@ interface Props {
   open: boolean
   onClose: () => void
   onSuccess: () => void
-  // scope отдела, в который загружается документ (ТЗ п.2.1)
-  scope: 'hr' | 'legal' | 'sales' | 'visa' | 'partner' | 'quality_control' | 'management'
+  // Отдел, в который ляжет документ (ТЗ п.2.1). Свой отдел приезжает один —
+  // тогда выбор не показываем; админу и руководству сервер разрешает любой.
+  scopes: DocumentDepartmentScope[]
+  defaultScope: DocumentDepartmentScope
 }
 
 function formatBytes(bytes: number): string {
@@ -24,13 +28,19 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`
 }
 
-export default function UploadOwnDocumentModal({ open, onClose, onSuccess, scope }: Props) {
+export default function UploadOwnDocumentModal({ open, onClose, onSuccess, scopes, defaultScope }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [scope, setScope] = useState<DocumentDepartmentScope>(defaultScope)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Открывая модалку с другого отдела, подставляем текущий выбранный
+  useEffect(() => {
+    if (open) setScope(defaultScope)
+  }, [open, defaultScope])
 
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault()
@@ -83,6 +93,24 @@ export default function UploadOwnDocumentModal({ open, onClose, onSuccess, scope
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {scopes.length > 1 && (
+            <div className="space-y-1.5">
+              <Label>Отдел <span className="text-destructive">*</span></Label>
+              <CustomSelect
+                value={scope}
+                onChange={(v) => setScope(v as DocumentDepartmentScope)}
+                disabled={loading}
+                options={DEPARTMENT_SCOPES.filter((d) => scopes.includes(d.scope)).map((d) => ({
+                  value: d.scope,
+                  label: d.label,
+                }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Документ увидят сотрудники этого отдела
+              </p>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="doc-title">Название документа <span className="text-destructive">*</span></Label>
             <Input

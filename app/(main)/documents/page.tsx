@@ -99,6 +99,13 @@ import {
     History,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+    DEPARTMENT_SCOPES,
+    canViewClientDocuments,
+    departmentScopeLabel,
+    departmentScopesForRole,
+    type DocumentDepartmentScope,
+} from "@/src/models/document-scopes"
 import { format } from "date-fns"
 import { ru } from "date-fns/locale"
 import { toast } from "sonner"
@@ -431,20 +438,36 @@ export default function DocumentsPage() {
     // (ТЗ п.2.1/3); у КК создание уходит на одобрение через Ленту
     const canUploadOwn = ['hr', 'legal', 'sales', 'visa', 'partner', 'management', 'system_admin'].includes(roleCode || '')
 
-    // Map department query param to document scope filter (admin viewing dept groups)
-    // Все отделы имеют свой scope (ТЗ п.2.1/2.2) — раньше маппились только
-    // hr/legal, из-за чего пункты «Документы» других отделов не переключались.
+    // Разделы документов (ТЗ п.2.1): «Документы отдела» — общие файлы отдела
+    // (шаблоны, прайсы, регламенты), «Документы клиентов» — договоры по сделкам
+    // (scope 'deal'). Раньше отдел переключался только через ?department= из
+    // меню; теперь это вкладки на самой странице (обратная связь 14.07.2026).
+    const availableDeptScopes = departmentScopesForRole(roleCode)
+    const showsClientDocs = canViewClientDocuments(roleCode)
+
+    // ?department= из старых ссылок/закладок продолжает открывать нужный отдел
     const departmentParam = searchParams.get('department')
-    const departmentScopeMap: Record<string, string> = {
-        hr: 'hr',
-        legal: 'legal',
-        sales: 'sales',
-        visa: 'visa',
-        partner: 'partner',
-        quality_control: 'quality_control',
-        management: 'management',
-    }
-    const departmentScope = departmentParam ? (departmentScopeMap[departmentParam] ?? null) : null
+    const initialDeptScope =
+        (availableDeptScopes.find((s) => s === departmentParam) ?? availableDeptScopes[0]) ?? null
+
+    const [docSection, setDocSection] = useState<'department' | 'client'>('department')
+    const [deptScope, setDeptScope] = useState<DocumentDepartmentScope | null>(null)
+
+    // Роль приезжает асинхронно (getMe), поэтому начальное значение выставляем,
+    // как только список отделов стал известен, и больше не трогаем — иначе
+    // собьём выбор пользователя.
+    useEffect(() => {
+        if (deptScope === null && initialDeptScope) setDeptScope(initialDeptScope)
+    }, [initialDeptScope, deptScope])
+
+    // Отделу без своих документов (таких нет) и ролям без scope 'deal' вкладка
+    // клиентов не нужна — держим их на документах отдела.
+    useEffect(() => {
+        if (!showsClientDocs && docSection === 'client') setDocSection('department')
+    }, [showsClientDocs, docSection])
+
+    // Итоговый scope для запроса: сервер сам проверит, что он разрешён роли.
+    const departmentScope = docSection === 'client' ? 'deal' : deptScope
 
     // Role-based fallback when permissions API hasn't loaded yet
     const docPermFallback: Record<string, string[]> = {
@@ -1234,11 +1257,17 @@ export default function DocumentsPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between m-6 gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">
-                        {departmentParam === 'hr' ? 'Документы — Отдел кадров'
-                            : departmentParam === 'legal' ? 'Документы — Юридический отдел'
-                            : 'Документы'}
+                        {docSection === 'client'
+                            ? 'Документы клиентов'
+                            : deptScope
+                                ? `Документы — ${departmentScopeLabel(deptScope)}`
+                                : 'Документы'}
                     </h1>
-                    <p className="text-gray-600">Управление документооборотом и подписанием</p>
+                    <p className="text-gray-600">
+                        {docSection === 'client'
+                            ? 'Договоры и расписки по клиентам и сделкам'
+                            : 'Общие документы отдела: шаблоны, прайсы, регламенты'}
+                    </p>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="icon" onClick={fetchDocuments} disabled={loading}>
@@ -1258,6 +1287,53 @@ export default function DocumentsPage() {
                     )}
                 </div>
             </div>
+
+            {/* Разделы: общие документы отдела vs документы по клиентам (ТЗ п.2.1).
+                Вкладку клиентов показываем только ролям, которым сервер отдаёт
+                scope 'deal' — остальным она вернула бы 403. */}
+            {showsClientDocs && (
+                <div className="mx-6 mb-4 flex w-fit rounded-md border overflow-hidden">
+                    {([
+                        { key: 'department', label: 'Документы отдела' },
+                        { key: 'client', label: 'Документы клиентов' },
+                    ] as const).map((tab) => (
+                        <button
+                            key={tab.key}
+                            type="button"
+                            onClick={() => setDocSection(tab.key)}
+                            className={cn(
+                                "px-4 py-2 text-sm font-medium transition-colors",
+                                docSection === tab.key
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-background text-muted-foreground hover:bg-muted"
+                            )}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {/* Выбор отдела — только тем, кому доступен не один (админ/руководство) */}
+            {docSection === 'department' && availableDeptScopes.length > 1 && (
+                <div className="mx-6 mb-4 flex flex-wrap gap-2">
+                    {DEPARTMENT_SCOPES.filter((d) => availableDeptScopes.includes(d.scope)).map((d) => (
+                        <button
+                            key={d.scope}
+                            type="button"
+                            onClick={() => setDeptScope(d.scope)}
+                            className={cn(
+                                "rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                                deptScope === d.scope
+                                    ? "border-blue-600 bg-blue-50 text-blue-700"
+                                    : "bg-white hover:bg-slate-50"
+                            )}
+                        >
+                            {d.label}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {/* Legal-only quick-filter tabs */}
             {isLegal && (
@@ -2252,22 +2328,14 @@ export default function DocumentsPage() {
                 </AlertDialogContent>
             </AlertDialog>
 
+            {/* Отдел загрузки: у обычной роли он один, админ и руководство
+                выбирают явно — раньше их документы молча падали в 'management' */}
             <UploadOwnDocumentModal
                 open={uploadOwnOpen}
                 onClose={() => setUploadOwnOpen(false)}
                 onSuccess={() => { setUploadOwnOpen(false); fetchDocuments() }}
-                scope={(
-                    {
-                        hr: 'hr',
-                        legal: 'legal',
-                        sales: 'sales',
-                        visa: 'visa',
-                        partner: 'partner',
-                        quality_control: 'quality_control',
-                        management: 'management',
-                        system_admin: 'management',
-                    } as const
-                )[roleCode || ''] || 'management'}
+                scopes={availableDeptScopes}
+                defaultScope={deptScope ?? availableDeptScopes[0] ?? 'management'}
             />
         </>
     )

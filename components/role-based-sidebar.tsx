@@ -14,16 +14,12 @@ import {
   ClipboardList,
   FileText,
   GitBranch,
-  Globe,
-  Handshake,
   LogOut,
   MessageCircle,
   MessageSquare,
   Phone,
   Rss,
-  Scale,
   Settings,
-  ShieldCheck,
   Target,
   UserCheck,
   Users,
@@ -94,15 +90,13 @@ const MENU: NavEntry[] = [
     roles: ["admin", "management", "quality_control"],
   },
   {
-    // Воронка лидов (ранее называлась «Сделки»). Все профильные отделы —
-    // отдел продаж, визовый, партнёрский, а также КК/руководство — работают
-    // со своими лидами карточками в канбане на /deals. Бэкенд сам отдаёт только
-    // воронки отдела (funnel_service.List), поэтому каждый видит свой канбан
-    // (обратная связь 10.07.2026, п.2). Право funnels.view есть у всех этих ролей
-    // (у visa/partner нет deals.view — но канбан работает через лиды).
+    // Воронка лидов (ранее называлась «Сделки»). Единственный вход в лиды для
+    // всех — отделы продаж/визовый/партнёрский, КК, руководство и админ. Бэкенд
+    // сам отдаёт только воронки отдела (funnel_service.List), а админу — все,
+    // поэтому список ролей здесь не нужен: хватает funnels.view, которого нет
+    // только у кадров и юристов (обратная связь 14.07.2026).
     type: "item", title: "Лиды", href: "/deals", icon: Target,
     permission: "funnels.view",
-    roles: ["sales", "visa", "partner", "quality_control", "management"],
   },
   {
     type: "item", title: "Клиенты", href: "/clients", icon: Users,
@@ -147,81 +141,10 @@ const MENU: NavEntry[] = [
     permission: "telephony.view",
   },
 
-  // ── Department groups ─────────────────────────────────────────────────────
-  {
-    type: "group", title: "Отдел продаж", icon: Target,
-    roles: ["admin", "quality_control", "management"],
-    children: [
-      { type: "item", title: "Лиды", href: "/deals?department=sales", icon: Target, permission: "deals.view" },
-      {
-        type: "item", title: "Документы", href: "/documents?department=sales", icon: FileText,
-        permission: "documents.view",
-        roles: ["admin", "management"],
-      },
-    ],
-  },
-  {
-    type: "group", title: "Визовый отдел", icon: Globe,
-    roles: ["admin", "quality_control", "management"],
-    children: [
-      { type: "item", title: "Лиды", href: "/leads?department=visa", icon: Target, permission: "leads.view" },
-      {
-        type: "item", title: "Документы", href: "/documents?department=visa", icon: FileText,
-        permission: "documents.view",
-        roles: ["admin", "management"],
-      },
-    ],
-  },
-  {
-    type: "group", title: "Партнёрский отдел", icon: Handshake,
-    roles: ["admin", "quality_control", "management"],
-    children: [
-      { type: "item", title: "Лиды", href: "/leads?department=partner", icon: Target, permission: "leads.view" },
-      {
-        type: "item", title: "Документы", href: "/documents?department=partner", icon: FileText,
-        permission: "documents.view",
-        roles: ["admin", "management"],
-      },
-    ],
-  },
-  {
-    type: "group", title: "Отдел кадров", icon: Users,
-    roles: ["admin"],
-    children: [
-      { type: "item", title: "Сотрудники", href: "/users?department=hr", icon: UserCheck, permission: "users.view" },
-      {
-        type: "item", title: "Табель сотрудников", href: "/hr/timesheet", icon: ClipboardList,
-        permission: "users.view", disabled: true,
-      },
-      { type: "item", title: "Документы", href: "/documents?department=hr", icon: FileText, permission: "documents.view" },
-    ],
-  },
-  {
-    type: "group", title: "Юридический отдел", icon: Scale,
-    roles: ["admin"],
-    children: [
-      { type: "item", title: "Клиенты", href: "/clients?department=legal", icon: Users, permission: "clients.view" },
-      { type: "item", title: "Документы", href: "/documents?department=legal", icon: FileText, permission: "documents.view" },
-      { type: "item", title: "Пользователи", href: "/users?department=legal", icon: UserCheck, permission: "users.view" },
-    ],
-  },
-  {
-    type: "group", title: "Контроль качества", icon: ShieldCheck,
-    roles: ["admin"],
-    children: [
-      { type: "item", title: "Лиды", href: "/deals?department=quality_control", icon: Target, permission: "deals.view" },
-      { type: "item", title: "Документы", href: "/documents?department=quality_control", icon: FileText, permission: "documents.view" },
-    ],
-  },
-  {
-    type: "group", title: "Руководство", icon: Building2,
-    roles: ["admin", "management"],
-    children: [
-      { type: "item", title: "Документы", href: "/documents?department=management", icon: FileText, permission: "documents.view" },
-      { type: "item", title: "Пользователи", href: "/users?department=management", icon: UserCheck, permission: "users.view" },
-      { type: "item", title: "Отчеты", href: "/analytics", icon: BarChart3, permission: "reports.view" },
-    ],
-  },
+  // Разделы по отделам (Отдел продаж / Визовый / Партнёрский / Кадры /
+  // Юридический / Контроль качества / Руководство) убраны: они дублировали
+  // плоские пункты меню через ?department=..., а лиды админ и так видит все
+  // (обратная связь 14.07.2026).
   {
     type: "group", title: "Настройки", icon: Settings,
     roles: ["admin"],
