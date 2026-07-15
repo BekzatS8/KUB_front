@@ -583,15 +583,10 @@ export default function DealsPage() {
 
         // Load clients (for dropdown)
         try {
-          // Apply same safety fix: default to listMyClients for sales users or undefined roles
-          const userRole = getRoleCode(userData);
-          const isSalesRole = userRole === 'sales';
-          
-          console.log('Loading clients for user:', { userRole, isSalesRole });
-          
-          const res = isSalesRole
-            ? await ClientAPI.listMyClients({ page: 1, size: 1000 })
-            : await ClientAPI.listClients({ page: 1, size: 1000 });
+          // Клиенты — общая база (сервер отдаёт менеджеру всех клиентов), поэтому
+          // берём общий список: сужение до «своих» прятало клиентов из выпадашки
+          // и не давало создать сделку. На 403 ниже есть откат к listMyClients.
+          const res = await ClientAPI.listClients({ page: 1, size: 1000 });
           console.log('Clients API response:', res);
           const clientsData = extractList(res);
           setClients(clientsData);
@@ -633,27 +628,21 @@ export default function DealsPage() {
           console.log('Deals page - loading leads for user:', currentUser?.role);
           console.log('Current user object:', currentUser);
           
-          // Use list_my_leads for non-system_admin/leadership users, with fallback for 403 errors
+          // Лиды берём общим списком: сервер сам режет выдачу по scope (менеджеру
+          // — лиды его филиала и отдела). Раньше здесь звали list_my_leads, и
+          // выпадашка была пуста — входящие лиды висят на админе интеграции,
+          // своих у менеджера нет. list_my_leads остаётся запасным вариантом на
+          // случай 403.
           let leadsRes;
-          const roleCode = getRoleCode(currentUser) || getRoleCode(userData);
-          if (roleCode === 'system_admin' || roleCode === 'leadership') {
-            try {
-              console.log('Attempting to use list_leads for system_admin/leadership user');
-              leadsRes = await list_leads(undefined, { page: 1, size: 1000, status_group: "active" });
-              console.log('list_leads response:', leadsRes);
-            } catch (leadsError: any) {
-              if (leadsError?.response?.status === 403) {
-                console.log('list_leads returned 403, falling back to list_my_leads for restricted user');
-                leadsRes = await list_my_leads(undefined, { page: 1, size: 1000, status_group: "active" });
-                console.log('Fallback list_my_leads response:', leadsRes);
-              } else {
-                throw leadsError;
-              }
+          try {
+            leadsRes = await list_leads(undefined, { page: 1, size: 1000, status_group: "active" });
+          } catch (leadsError: any) {
+            if (leadsError?.response?.status === 403) {
+              console.log('list_leads returned 403, falling back to list_my_leads');
+              leadsRes = await list_my_leads(undefined, { page: 1, size: 1000, status_group: "active" });
+            } else {
+              throw leadsError;
             }
-          } else {
-            console.log('Using list_my_leads for non-system_admin/leadership user (sales/restricted)');
-            leadsRes = await list_my_leads(undefined, { page: 1, size: 1000, status_group: "active" });
-            console.log('list_my_leads response:', leadsRes);
           }
             
           const leadsData = extractList(leadsRes);

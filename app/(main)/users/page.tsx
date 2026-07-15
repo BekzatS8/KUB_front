@@ -207,7 +207,10 @@ function ComboboxSelect({
 
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked" | "deleted">("all");
+  // по умолчанию показываем только активных: во «Все» попадают ещё и
+  // заблокированные с мягко удалёнными, из-за чего список расходился со
+  // счётчиками по ролям (они считают активных)
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked" | "deleted">("active");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [userFormData, setUserFormData] = useState<
     Models.CreateUserRequest | Models.UpdateUserRequest
