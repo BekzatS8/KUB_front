@@ -360,11 +360,29 @@ export function KanbanBoard({
     }
   };
 
+  // Первичная загрузка и смена воронки — со скелетоном (это действительно
+  // полная перезагрузка контента).
   useEffect(() => {
     if (funnelId) {
       loadBoard();
     }
-  }, [funnelId, refreshKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [funnelId]);
+
+  // Обновления, инициированные родителем (перенос через модалку, архивация,
+  // изменения на детальной странице) — тихо, без скелетона, чтобы доска не
+  // мигала и перенос ощущался моментальным.
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return; // не дублируем первичную загрузку
+    }
+    if (funnelId) {
+      refreshBoard();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   // «Живой» режим доски. Раньше при смене этапа на детальной странице
   // лида/сделки доска оставалась смонтированной со старым состоянием, и
@@ -497,10 +515,12 @@ export function KanbanBoard({
     moveRequest
       .then(() => {
         toast.success(parsed.kind === "lead" ? "Лид перемещён" : "Сделка перемещена");
-        // Reload board to get the real status/owner change from backend
-        // (won/lost/in_progress is set server-side based on stage.type;
-        // unassigned leads get claimed by the mover)
-        loadBoard();
+        // Тихо сверяем состояние с сервером (won/lost/in_progress выставляется
+        // на бэке по stage.type; неразобранный лид достаётся тому, кто перенёс).
+        // Именно ТИХО, без скелетона: оптимистичная карточка уже на месте,
+        // полная перезагрузка `loadBoard()` мигала и создавала ощущение
+        // задержки — перенос должен быть моментальным.
+        refreshBoard();
       })
       .catch((err: any) => {
         console.error("Error moving card:", err);

@@ -42,6 +42,7 @@ const emptyStageForm: UpsertFunnelStageRequest = {
   probability: 0,
   description: "",
   is_active: true,
+  auto_archive: false,
 }
 
 export default function FunnelsPage() {
@@ -201,6 +202,7 @@ export default function FunnelsPage() {
       probability: stage.probability,
       description: stage.description || "",
       is_active: stage.is_active,
+      auto_archive: stage.auto_archive ?? false,
     })
     setIsStageDialogOpen(true)
   }
@@ -544,6 +546,19 @@ export default function FunnelsPage() {
                 id="stage_is_active"
                 checked={Boolean(stageForm.is_active)}
                 onCheckedChange={(checked) => setStageForm({ ...stageForm, is_active: checked })}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="pr-3">
+                <Label htmlFor="stage_auto_archive">Отправлять в архив</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  При переходе карточки на этот этап она автоматически уходит в архив.
+                </p>
+              </div>
+              <Switch
+                id="stage_auto_archive"
+                checked={Boolean(stageForm.auto_archive)}
+                onCheckedChange={(checked) => setStageForm({ ...stageForm, auto_archive: checked })}
               />
             </div>
           </div>

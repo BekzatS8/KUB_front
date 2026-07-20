@@ -13,6 +13,8 @@ export interface FunnelStage {
   probability: number
   description?: string
   is_active: boolean
+  /** При переходе на этот этап карточка автоматически уходит в архив. */
+  auto_archive?: boolean
   created_at?: string
   updated_at?: string
 }
@@ -25,6 +27,7 @@ export interface UpsertFunnelStageRequest {
   probability?: number
   description?: string
   is_active?: boolean
+  auto_archive?: boolean
 }
 
 export type FunnelBoardCardKind = "deal" | "lead"
