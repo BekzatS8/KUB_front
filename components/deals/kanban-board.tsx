@@ -18,13 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Building2, User, RefreshCw, Pencil, Archive, Trash2, MessageCircle, Phone, ArrowRightLeft } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
+import { Building2, User, RefreshCw, Pencil, Archive, Trash2, MessageCircle, Phone } from "lucide-react";
 import type { FunnelStage } from "@/src/models/funnel-stages.model";
 import * as FunnelStagesAPI from "@/src/api/funnel-stages.api";
 import { move_deal_stage } from "@/src/api/deals.api";
@@ -232,33 +226,29 @@ function DealCard({
         )
       )}
       {showMove && (
+        // Нативный <select> вместо radix-меню на каждой карточке: при сотнях
+        // лидов сотни radix-компонентов роняли производительность (лаги драга,
+        // промахи дропа). Нативный select почти бесплатен и работает на тач.
         <div className="mt-2 border-t pt-2" onPointerDown={stop} onClick={stop}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                title="Переместить на этап"
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border bg-white px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              >
-                <ArrowRightLeft className="h-3.5 w-3.5" /> На этап…
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
-              {moveTargets.map((s) => (
-                <DropdownMenuItem
-                  key={s.id}
-                  className="gap-2"
-                  onSelect={() => onMoveToStage?.(deal, s.id)}
-                >
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: s.color || "#94a3b8" }}
-                  />
-                  <span className="truncate">{s.name}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <select
+            aria-label="Переместить на этап"
+            title="Переместить на этап"
+            value=""
+            onChange={(e) => {
+              const stageId = Number(e.target.value);
+              if (stageId && onMoveToStage) onMoveToStage(deal, stageId);
+            }}
+            className="w-full cursor-pointer rounded-md border bg-white px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+          >
+            <option value="" disabled>
+              На этап…
+            </option>
+            {moveTargets.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
         </div>
       )}
     </div>
@@ -310,7 +300,10 @@ function Column({ column, onDealClick, canMove, stages, onMoveToStage, ...action
       <div
         ref={setNodeRef}
         className={cn(
-          "flex flex-col gap-2 p-2 transition-colors min-h-[120px]",
+          // flex-1 растягивает зону сброса на всю высоту колонки (колонки
+          // выровнены по высоте — items-stretch у доски), чтобы карточку можно
+          // было бросить в любую колонку на любой высоте, не таща наверх.
+          "flex flex-1 flex-col gap-2 p-2 transition-colors min-h-[120px]",
           isOver && "bg-blue-50"
         )}
       >
@@ -446,10 +439,16 @@ export function KanbanBoard({
   const activeDealRef = useRef<FunnelBoardDeal | null>(null);
   activeDealRef.current = activeDeal;
 
+  // Пока идёт перенос (запрос на сервере не завершён), НЕ перечитываем доску —
+  // иначе фоновое обновление (WS-эхо/поллинг) перетрёт оптимистичную карточку
+  // старым состоянием сервера, и она «отскакивает» назад.
+  const isMovingRef = useRef(false);
+
   const maybeRefreshRef = useRef<() => void>(() => {});
   maybeRefreshRef.current = () => {
     if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
     if (activeDealRef.current) return; // не мешаем перетаскиванию
+    if (isMovingRef.current) return; // не мешаем незавершённому переносу
     refreshBoard();
   };
 
@@ -577,6 +576,7 @@ export function KanbanBoard({
       return col;
     });
     setBoard({ ...board, columns: newColumns });
+    isMovingRef.current = true;
 
     const moveRequest =
       kind === "lead"
@@ -584,15 +584,18 @@ export function KanbanBoard({
         : move_deal_stage({ stage_id: targetStageId }, { id });
 
     moveRequest
-      .then(() => {
+      .then(async () => {
         toast.success(kind === "lead" ? "Лид перемещён" : "Сделка перемещена");
         // Тихо сверяем состояние с сервером; оптимистичная карточка уже на месте.
-        refreshBoard();
+        await refreshBoard();
       })
       .catch((err: any) => {
         console.error("Error moving card:", err);
         toast.error(err?.response?.data?.message || err?.message || "Ошибка при перемещении");
         setBoard(previousBoard);
+      })
+      .finally(() => {
+        isMovingRef.current = false;
       });
   };
 
@@ -635,7 +638,7 @@ export function KanbanBoard({
       <div
         ref={boardRef}
         onScroll={syncFromBoard}
-        className="flex items-start gap-3 overflow-auto pb-2 max-h-[75vh]"
+        className="flex items-stretch gap-3 overflow-auto pb-2 max-h-[75vh]"
       >
         {board.columns.map((column) => (
           <Column
