@@ -18,7 +18,14 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Building2, User, RefreshCw, Pencil, Archive, Trash2, MessageCircle, Phone } from "lucide-react";
+import { Building2, User, RefreshCw, Pencil, Archive, Trash2, MessageCircle, Phone, ArrowRightLeft } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import type { FunnelStage } from "@/src/models/funnel-stages.model";
 import * as FunnelStagesAPI from "@/src/api/funnel-stages.api";
 import { move_deal_stage } from "@/src/api/deals.api";
 import { move_lead_stage } from "@/src/api/leads.api";
@@ -78,6 +85,9 @@ interface DealCardProps extends DealActions {
   deal: FunnelBoardDeal;
   onClick?: (deal: FunnelBoardDeal) => void;
   disabled?: boolean;
+  stages?: FunnelStage[];
+  currentStageId?: number;
+  onMoveToStage?: (deal: FunnelBoardDeal, stageId: number) => void;
 }
 
 function DealCard({
@@ -91,6 +101,9 @@ function DealCard({
   canWrite,
   isSales,
   isAdmin,
+  stages,
+  currentStageId,
+  onMoveToStage,
 }: DealCardProps & { overlay?: boolean }) {
   const isLead = deal.kind === "lead";
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -106,6 +119,12 @@ function DealCard({
 
   // Prevent drag/card-click from firing when interacting with action buttons.
   const stop = (e: PointerEvent | MouseEvent) => e.stopPropagation();
+
+  // Быстрое перемещение без перетаскивания: список этапов, кроме текущего.
+  // Решает боль «лид внизу длинной колонки — тащить через весь экран вверх».
+  const fromStageId = currentStageId ?? deal.stage_id;
+  const moveTargets = (stages || []).filter((s) => s.id !== fromStageId);
+  const showMove = !overlay && !disabled && !!onMoveToStage && moveTargets.length > 0;
 
   return (
     <div
@@ -212,6 +231,36 @@ function DealCard({
           </div>
         )
       )}
+      {showMove && (
+        <div className="mt-2 border-t pt-2" onPointerDown={stop} onClick={stop}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                title="Переместить на этап"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border bg-white px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5" /> На этап…
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+              {moveTargets.map((s) => (
+                <DropdownMenuItem
+                  key={s.id}
+                  className="gap-2"
+                  onSelect={() => onMoveToStage?.(deal, s.id)}
+                >
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: s.color || "#94a3b8" }}
+                  />
+                  <span className="truncate">{s.name}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
     </div>
   );
 }
@@ -220,9 +269,11 @@ interface ColumnProps extends DealActions {
   column: FunnelBoardColumn;
   onDealClick?: (deal: FunnelBoardDeal) => void;
   canMove: boolean;
+  stages?: FunnelStage[];
+  onMoveToStage?: (deal: FunnelBoardDeal, stageId: number) => void;
 }
 
-function Column({ column, onDealClick, canMove, ...actions }: ColumnProps) {
+function Column({ column, onDealClick, canMove, stages, onMoveToStage, ...actions }: ColumnProps) {
   const stage = column.stage;
   const droppableId = stage ? `stage-${stage.id}` : "stage-none";
   const { setNodeRef, isOver } = useDroppable({
@@ -272,6 +323,9 @@ function Column({ column, onDealClick, canMove, ...actions }: ColumnProps) {
               deal={deal}
               onClick={onDealClick}
               disabled={!canMove}
+              stages={stages}
+              currentStageId={stage?.id}
+              onMoveToStage={onMoveToStage}
               {...actions}
             />
           ))
@@ -473,11 +527,18 @@ export function KanbanBoard({
     }
 
     if (!targetStageId) return;
+    moveCardToStage(parsed.kind, parsed.id, targetStageId);
+  };
 
+  // Единая логика перемещения карточки на этап — используется и перетаскиванием,
+  // и кнопкой «На этап…» на карточке (быстрый перенос без драга). Делает
+  // оптимистичное обновление, зовёт API и тихо сверяется с сервером.
+  const moveCardToStage = (kind: "deal" | "lead", id: number, targetStageId: number) => {
+    if (!board) return;
     const sourceColumn = board.columns.find((c) =>
-      c.deals.some((d) => matchCard(d, parsed.kind, parsed.id))
+      c.deals.some((d) => matchCard(d, kind, id))
     );
-    const deal = sourceColumn?.deals.find((d) => matchCard(d, parsed.kind, parsed.id));
+    const deal = sourceColumn?.deals.find((d) => matchCard(d, kind, id));
     if (!deal || !sourceColumn) return;
     if (sourceColumn.stage?.id === targetStageId) return;
 
@@ -488,7 +549,7 @@ export function KanbanBoard({
     let optimisticStatus = deal.status;
     if (targetColumn.stage) {
       const s = targetColumn.stage;
-      if (parsed.kind === "lead") {
+      if (kind === "lead") {
         optimisticStatus = s.type === "lost" ? "cancelled" : deal.status === "new" ? "in_progress" : deal.status;
       } else if (s.type === "won") {
         optimisticStatus = "won";
@@ -506,7 +567,7 @@ export function KanbanBoard({
     const optimisticDeal: FunnelBoardDeal = { ...deal, stage_id: targetStageId, status: optimisticStatus };
     const newColumns = board.columns.map((col) => {
       if (col === sourceColumn) {
-        const deals = col.deals.filter((d) => !matchCard(d, parsed.kind, parsed.id));
+        const deals = col.deals.filter((d) => !matchCard(d, kind, id));
         return { ...col, deals, count: deals.length, total_amount: deals.reduce((s, d) => s + Number(d.amount || 0), 0) };
       }
       if (col === targetColumn) {
@@ -518,18 +579,14 @@ export function KanbanBoard({
     setBoard({ ...board, columns: newColumns });
 
     const moveRequest =
-      parsed.kind === "lead"
-        ? move_lead_stage({ stage_id: targetStageId }, { id: parsed.id })
-        : move_deal_stage({ stage_id: targetStageId }, { id: parsed.id });
+      kind === "lead"
+        ? move_lead_stage({ stage_id: targetStageId }, { id })
+        : move_deal_stage({ stage_id: targetStageId }, { id });
 
     moveRequest
       .then(() => {
-        toast.success(parsed.kind === "lead" ? "Лид перемещён" : "Сделка перемещена");
-        // Тихо сверяем состояние с сервером (won/lost/in_progress выставляется
-        // на бэке по stage.type; неразобранный лид достаётся тому, кто перенёс).
-        // Именно ТИХО, без скелетона: оптимистичная карточка уже на месте,
-        // полная перезагрузка `loadBoard()` мигала и создавала ощущение
-        // задержки — перенос должен быть моментальным.
+        toast.success(kind === "lead" ? "Лид перемещён" : "Сделка перемещена");
+        // Тихо сверяем состояние с сервером; оптимистичная карточка уже на месте.
         refreshBoard();
       })
       .catch((err: any) => {
@@ -558,6 +615,10 @@ export function KanbanBoard({
     );
   }
 
+  const boardStages = board.columns
+    .map((c) => c.stage)
+    .filter((s): s is FunnelStage => !!s);
+
   return (
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       {/* Дублирующая полоса прокрутки сверху — видна только когда доска шире экрана */}
@@ -582,6 +643,10 @@ export function KanbanBoard({
             column={column}
             onDealClick={onDealClick}
             canMove={canMove}
+            stages={boardStages}
+            onMoveToStage={(deal, stageId) =>
+              moveCardToStage(deal.kind === "lead" ? "lead" : "deal", deal.id, stageId)
+            }
             {...actions}
           />
         ))}
