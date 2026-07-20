@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { renderAsync } from "docx-preview"
-import { FileText, Loader2 } from "lucide-react"
+import { FileText, Loader2, Stamp } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { previewDocumentTemplate } from "@/src/api/documents.api"
 
@@ -75,6 +75,17 @@ export function TemplatePreviewModal({ open, onClose, docType, title }: Props) {
             документа они заполнятся автоматически.
           </DialogDescription>
         </DialogHeader>
+
+        {/* docx-preview не рисует плавающие картинки за текстом (печать,
+            подпись). В готовом документе они есть — предупреждаем, чтобы
+            пустое место в предпросмотре не приняли за пропажу. */}
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <Stamp className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Печать и подпись здесь не показываются — это ограничение предпросмотра.
+            В сформированном документе (PDF) они будут на месте.
+          </span>
+        </div>
 
         <div className="max-h-[70vh] overflow-auto rounded-lg border bg-slate-50 p-4">
           {loading ? (
