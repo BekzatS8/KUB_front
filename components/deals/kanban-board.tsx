@@ -22,6 +22,7 @@ import { Building2, User, RefreshCw, Pencil, Archive, Trash2, MessageCircle, Pho
 import * as FunnelStagesAPI from "@/src/api/funnel-stages.api";
 import { move_deal_stage } from "@/src/api/deals.api";
 import { move_lead_stage } from "@/src/api/leads.api";
+import { useBoardSocket } from "@/hooks/useBoardSocket";
 import type {
   FunnelBoard,
   FunnelBoardColumn,
@@ -384,29 +385,38 @@ export function KanbanBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
 
-  // «Живой» режим доски. Раньше при смене этапа на детальной странице
-  // лида/сделки доска оставалась смонтированной со старым состоянием, и
-  // изменения появлялись только после ручного обновления страницы
-  // («зайти в другой раздел и вернуться» — обратная связь по видео
-  // 17.07.2026). Перечитываем доску при возврате фокуса/видимости вкладки
-  // и лёгким поллингом, пропуская момент активного перетаскивания карточки.
+  // «Живой» режим доски. Основной канал — WebSocket (см. useBoardSocket ниже):
+  // когда другой менеджер двигает/архивирует карточку в этой воронке, сервер
+  // шлёт сигнал, и доска перечитывается моментально. Слушатели фокуса/
+  // видимости и поллинг (30с) остаются страховкой на случай обрыва сокета.
   const activeDealRef = useRef<FunnelBoardDeal | null>(null);
   activeDealRef.current = activeDeal;
+
+  const maybeRefreshRef = useRef<() => void>(() => {});
+  maybeRefreshRef.current = () => {
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    if (activeDealRef.current) return; // не мешаем перетаскиванию
+    refreshBoard();
+  };
+
+  // Real-time через WebSocket: по сигналу «board_changed» перечитываем доску
+  // (лёгкий дебаунс, чтобы серия переносов не вызвала шквал запросов).
+  const wsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useBoardSocket(funnelId || null, () => {
+    if (wsDebounceRef.current) clearTimeout(wsDebounceRef.current);
+    wsDebounceRef.current = setTimeout(() => maybeRefreshRef.current(), 250);
+  });
 
   useEffect(() => {
     if (!funnelId) return;
 
-    const maybeRefresh = () => {
-      if (document.visibilityState !== "visible") return;
-      if (activeDealRef.current) return; // не мешаем перетаскиванию
-      refreshBoard();
-    };
+    const maybeRefresh = () => maybeRefreshRef.current();
 
     const onVisibility = () => maybeRefresh();
     const onFocus = () => maybeRefresh();
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("focus", onFocus);
-    const interval = window.setInterval(maybeRefresh, 15000);
+    const interval = window.setInterval(maybeRefresh, 30000);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
