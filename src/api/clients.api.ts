@@ -369,6 +369,55 @@ export async function loadClientAvatar(clientId: string): Promise<string | null>
   }
 }
 
+// ─── Client Attachments (сканы паспорта, удостоверения, прав, дипломов, справок) ──
+
+export interface ClientAttachment {
+  id: number
+  client_id: number
+  category: string
+  file_path: string
+  mime?: string | null
+  size_bytes?: number | null
+  created_at: string
+}
+
+export async function listClientAttachments(clientId: string | number): Promise<ClientAttachment[]> {
+  const res = await api.get(`/clients/${clientId}/attachments`)
+  return res.data?.items || []
+}
+
+export async function uploadClientAttachment(clientId: string | number, category: string, file: File): Promise<ClientAttachment> {
+  const form = new FormData()
+  form.append('category', category)
+  form.append('file', file)
+  const res = await api.post(`/clients/${clientId}/attachments`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return res.data
+}
+
+export async function deleteClientAttachment(clientId: string | number, fileId: number): Promise<void> {
+  await api.delete(`/clients/${clientId}/attachments/${fileId}`)
+}
+
+// Просмотр (inline) — возвращает blob-URL для картинки/pdf; вызывающий освобождает URL.
+export async function loadClientAttachment(clientId: string | number, fileId: number): Promise<string> {
+  const res = await api.get(`/clients/${clientId}/attachments/${fileId}`, { responseType: 'blob' })
+  return URL.createObjectURL(res.data)
+}
+
+export async function downloadClientAttachment(clientId: string | number, fileId: number, fileName: string): Promise<void> {
+  const res = await api.get(`/clients/${clientId}/attachments/${fileId}/download`, { responseType: 'blob' })
+  const url = URL.createObjectURL(res.data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName || 'file'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 // ─── Client Documents ──────────────────────────────────────────────
 
 export async function getClientDocuments(clientId: string, params?: { page?: number; size?: number; status?: string; doc_type?: string; q?: string }): Promise<{ items: any[]; total: number }> {

@@ -57,13 +57,35 @@ CommandInput.displayName = CommandPrimitive.Input.displayName;
 const CommandList = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.List>
->(({ className, ...props }, ref) => (
-  <CommandPrimitive.List
-    ref={ref}
-    className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden", className)}
-    {...props}
-  />
-));
+>(({ className, ...props }, ref) => {
+  const innerRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Внутри модалки (Radix Dialog) react-remove-scroll блокирует колёсико на
+  // контенте, вынесенном в портал (поповер/командный список). Прокручиваем
+  // вручную — это чинит скролл мышкой во всех выпадашках в модалках.
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const el = innerRef.current;
+    if (!el || el.scrollHeight <= el.clientHeight) return;
+    e.preventDefault();
+    e.stopPropagation();
+    el.scrollTop += e.deltaY;
+  };
+
+  const setRef = (node: HTMLDivElement | null) => {
+    innerRef.current = node;
+    if (typeof ref === "function") ref(node);
+    else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+  };
+
+  return (
+    <CommandPrimitive.List
+      ref={setRef}
+      onWheelCapture={handleWheel}
+      className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden overscroll-contain", className)}
+      {...props}
+    />
+  );
+});
 
 CommandList.displayName = CommandPrimitive.List.displayName;
 

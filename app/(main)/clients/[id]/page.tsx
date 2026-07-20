@@ -38,6 +38,7 @@ import {
 } from "@/src/api/document-versions.api"
 import { getCurrentUser, hasPermission, getRoleCode } from "@/lib/auth"
 import { getMyPermissions } from "@/src/api/permissions.api"
+import { ClientAttachments } from "@/components/client-attachments"
 import type { Client } from "@/src/models/clients.model"
 import type { Document, DocType, DocStatus } from "@/src/models/documents.model"
 import type { TelephonyCall } from "@/src/models/telephony.model"
@@ -217,37 +218,35 @@ function DetailItem({ label, value, className }: { label: string; value?: React.
 
 // ─── Client Avatar Component ────────────────────────────────────────
 
+// В обзоре аватар только просматривают и увеличивают: загрузка/удаление фото
+// перенесены в форму редактирования клиента (обратная связь 20.07.2026).
 function ClientAvatar({
-  client, avatarUrl, onUpload, onDelete, canEdit,
+  client, avatarUrl,
 }: {
   client: Client
   avatarUrl: string | null
-  onUpload: (file: File) => void
-  onDelete: () => void
-  canEdit: boolean
 }) {
   const [error, setError] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [zoomOpen, setZoomOpen] = useState(false)
   const initials = getInitials(client)
   const color = getAvatarColor(client.id)
   const isLegal = client.client_type === "legal"
+  const hasImage = !!avatarUrl && !error
 
   useEffect(() => { setError(false) }, [avatarUrl])
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) onUpload(file)
-    e.target.value = ""
-  }
 
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="relative group">
-        <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-border bg-muted">
-          {avatarUrl && !error ? (
+        <div
+          className={`w-24 h-24 rounded-full overflow-hidden border-2 border-border bg-muted ${hasImage ? "cursor-zoom-in" : ""}`}
+          onClick={() => { if (hasImage) setZoomOpen(true) }}
+          title={hasImage ? "Нажмите, чтобы увеличить" : undefined}
+        >
+          {hasImage ? (
             <img
-              key={avatarUrl}
-              src={avatarUrl}
+              key={avatarUrl!}
+              src={avatarUrl!}
               alt={client.display_name || client.name || ""}
               className="w-full h-full object-cover"
               onError={() => setError(true)}
@@ -258,34 +257,24 @@ function ClientAvatar({
             </div>
           )}
         </div>
-        {canEdit && (
-          <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 rounded-full bg-white/90 hover:bg-white text-slate-700"
-              title="Загрузить фото"
-            >
-              <Camera className="w-4 h-4" />
-            </button>
-            {avatarUrl && (
-              <button
-                onClick={onDelete}
-                className="p-1.5 rounded-full bg-white/90 hover:bg-white text-rose-600"
-                title="Удалить фото"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+        {hasImage && (
+          <div className="pointer-events-none absolute inset-0 rounded-full bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <Search className="w-5 h-5 text-white" />
           </div>
         )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,application/pdf"
-          className="hidden"
-          onChange={handleFileChange}
-        />
       </div>
+
+      {/* Лайтбокс: увеличенное фото */}
+      <Dialog open={zoomOpen} onOpenChange={setZoomOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{client.display_name || client.name || "Фото"}</DialogTitle>
+          </DialogHeader>
+          {hasImage && (
+            <img src={avatarUrl!} alt="" className="max-h-[70vh] w-full rounded-lg object-contain" />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -1375,9 +1364,6 @@ export default function ClientProfilePage() {
             <ClientAvatar
               client={client}
               avatarUrl={avatarUrl}
-              onUpload={handleAvatarUpload}
-              onDelete={handleAvatarDelete}
-              canEdit={canEdit}
             />
 
             {/* Client info */}
@@ -1450,7 +1436,14 @@ export default function ClientProfilePage() {
             {activeSection === "calls" && "Звонки"}
           </h1>
 
-          {activeSection === "overview" && <OverviewSection client={client} profile={profile} />}
+          {activeSection === "overview" && (
+            <div className="space-y-6">
+              <OverviewSection client={client} profile={profile} />
+              {/* Сканы документов клиента (паспорт, удостоверение, права,
+                  дипломы, справки) с просмотром и увеличением */}
+              <ClientAttachments clientId={Number(client.id)} canEdit={canEdit} />
+            </div>
+          )}
           {activeSection === "deals" && <DealsSection client={client} />}
           {activeSection === "documents" && (
             canViewDocs

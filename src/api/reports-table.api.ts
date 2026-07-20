@@ -72,3 +72,22 @@ export async function getReportTable(id: number): Promise<ManagerReport> {
   const res = await api.get(`/reports/table/report/${id}`)
   return res.data
 }
+
+// Админ: правка/удаление любого отчёта сотрудника.
+export async function saveReportTable(
+  id: number,
+  content: ReportTableContent,
+  title?: string,
+): Promise<void> {
+  await api.put(`/reports/table/report/${id}`, { content, title })
+}
+
+export async function deleteReportTable(id: number): Promise<void> {
+  await api.delete(`/reports/table/report/${id}`)
+}
+
+// Скачать отчёт в Excel (руководство/админ/КК). Возвращает blob для сохранения.
+export async function exportReportTable(id: number): Promise<Blob> {
+  const res = await api.get(`/reports/table/report/${id}/export`, { responseType: 'blob' })
+  return res.data as Blob
+}

@@ -11,21 +11,33 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { ArrowLeft, FileSpreadsheet, RefreshCw, User } from "lucide-react";
+import { ArrowLeft, FileSpreadsheet, RefreshCw, User, Download, Pencil, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ReportTableEditor } from "@/components/report-table-editor";
+import { getCurrentUser, getRoleCode } from "@/lib/auth";
 import {
   getReportTable,
   listReportTableOwners,
   listUserReportTables,
+  saveReportTable,
+  deleteReportTable,
+  exportReportTable,
   type ManagerReport,
   type ManagerReportOwner,
   type ReportTableContent,
 } from "@/src/api/reports-table.api";
 
 export default function TeamReportsPage() {
+  const isAdmin = getRoleCode(getCurrentUser()) === "system_admin";
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [owners, setOwners] = useState<ManagerReportOwner[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -62,6 +74,7 @@ export default function TeamReportsPage() {
 
   const openReport = async (id: number) => {
     setReportLoading(true);
+    setEditing(false);
     try {
       setReport(await getReportTable(id));
     } catch (err: any) {
@@ -71,30 +84,132 @@ export default function TeamReportsPage() {
     }
   };
 
+  // Админ правит чужой отчёт
+  const handleSaveReport = async (content: ReportTableContent) => {
+    if (!report) return;
+    setSaving(true);
+    try {
+      await saveReportTable(report.id, content, report.title);
+      setReport({ ...report, content, updated_at: new Date().toISOString() });
+      setEditing(false);
+      toast.success("Отчёт сохранён");
+    } catch (err: any) {
+      toast.error(err?.message || "Не удалось сохранить отчёт");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteReport = async () => {
+    if (!report) return;
+    try {
+      await deleteReportTable(report.id);
+      toast.success("Отчёт удалён");
+      setDeleteOpen(false);
+      // возврат к списку отчётов сотрудника + обновление
+      setReport(null);
+      if (owner) openOwner(owner);
+    } catch (err: any) {
+      toast.error(err?.message || "Не удалось удалить отчёт");
+    }
+  };
+
+  const handleExport = async () => {
+    if (!report) return;
+    try {
+      const blob = await exportReportTable(report.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${report.title || "report"}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast.error(err?.message || "Не удалось скачать отчёт");
+    }
+  };
+
   // Уровень 3: сам отчёт
   if (report || reportLoading) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => setReport(null)}>
-            <ArrowLeft className="mr-1.5 h-4 w-4" />
-            К отчётам сотрудника
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">{report?.title || "..."}</h1>
-            <p className="text-xs text-slate-500">
-              {report?.user_name}
-              {report?.updated_at && (
-                <> · обновлён {format(new Date(report.updated_at), "d MMMM yyyy, HH:mm", { locale: ru })}</>
-              )}
-            </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => { setEditing(false); setReport(null); }}>
+              <ArrowLeft className="mr-1.5 h-4 w-4" />
+              К отчётам сотрудника
+            </Button>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">{report?.title || "..."}</h1>
+              <p className="text-xs text-slate-500">
+                {report?.user_name}
+                {report?.updated_at && (
+                  <> · обновлён {format(new Date(report.updated_at), "d MMMM yyyy, HH:mm", { locale: ru })}</>
+                )}
+              </p>
+            </div>
           </div>
+          {report && !reportLoading && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleExport}>
+                <Download className="mr-1.5 h-4 w-4" />
+                Excel
+              </Button>
+              {isAdmin && (editing ? (
+                <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
+                  <X className="mr-1.5 h-4 w-4" />
+                  Отменить правку
+                </Button>
+              ) : (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                    <Pencil className="mr-1.5 h-4 w-4" />
+                    Редактировать
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="mr-1.5 h-4 w-4" />
+                    Удалить
+                  </Button>
+                </>
+              ))}
+            </div>
+          )}
         </div>
         {reportLoading || !report ? (
           <Skeleton className="h-64 w-full rounded-lg" />
         ) : (
-          <ReportTableEditor content={report.content as ReportTableContent} readOnly />
+          <ReportTableEditor
+            key={`${report.id}-${editing}`}
+            content={report.content as ReportTableContent}
+            readOnly={!editing}
+            saving={saving}
+            onSave={editing ? handleSaveReport : undefined}
+          />
         )}
+
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Удалить отчёт «{report?.title}»?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Отчёт сотрудника {report?.user_name} будет удалён безвозвратно.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Отмена</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteReport} className="bg-red-600 text-white hover:bg-red-700">
+                Удалить
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }
