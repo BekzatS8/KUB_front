@@ -13,6 +13,8 @@ export interface Client {
   photo_35x45?: string | null;
   avatar_url?: string | null;
   contact_info?: string | null;
+  telegram_username?: string | null;
+  instagram_username?: string | null;
   owner_id?: number | null;
   display_name?: string | null;
   primary_phone?: string | null;

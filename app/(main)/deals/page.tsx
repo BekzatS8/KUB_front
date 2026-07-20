@@ -509,7 +509,13 @@ export default function DealsPage() {
                 {options.map((option) => (
                   <CommandItem
                     key={option.value}
-                    value={option.searchValue || option.label}
+                    // cmdk использует value как идентификатор пункта. При
+                    // одинаковых подписях (например, несколько «Лид из
+                    // Instagram») пункты схлопывались в один — ломались скролл
+                    // и выделение (несколько строк «выбирались» разом). Добавляем
+                    // уникальный суффикс с option.value, оставляя текст доступным
+                    // для поиска.
+                    value={`${option.searchValue || option.label} ::${option.value}`}
                     onSelect={() => {
                       onChange(option.value);
                       setOpen(false);
@@ -1270,6 +1276,22 @@ export default function DealsPage() {
     return lead ? lead.title : `Лид #${leadId}`;
   };
 
+  // Опция лида для выпадающего списка. Лиды из Instagram часто имеют
+  // одинаковый заголовок «Лид из Instagram» без телефона, из-за чего в
+  // списке их невозможно было различить. Добавляем телефон/имя клиента
+  // (если есть) и #id, а также расширенное значение для поиска.
+  const getLeadOption = (lead: any) => {
+    const base = lead.title || `Лид #${lead.id}`;
+    const extra = lead.phone
+      ? `+${String(lead.phone).replace(/^\+/, "")}`
+      : (lead.client_name || "");
+    const label = [base, extra].filter(Boolean).join(" · ") + ` · #${lead.id}`;
+    const searchValue = [base, extra, lead.description, lead.source, `#${lead.id}`]
+      .filter(Boolean)
+      .join(" ");
+    return { value: lead.id.toString(), label, searchValue };
+  };
+
   // Calculate statistics
   const stats = {
     total: totalDeals,
@@ -1912,10 +1934,7 @@ export default function DealsPage() {
                 placeholder="Выберите лид"
                 searchPlaceholder="Поиск лида..."
                 emptyText="Лид не найден"
-                options={leads.map((lead) => ({
-                  value: lead.id.toString(),
-                  label: lead.title || `Лид #${lead.id}`
-                }))}
+                options={leads.map(getLeadOption)}
               />
               {!newDeal.lead_id && (
                 <p className="text-xs text-red-500">Выберите лид для продолжения</p>
@@ -2083,10 +2102,7 @@ export default function DealsPage() {
                 placeholder="Выберите лид"
                 searchPlaceholder="Поиск лида..."
                 emptyText="Лид не найден"
-                options={leads.map((lead) => ({
-                  value: lead.id.toString(),
-                  label: lead.title || `Лид #${lead.id}`
-                }))}
+                options={leads.map(getLeadOption)}
               />
             </div>
 

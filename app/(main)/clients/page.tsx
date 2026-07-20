@@ -279,6 +279,8 @@ const EMPTY_CLIENT: Models.CreateClientRequest = {
   phone: DEFAULT_PHONE_PREFIX,
   email: "",
   contact_info: "",
+  telegram_username: "",
+  instagram_username: "",
   client_type: "individual",
   owner_id: 0,
 
@@ -865,6 +867,8 @@ export default function ClientsPage() {
       bin_iin: client.bin_iin || "",
       address: client.address || "",
       contact_info: client.contact_info || "",
+      telegram_username: client.telegram_username || "",
+      instagram_username: client.instagram_username || "",
       client_type: client.client_type || "individual",
 
       // Legal profile nested fields
@@ -1255,6 +1259,8 @@ export default function ClientsPage() {
       phone: clientFormData.phone || "",
       email: clientFormData.email || "",
       contact_info: clientFormData.contact_info || "",
+      telegram_username: clientFormData.telegram_username || "",
+      instagram_username: clientFormData.instagram_username || "",
       actual_address: clientFormData.client_type === "legal" ? clientFormData.legal_profile?.actual_address || "" : clientFormData.actual_address || "",
     };
 
@@ -1351,6 +1357,8 @@ export default function ClientsPage() {
           phone: clientFormData.phone || "",
           email: clientFormData.email || "",
           contact_info: clientFormData.contact_info || "",
+          telegram_username: clientFormData.telegram_username || "",
+          instagram_username: clientFormData.instagram_username || "",
           last_name: clientFormData.last_name || "",
           first_name: clientFormData.first_name || "",
           middle_name: clientFormData.middle_name || "",
@@ -2262,6 +2270,17 @@ export default function ClientsPage() {
                         <div className="space-y-2">
                           <Label htmlFor="email">Email</Label>
                           <Input id="email" type="email" placeholder="Email" value={clientFormData.email || ""} onChange={handleFormChange} />
+                        </div>
+                      </div>
+                      {/* Мессенджер-хендлы для быстрой связи из карточки (видео 17.07.2026) */}
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="telegram_username">Telegram</Label>
+                          <Input id="telegram_username" placeholder="@username или ссылка" value={clientFormData.telegram_username || ""} onChange={handleFormChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="instagram_username">Instagram</Label>
+                          <Input id="instagram_username" placeholder="username без @" value={clientFormData.instagram_username || ""} onChange={handleFormChange} />
                         </div>
                       </div>
                     </div>

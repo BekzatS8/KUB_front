@@ -348,11 +348,55 @@ export function KanbanBoard({
     }
   };
 
+  // Тихое фоновое обновление доски — без спиннера и без тоста, чтобы не
+  // мигало при поллинге/возврате фокуса. Используется для «живого» режима.
+  const refreshBoard = async () => {
+    if (!funnelId) return;
+    try {
+      const data = await FunnelStagesAPI.getFunnelBoard(funnelId);
+      setBoard(data);
+    } catch (err) {
+      console.error("Error refreshing funnel board:", err);
+    }
+  };
+
   useEffect(() => {
     if (funnelId) {
       loadBoard();
     }
   }, [funnelId, refreshKey]);
+
+  // «Живой» режим доски. Раньше при смене этапа на детальной странице
+  // лида/сделки доска оставалась смонтированной со старым состоянием, и
+  // изменения появлялись только после ручного обновления страницы
+  // («зайти в другой раздел и вернуться» — обратная связь по видео
+  // 17.07.2026). Перечитываем доску при возврате фокуса/видимости вкладки
+  // и лёгким поллингом, пропуская момент активного перетаскивания карточки.
+  const activeDealRef = useRef<FunnelBoardDeal | null>(null);
+  activeDealRef.current = activeDeal;
+
+  useEffect(() => {
+    if (!funnelId) return;
+
+    const maybeRefresh = () => {
+      if (document.visibilityState !== "visible") return;
+      if (activeDealRef.current) return; // не мешаем перетаскиванию
+      refreshBoard();
+    };
+
+    const onVisibility = () => maybeRefresh();
+    const onFocus = () => maybeRefresh();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onFocus);
+    const interval = window.setInterval(maybeRefresh, 15000);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [funnelId]);
 
   const allDeals = useMemo(
     () => board?.columns.flatMap((c) => c.deals) || [],

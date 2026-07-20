@@ -8,6 +8,7 @@ import {
   Edit, MoreHorizontal, Eye, Send,
   Download, RefreshCw, Upload, AlertCircle, History, RotateCcw, Camera, X,
   Search, PlayCircle, TrendingUp, PhoneCall, ShieldCheck, XCircle,
+  MessageCircle, Instagram,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -1342,6 +1343,17 @@ export default function ClientProfilePage() {
   const clientType = client.client_type === "legal" ? "Юр. лицо" : "Физ. лицо"
   const isArchived = client.is_archived || client.archived
 
+  // Мессенджер-хендлы клиента → готовые ссылки (видео 17.07.2026).
+  // Принимаем как @username / username, так и полную ссылку.
+  const tgRaw = (client.telegram_username || "").trim()
+  const igRaw = (client.instagram_username || "").trim()
+  const tgHref = tgRaw
+    ? (/^https?:\/\//i.test(tgRaw) ? tgRaw : `https://t.me/${tgRaw.replace(/^@/, "")}`)
+    : ""
+  const igHref = igRaw
+    ? (/^https?:\/\//i.test(igRaw) ? igRaw : `https://instagram.com/${igRaw.replace(/^@/, "")}`)
+    : ""
+
   const visibleNavItems = NAV_ITEMS
 
   return (
@@ -1392,6 +1404,47 @@ export default function ClientProfilePage() {
                   >
                     <PhoneCall className="w-3 h-3 text-emerald-600" />
                   </Button>
+                  {/* Быстрый переход в WhatsApp по номеру клиента.
+                      Заказчик просил из карточки связываться в мессенджерах
+                      (видео 17.07.2026): переписка с частью клиентов уже
+                      ведётся в WhatsApp. */}
+                  <a
+                    href={`https://wa.me/${(client.primary_phone || client.phone || "").replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Написать в WhatsApp"
+                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                  >
+                    <MessageCircle className="w-3 h-3 text-green-600" />
+                  </a>
+                </div>
+              )}
+              {/* Telegram / Instagram — отдельный ряд, показываем по наличию
+                  хендла независимо от телефона (видео 17.07.2026). */}
+              {(tgHref || igHref) && (
+                <div className="mt-2 flex items-center justify-center gap-2">
+                  {tgHref && (
+                    <a
+                      href={tgHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Написать в Telegram"
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                    >
+                      <Send className="w-3.5 h-3.5 text-sky-500" />
+                    </a>
+                  )}
+                  {igHref && (
+                    <a
+                      href={igHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Открыть Instagram"
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                    >
+                      <Instagram className="w-3.5 h-3.5 text-pink-500" />
+                    </a>
+                  )}
                 </div>
               )}
             </div>
