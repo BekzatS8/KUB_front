@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,9 +57,12 @@ import {
   addMembers,
   leaveChat,
   deleteChat,
+  removeMember,
 } from "@/src/api/chat.api";
 import type { Chat, Message } from "@/src/models/chat.model";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, getRoleCode } from "@/lib/auth";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
 import { CustomSelect } from "@/components/ui/custom-select";
 import api from "@/src/api/index";
 import type { User } from "@/src/models/users.model";
@@ -590,11 +592,51 @@ export default function ChatPage() {
   const handleAddMembers = async () => {
     if (!selectedChat || addMembersList.length === 0) return;
     try {
-      await addMembers(selectedChat.id, { members: addMembersList.map(id => parseInt(id)) });
+      await addMembers(selectedChat.id, { members: addMembersList.map(id => parseInt(String(id))) });
       await fetchChats();
+      await refreshGroupInfo(selectedChat.id, [
+        ...(selectedChat.members || []),
+        ...addMembersList.map(id => parseInt(String(id))),
+      ]);
+      setAddMembersList([]);
       setIsAddMembersModalOpen(false);
     } catch (e: any) {
       console.error(e);
+      toast.error("Не удалось добавить участников");
+    }
+  }
+
+  // Может ли текущий пользователь управлять составом группы: создатель группы
+  // или системный админ.
+  const canManageGroup = (chat: any): boolean => {
+    if (!chat?.is_group) return false;
+    if (getRoleCode(currentUser) === "system_admin") return true;
+    return String(chat.creator_id ?? "") === String(currentUser?.id ?? "-");
+  };
+
+  // Перечитать участников открытой карточки группы после добавления/удаления
+  const refreshGroupInfo = async (chatId: number, memberIds: number[]) => {
+    const unique = Array.from(new Set(memberIds));
+    const participants = await fetchGroupParticipants(unique);
+    setSelectedUserInfo((prev: any) =>
+      prev && prev.id === chatId
+        ? { ...prev, members: unique, member_count: unique.length, participants }
+        : prev
+    );
+    setSelectedChat((prev: any) => (prev && prev.id === chatId ? { ...prev, members: unique } : prev));
+  };
+
+  const handleRemoveMember = async (chat: any, userId: number) => {
+    if (!chat?.id) return;
+    try {
+      await removeMember(chat.id, userId);
+      await fetchChats();
+      await refreshGroupInfo(chat.id, (chat.members || []).filter((m: number) => m !== userId));
+    } catch (e: any) {
+      console.error(e);
+      toast.error("Не удалось удалить участника", {
+        description: e?.response?.data?.message || "Только владелец группы или админ может удалять участников",
+      });
     }
   }
 
@@ -629,6 +671,7 @@ export default function ChatPage() {
         id: chat.id,
         name: chat.name || `Group ${chat.id}`,
         is_group: true,
+        creator_id: (chat as any).creator_id,
         members: chat.members || [],
         member_count: chat.members?.length || 0,
         created_at: chat.created_at,
@@ -1050,7 +1093,7 @@ export default function ChatPage() {
           </div>
         </div>
 
-        <ScrollArea className="flex-1">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="p-2">
             {chatsLoading && <div className="py-4 text-center">Загрузка чатов...</div>}
             {chatsError && (
@@ -1118,7 +1161,7 @@ export default function ChatPage() {
               )
             )}
           </div>
-        </ScrollArea>
+        </div>
       </div>
 
       {/* Chat Area */}
@@ -1200,7 +1243,7 @@ export default function ChatPage() {
               </div>
 
               {/* Messages */}
-              <ScrollArea className="flex-1 p-4 bg-gray-50">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-gray-50">
                 <div className="space-y-4">
                   {(() => {
                     console.log('Rendering messages section:', { messagesLoading, messagesError, messagesLength: messages.length, messages });
@@ -1347,7 +1390,7 @@ export default function ChatPage() {
                   )}
                   <div ref={messagesEndRef} />
                 </div>
-              </ScrollArea>
+              </div>
 
               {/* Message Input */}
               <div className="p-4 bg-white border-t border-gray-200">
@@ -1401,34 +1444,53 @@ export default function ChatPage() {
       {selectedChat && <Dialog open={isAddMembersModalOpen} onOpenChange={setIsAddMembersModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {selectedUserInfo?.is_group ? 'Информация о группе' : 'Информация о пользователе'}
-            </DialogTitle>
+            <DialogTitle>Добавить участников</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <Label>Участники</Label>
-            <div className="space-y-2">
+          <div className="py-2">
+            <Label>Выберите участников</Label>
+            {/* Нативный скролл-контейнер: колёсико работает всегда, а список
+                больше не вываливается за пределы модалки (баг на фото 1). */}
+            <div className="mt-2 max-h-[50vh] space-y-1 overflow-y-auto rounded-md border p-2">
               {usersLoading ? (
-                <div>Загрузка...</div>
-              ) : (
-                users.filter(u => u?.id?.toString() !== currentUser?.id && !selectedChat.members.includes(parseInt(u?.id || 0))).map(user => (
-                  <div key={user?.id || 'unknown'} className="flex items-center space-x-2">
-                    <Input type="checkbox" id={`add-user-${user?.id}`} onChange={e => {
-                      if (e.target.checked) {
-                        setAddMembersList([...addMembersList, user?.id || 0]);
-                      } else {
-                        setAddMembersList(addMembersList.filter(id => id !== user?.id));
-                      }
-                    }} />
-                    <Label htmlFor={`add-user-${user?.id}`}>{user?.firstName} {user?.lastName}</Label>
-                  </div>
-                ))
-              )}
+                <div className="p-3 text-sm text-muted-foreground">Загрузка...</div>
+              ) : (() => {
+                const candidates = users.filter(
+                  u => String(u?.user_id || u?.id) !== String(currentUser?.id) &&
+                    !(selectedChat.members || []).includes(parseInt(String(u?.user_id || u?.id)))
+                );
+                if (candidates.length === 0) {
+                  return <div className="p-3 text-sm text-muted-foreground">Все пользователи уже в группе</div>;
+                }
+                return candidates.map(user => {
+                  const uid = String(user?.user_id || user?.id);
+                  const checked = addMembersList.includes(uid);
+                  return (
+                    <label
+                      key={uid}
+                      htmlFor={`add-user-${uid}`}
+                      className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-slate-50"
+                    >
+                      <Checkbox
+                        id={`add-user-${uid}`}
+                        checked={checked}
+                        onCheckedChange={(v) =>
+                          setAddMembersList(v === true
+                            ? [...addMembersList, uid]
+                            : addMembersList.filter(id => id !== uid))
+                        }
+                      />
+                      <span className="text-sm">{getUserDisplayName(user)}</span>
+                    </label>
+                  );
+                });
+              })()}
             </div>
           </div>
           <DialogFooter>
-            <DialogClose asChild><Button variant="ghost">Отмена</Button></DialogClose>
-            <Button onClick={handleAddMembers}>Добавить</Button>
+            <DialogClose asChild><Button variant="ghost" onClick={() => setAddMembersList([])}>Отмена</Button></DialogClose>
+            <Button onClick={handleAddMembers} disabled={addMembersList.length === 0}>
+              Добавить{addMembersList.length > 0 ? ` (${addMembersList.length})` : ""}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>}
@@ -1520,15 +1582,29 @@ export default function ChatPage() {
               {/* Group Participants */}
               {selectedUserInfo.is_group && selectedUserInfo.participants && (
                 <div className="space-y-4">
-                  <h4 className="text-sm font-medium text-muted-foreground">Participants</h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium text-muted-foreground">Участники</h4>
+                    {canManageGroup(selectedUserInfo) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setSelectedChat(selectedUserInfo); setAddMembersList([]); setIsAddMembersModalOpen(true); }}
+                      >
+                        <UserPlus className="mr-1.5 h-4 w-4" /> Добавить
+                      </Button>
+                    )}
+                  </div>
                   <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {selectedUserInfo.participants.map((participant: any) => (
+                    {selectedUserInfo.participants.map((participant: any) => {
+                      const pid = parseInt(String(participant?.user_id || participant?.id));
+                      const isSelf = String(pid) === String(currentUser?.id);
+                      const isOwner = String(pid) === String(selectedUserInfo.creator_id ?? "");
+                      return (
                       <div
                         key={participant?.user_id || participant?.id || 'unknown'}
-                        className="flex items-center justify-between p-2 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => handleViewParticipant(participant)}
+                        className="flex items-center justify-between p-2 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors"
                       >
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 min-w-0 cursor-pointer" onClick={() => handleViewParticipant(participant)}>
                           <Avatar className="h-8 w-8">
                             <AvatarImage src={''} />
                             <AvatarFallback className="text-xs">
@@ -1539,23 +1615,32 @@ export default function ChatPage() {
                               })()}
                             </AvatarFallback>
                           </Avatar>
-                          <div>
-                            <p className="text-sm font-medium">{getUserDisplayName(participant)}</p>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{getUserDisplayName(participant)}{isOwner && <span className="ml-1 text-xs text-muted-foreground">(владелец)</span>}</p>
                             {participant.email && (
-                              <p className="text-xs text-muted-foreground">{participant.email}</p>
+                              <p className="text-xs text-muted-foreground truncate">{participant.email}</p>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 shrink-0">
                           {participant.is_online !== undefined && (
                             <div className={`w-2 h-2 rounded-full ${participant.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></div>
                           )}
-                          {participant.company_name && (
-                            <span className="text-xs text-muted-foreground">{participant.company_name}</span>
+                          {/* Удалить участника: только управляющий, не себя и не владельца */}
+                          {canManageGroup(selectedUserInfo) && !isSelf && !isOwner && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-muted-foreground hover:text-red-600"
+                              title="Удалить из группы"
+                              onClick={(e) => { e.stopPropagation(); handleRemoveMember(selectedUserInfo, pid); }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           )}
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 </div>
               )}

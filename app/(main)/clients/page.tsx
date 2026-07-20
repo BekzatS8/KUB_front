@@ -1635,14 +1635,15 @@ export default function ClientsPage() {
         <CardContent>
           <div className="overflow-hidden rounded-md border">
             <Table className="w-full table-fixed animate-fade-in">
+              {/* 6 колонок = 6 <col>. Раньше их было 7, лишняя добавляла
+                  пустой столбец справа от «Действий». Сумма ширин = 100%. */}
               <colgroup>
-                <col className="w-[5%]" />
-                <col className="w-[23%]" />
-                <col className="w-[15%]" />
-                <col className="w-[13%]" />
+                <col className="w-[6%]" />
+                <col className="w-[28%]" />
+                <col className="w-[12%]" />
+                <col className="w-[18%]" />
                 <col className="w-[20%]" />
-                <col className="w-[12%]" />
-                <col className="w-[12%]" />
+                <col className="w-[16%]" />
               </colgroup>
               <TableHeader>
                 <TableRow>

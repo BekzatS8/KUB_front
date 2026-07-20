@@ -50,6 +50,12 @@ export async function leaveChat(chatId: number): Promise<any> {
   return res.data
 }
 
+// Удалить участника из группы (владелец/админ группы или системный админ)
+export async function removeMember(chatId: number, userId: number): Promise<any> {
+  const res = await api.delete(`/chats/${chatId}/members/${userId}`)
+  return res.data
+}
+
 export async function deleteChat(chatId: number): Promise<any> {
   const res = await api.delete(`/chats/${chatId}`)
   return res.data

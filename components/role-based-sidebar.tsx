@@ -122,11 +122,13 @@ const MENU: NavEntry[] = [
     roles: ["hr"],
     disabled: true,
   },
-  // Пользователи for management / legal (not admin — in Settings group; not hr — uses Сотрудники)
+  // Пользователи for management (not admin — in Settings group; not hr — uses
+  // Сотрудники). Юрист доступа к пользователям больше не имеет (обратная связь
+  // 20.07.2026).
   {
     type: "item", title: "Пользователи", href: "/users", icon: UserCheck,
     permission: "users.view",
-    roles: ["management", "legal"],
+    roles: ["management"],
   },
   {
     type: "item", title: "Чат", href: "/chat", icon: MessageSquare,

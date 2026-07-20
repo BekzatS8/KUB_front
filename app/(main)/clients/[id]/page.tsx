@@ -7,7 +7,7 @@ import {
   CreditCard, Briefcase, Heart,
   Edit, MoreHorizontal, Eye, Send,
   Download, RefreshCw, Upload, AlertCircle, History, RotateCcw, Camera, X,
-  Search, PlayCircle, TrendingUp, PhoneCall,
+  Search, PlayCircle, TrendingUp, PhoneCall, ShieldCheck, XCircle,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -16,8 +16,9 @@ import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
+  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
+import { SendForSignatureModal } from "@/components/send-for-signature-modal"
 import { PdfViewer } from "@/components/ui/pdf-viewer-simple"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -36,6 +37,7 @@ import {
   restoreDocumentVersion, type DocumentVersion,
 } from "@/src/api/document-versions.api"
 import { getCurrentUser, hasPermission, getRoleCode } from "@/lib/auth"
+import { getMyPermissions } from "@/src/api/permissions.api"
 import type { Client } from "@/src/models/clients.model"
 import type { Document, DocType, DocStatus } from "@/src/models/documents.model"
 import type { TelephonyCall } from "@/src/models/telephony.model"
@@ -487,6 +489,38 @@ function DocumentsSection({ client }: { client: Client }) {
   const [versionComment, setVersionComment] = useState("")
   const versionFileRef = useRef<HTMLInputElement>(null)
 
+  // Полный жизненный цикл документа (как на /documents): проверка, ревью,
+  // подпись. Права берём с бэкенда — тот же docPermSet, что на общей странице.
+  const [docPerms, setDocPerms] = useState<Set<string>>(new Set())
+  const [actionLoading, setActionLoading] = useState(false)
+  const [reviewDoc, setReviewDoc] = useState<Document | null>(null)
+  const [isReviewOpen, setIsReviewOpen] = useState(false)
+  const [signDoc, setSignDoc] = useState<Document | null>(null)
+  const [isSignOpen, setIsSignOpen] = useState(false)
+
+  const roleCode = getRoleCode(getCurrentUser())
+  useEffect(() => {
+    getMyPermissions()
+      .then((data) => setDocPerms(new Set((data?.permissions || []).map((p: any) => p.action))))
+      .catch(() => setDocPerms(new Set()))
+  }, [])
+
+  // fallback до загрузки прав — та же матрица, что на /documents
+  const docPermFallback: Record<string, string[]> = {
+    system_admin: ['documents.view', 'documents.create', 'documents.update', 'documents.delete', 'documents.send', 'documents.download'],
+    management: ['documents.view', 'documents.create', 'documents.update', 'documents.send'],
+    quality_control: ['documents.view', 'documents.update', 'documents.send', 'documents.download'],
+    sales: ['documents.view', 'documents.send'],
+    visa: ['documents.view', 'documents.send'],
+    partner: ['documents.view'],
+    hr: ['documents.view', 'documents.create', 'documents.update', 'documents.send', 'documents.download'],
+    legal: ['documents.view', 'documents.create', 'documents.update', 'documents.send', 'documents.download'],
+  }
+  const docPermSet = docPerms.size > 0 ? docPerms : new Set(docPermFallback[roleCode || ''] || [])
+  const canDownloadDocs = docPermSet.has('documents.download')
+  const canSendDocs = docPermSet.has('documents.send')
+  const canUpdateDocs = docPermSet.has('documents.update')
+
   const loadDocs = useCallback(async () => {
     setLoading(true)
     try {
@@ -567,6 +601,37 @@ function DocumentsSection({ client }: { client: Client }) {
   const handleViewDocument = (doc: Document) => {
     setSelectedPdfDoc(doc)
     setIsPdfViewerOpen(true)
+  }
+
+  // Отправить на проверку (draft → under_review)
+  const handleSubmit = async (doc: Document) => {
+    setActionLoading(true)
+    try {
+      await DocAPI.submitDocument(doc.id)
+      toast({ title: "Документ отправлен на проверку" })
+      loadDocs()
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Ошибка", description: err?.message || "Не удалось отправить на проверку" })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  // Ревью: утвердить (approve) или вернуть на доработку (return)
+  const handleReview = async (action: "approve" | "return") => {
+    if (!reviewDoc) return
+    setActionLoading(true)
+    try {
+      await DocAPI.reviewDocument(reviewDoc.id, action)
+      toast({ title: action === "approve" ? "Документ утверждён" : "Документ возвращён на доработку" })
+      setIsReviewOpen(false)
+      setReviewDoc(null)
+      loadDocs()
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Ошибка", description: err?.message || "Не удалось выполнить ревью" })
+    } finally {
+      setActionLoading(false)
+    }
   }
 
   // Отправка документа клиенту в WhatsApp (ТЗ п.2.3): генерируем публичную
@@ -821,10 +886,10 @@ function DocumentsSection({ client }: { client: Client }) {
                         <Download className="w-4 h-4 mr-2" /> Скачать
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent>
-                        <DropdownMenuItem onClick={() => handleDownloadDocument(doc, "pdf")}>
+                        <DropdownMenuItem onClick={() => handleDownloadDocument(doc, "pdf")} disabled={!canDownloadDocs}>
                           <FileText className="w-4 h-4 mr-2" /> PDF
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDownloadDocument(doc, "docx")}>
+                        <DropdownMenuItem onClick={() => handleDownloadDocument(doc, "docx")} disabled={!canDownloadDocs}>
                           <FileText className="w-4 h-4 mr-2" /> Word
                         </DropdownMenuItem>
                       </DropdownMenuSubContent>
@@ -832,6 +897,30 @@ function DocumentsSection({ client }: { client: Client }) {
                     <DropdownMenuItem onClick={() => loadVersions(doc)}>
                       <History className="w-4 h-4 mr-2" /> История версий
                     </DropdownMenuItem>
+
+                    {/* Жизненный цикл документа (как на /documents) — по статусу */}
+                    {(
+                      (canUpdateDocs && doc.status === "draft") ||
+                      (canUpdateDocs && doc.status === "under_review") ||
+                      (canSendDocs && doc.status === "approved")
+                    ) && <DropdownMenuSeparator />}
+                    {canUpdateDocs && doc.status === "draft" && (
+                      <DropdownMenuItem onClick={() => handleSubmit(doc)}>
+                        <Send className="w-4 h-4 mr-2" /> Отправить на проверку
+                      </DropdownMenuItem>
+                    )}
+                    {canUpdateDocs && doc.status === "under_review" && (
+                      <DropdownMenuItem onClick={() => { setReviewDoc(doc); setIsReviewOpen(true) }}>
+                        <ShieldCheck className="w-4 h-4 mr-2" /> Ревью
+                      </DropdownMenuItem>
+                    )}
+                    {canSendDocs && doc.status === "approved" && (
+                      <DropdownMenuItem onClick={() => { setSignDoc(doc); setIsSignOpen(true) }}>
+                        <Send className="w-4 h-4 mr-2" /> Отправить на подпись
+                      </DropdownMenuItem>
+                    )}
+
+                    <DropdownMenuSeparator />
                     {/* Отправка клиенту в WhatsApp (ТЗ п.2.3) */}
                     <DropdownMenuItem onClick={() => handleSendToWhatsApp(doc)}>
                       <Send className="w-4 h-4 mr-2" /> Отправить в WhatsApp
@@ -850,6 +939,48 @@ function DocumentsSection({ client }: { client: Client }) {
         onClose={() => setIsPdfViewerOpen(false)}
         documentId={selectedPdfDoc?.id || 0}
         documentName={selectedPdfDoc ? (DOC_TYPE_LABELS[selectedPdfDoc.doc_type as DocType] || selectedPdfDoc.doc_type) : undefined}
+      />
+
+      {/* Ревью документа: утвердить / вернуть */}
+      <Dialog open={isReviewOpen} onOpenChange={setIsReviewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ревью документа #{reviewDoc?.id}</DialogTitle>
+            <DialogDescription>Утвердите или верните документ на доработку.</DialogDescription>
+          </DialogHeader>
+          {reviewDoc && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Тип:</span>
+              <span className="font-medium">{DOC_TYPE_LABELS[reviewDoc.doc_type as DocType] || reviewDoc.doc_type}</span>
+              <Badge variant="outline" className={`text-xs ${DOC_STATUS_COLORS[reviewDoc.status] || ""}`}>
+                {DOC_STATUS_LABELS[reviewDoc.status as DocStatus] || reviewDoc.status}
+              </Badge>
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" onClick={() => setIsReviewOpen(false)} disabled={actionLoading}>Отмена</Button>
+            <Button
+              variant="outline"
+              onClick={() => handleReview("return")}
+              disabled={actionLoading}
+              className="border-orange-300 text-orange-700 hover:bg-orange-50"
+            >
+              <XCircle className="w-4 h-4 mr-2" /> Вернуть
+            </Button>
+            <Button onClick={() => handleReview("approve")} disabled={actionLoading} className="bg-green-600 hover:bg-green-700">
+              <ShieldCheck className="w-4 h-4 mr-2" /> Утвердить
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Отправка документа на подпись клиенту */}
+      <SendForSignatureModal
+        open={isSignOpen}
+        onOpenChange={setIsSignOpen}
+        document={signDoc}
+        docTypeLabel={signDoc ? (DOC_TYPE_LABELS[signDoc.doc_type as DocType] || signDoc.doc_type) : undefined}
+        onSuccess={() => { setIsSignOpen(false); loadDocs() }}
       />
 
       {/* Version dialog */}

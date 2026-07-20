@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { getCurrentUser, getRoleCode } from "@/lib/auth";
 import {
   getWazzupIframe,
   setupWazzup,
@@ -41,6 +42,9 @@ const getWidgetErrorMessage = (error: any) => {
 };
 
 export default function MessengerPage() {
+  // Настройку интеграции меняет только админ — обычные роли (в т.ч. юрист,
+  // которому открыли мессенджер) кнопку настроек не видят (обратная связь 20.07.2026).
+  const isAdmin = getRoleCode(getCurrentUser()) === "system_admin";
   const [iframeUrl, setIframeUrl] = useState("");
   const [widgetState, setWidgetState] = useState<WidgetState>("loading");
   const [widgetError, setWidgetError] = useState("");
@@ -132,10 +136,12 @@ export default function MessengerPage() {
               {widgetError || "Не удалось открыть мессенджер. Проверьте интеграцию."}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
-              <Button variant="outline" onClick={() => setIsSetupModalOpen(true)}>
-                <Settings className="mr-2 h-4 w-4" />
-                Настройки интеграции
-              </Button>
+              {isAdmin && (
+                <Button variant="outline" onClick={() => setIsSetupModalOpen(true)}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  Настройки интеграции
+                </Button>
+              )}
               <Button onClick={refreshWidget}>
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Повторить
@@ -174,10 +180,12 @@ export default function MessengerPage() {
             <RefreshCw className={cn("mr-2 h-4 w-4", isManualRefresh && "animate-spin")} />
             Обновить
           </Button>
-          <Button onClick={() => setIsSetupModalOpen(true)}>
-            <Settings className="mr-2 h-4 w-4" />
-            Настройки
-          </Button>
+          {isAdmin && (
+            <Button onClick={() => setIsSetupModalOpen(true)}>
+              <Settings className="mr-2 h-4 w-4" />
+              Настройки
+            </Button>
+          )}
         </div>
       </div>
 
