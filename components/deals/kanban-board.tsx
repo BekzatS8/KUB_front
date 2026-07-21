@@ -30,6 +30,11 @@ import type {
   FunnelBoardDeal,
 } from "@/src/models/funnel-stages.model";
 
+// Кэш досок по funnelId, живёт на уровне модуля (переживает перемонтирование).
+// Позволяет показать воронку МГНОВЕННО из кэша при возврате на страницу, а
+// свежие данные подтянуть в фоне (stale-while-revalidate) — без ожидания.
+const boardCache = new Map<number, FunnelBoard>();
+
 const STATUS_LABELS: Record<string, string> = {
   new: "Новая",
   in_progress: "В работе",
@@ -342,8 +347,11 @@ export function KanbanBoard({
   refreshKey,
   ...actions
 }: KanbanBoardProps) {
-  const [board, setBoard] = useState<FunnelBoard | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Инициализируем из кэша — при возврате на страницу доска рисуется мгновенно.
+  const [board, setBoard] = useState<FunnelBoard | null>(
+    () => (funnelId ? boardCache.get(funnelId) ?? null : null)
+  );
+  const [isLoading, setIsLoading] = useState(() => !(funnelId && boardCache.has(funnelId)));
   const [activeDeal, setActiveDeal] = useState<FunnelBoardDeal | null>(null);
 
   // Горизонтальный скролл воронки: у высоких колонок нижняя полоса прокрутки
@@ -388,6 +396,7 @@ export function KanbanBoard({
     try {
       const data = await FunnelStagesAPI.getFunnelBoard(funnelId);
       setBoard(data);
+      boardCache.set(funnelId, data);
     } catch (err: any) {
       console.error("Error loading funnel board:", err);
       toast.error("Ошибка при загрузке воронки");
@@ -403,15 +412,19 @@ export function KanbanBoard({
     try {
       const data = await FunnelStagesAPI.getFunnelBoard(funnelId);
       setBoard(data);
+      boardCache.set(funnelId, data);
     } catch (err) {
       console.error("Error refreshing funnel board:", err);
     }
   };
 
-  // Первичная загрузка и смена воронки — со скелетоном (это действительно
-  // полная перезагрузка контента).
+  // Первичная загрузка. Если доска уже в кэше — показываем её мгновенно
+  // (она уже в state) и лишь тихо обновляем в фоне; иначе грузим со скелетоном.
   useEffect(() => {
-    if (funnelId) {
+    if (!funnelId) return;
+    if (boardCache.has(funnelId)) {
+      refreshBoard();
+    } else {
       loadBoard();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

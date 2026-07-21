@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -104,6 +104,94 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
+type ComboboxOption = { value: string; label: string; searchValue?: string };
+
+// Выпадающий список с поиском. Определён на уровне модуля (стабильная
+// идентичность), поэтому ре-рендеры родителя не ремоунтят его — критично для
+// серверного поиска, где каждое нажатие меняет state.
+function ComboboxSelect({
+  value,
+  onChange,
+  options,
+  placeholder = "Выберите...",
+  searchPlaceholder = "Поиск...",
+  emptyText = "Ничего не найдено",
+  disabled = false,
+  onSearchChange,
+  loading = false,
+}: {
+  value: string | number;
+  onChange: (value: string) => void;
+  options: ComboboxOption[];
+  placeholder?: string;
+  searchPlaceholder?: string;
+  emptyText?: string;
+  disabled?: boolean;
+  // Если задан — поиск идёт на сервере (по всей БД). cmdk-фильтр отключаем.
+  onSearchChange?: (query: string) => void;
+  loading?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn("w-full justify-between font-normal bg-background px-3 py-2 text-sm border-input border rounded-xl h-10 hover:bg-accent hover:text-accent-foreground", !value && "text-muted-foreground")}
+          disabled={disabled}
+        >
+          <span className="truncate">
+            {value
+              ? options.find((option) => option.value === value.toString())?.label
+              : placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-[--radix-popover-trigger-width] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl bg-white p-0"
+        align="start"
+      >
+        <Command shouldFilter={!onSearchChange}>
+          <CommandInput
+            placeholder={searchPlaceholder}
+            onValueChange={onSearchChange}
+          />
+          <CommandList className="max-h-[min(18rem,calc(100vh-8rem))] touch-pan-y overscroll-contain [-webkit-overflow-scrolling:touch]">
+            <CommandEmpty>{loading ? "Поиск…" : emptyText}</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => (
+                <CommandItem
+                  key={option.value}
+                  // cmdk использует value как идентификатор пункта. При одинаковых
+                  // подписях пункты схлопывались в один — добавляем уникальный
+                  // суффикс с option.value, оставляя текст доступным для поиска.
+                  value={`${option.searchValue || option.label} ::${option.value}`}
+                  onSelect={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value.toString() === option.value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {option.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function DealsPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
@@ -134,6 +222,12 @@ export default function DealsPage() {
   const [clients, setClients] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
+  // Серверный поиск лида в выпадашке: null = показываем стартовый список,
+  // массив = результаты поиска по всей БД (?q=). Так находятся ВСЕ лиды, а не
+  // только загруженная в память тысяча.
+  const [leadSearchResults, setLeadSearchResults] = useState<any[] | null>(null);
+  const [leadSearchLoading, setLeadSearchLoading] = useState(false);
+  const leadSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Kanban view state
   const [viewMode, setViewMode] = useState<"kanban" | "table">("table");
@@ -460,83 +554,9 @@ export default function DealsPage() {
     }
   };
 
-  const ComboboxSelect = ({
-    value,
-    onChange,
-    options,
-    placeholder = "Выберите...",
-    searchPlaceholder = "Поиск...",
-    emptyText = "Ничего не найдено",
-    disabled = false
-  }: {
-    value: string | number;
-    onChange: (value: string) => void;
-    options: { value: string; label: string; searchValue?: string }[];
-    placeholder?: string;
-    searchPlaceholder?: string;
-    emptyText?: string;
-    disabled?: boolean;
-  }) => {
-    const [open, setOpen] = useState(false);
-
-    return (
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            className={cn("w-full justify-between font-normal bg-background px-3 py-2 text-sm border-input border rounded-xl h-10 hover:bg-accent hover:text-accent-foreground", !value && "text-muted-foreground")}
-            disabled={disabled}
-          >
-            <span className="truncate">
-              {value
-                ? options.find((option) => option.value === value.toString())?.label
-                : placeholder}
-            </span>
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          className="w-[--radix-popover-trigger-width] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl bg-white p-0"
-          align="start"
-        >
-          <Command>
-            <CommandInput placeholder={searchPlaceholder} />
-            <CommandList className="max-h-[min(18rem,calc(100vh-8rem))] touch-pan-y overscroll-contain [-webkit-overflow-scrolling:touch]">
-              <CommandEmpty>{emptyText}</CommandEmpty>
-              <CommandGroup>
-                {options.map((option) => (
-                  <CommandItem
-                    key={option.value}
-                    // cmdk использует value как идентификатор пункта. При
-                    // одинаковых подписях (например, несколько «Лид из
-                    // Instagram») пункты схлопывались в один — ломались скролл
-                    // и выделение (несколько строк «выбирались» разом). Добавляем
-                    // уникальный суффикс с option.value, оставляя текст доступным
-                    // для поиска.
-                    value={`${option.searchValue || option.label} ::${option.value}`}
-                    onSelect={() => {
-                      onChange(option.value);
-                      setOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value.toString() === option.value ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    {option.label}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-    );
-  };
+  // ComboboxSelect вынесен на уровень модуля (см. ниже) — иначе он
+  // пересоздавался каждый рендер и выпадашка «схлопывалась» при серверном
+  // поиске (каждое нажатие меняет state → ремоунт).
 
   const handlePageChange = (page: number) => {
     const params = new URLSearchParams(searchParams);
@@ -1282,14 +1302,68 @@ export default function DealsPage() {
   // (если есть) и #id, а также расширенное значение для поиска.
   const getLeadOption = (lead: any) => {
     const base = lead.title || `Лид #${lead.id}`;
-    const extra = lead.phone
-      ? `+${String(lead.phone).replace(/^\+/, "")}`
-      : (lead.client_name || "");
+    const phone = lead.phone ? `+${String(lead.phone).replace(/^\+/, "")}` : "";
+    // Не дублируем телефон в подписи, если он уже есть в заголовке
+    // («Лид из WhatsApp +7708…»). Иначе показываем телефон или имя клиента.
+    const extra = phone && !base.includes(phone) ? phone : (lead.client_name || "");
     const label = [base, extra].filter(Boolean).join(" · ") + ` · #${lead.id}`;
-    const searchValue = [base, extra, lead.description, lead.source, `#${lead.id}`]
+    // В поиск кладём всё, что может ввести пользователь: телефон, имя, текст
+    // первого сообщения (description), источник и #id.
+    const searchValue = [base, phone, lead.client_name, lead.description, lead.source, `#${lead.id}`]
       .filter(Boolean)
       .join(" ");
     return { value: lead.id.toString(), label, searchValue };
+  };
+
+  // Серверный поиск лида по всей БД (debounce 300мс). Пустой запрос —
+  // возвращаемся к стартовому списку. Поиск идёт по title/description/phone
+  // на бэке (?q=), поэтому находит любого лида, а не только загруженного.
+  const handleLeadSearch = (query: string) => {
+    if (leadSearchTimer.current) clearTimeout(leadSearchTimer.current);
+    const term = query.trim();
+    if (!term) {
+      setLeadSearchResults(null);
+      setLeadSearchLoading(false);
+      return;
+    }
+    setLeadSearchLoading(true);
+    leadSearchTimer.current = setTimeout(async () => {
+      try {
+        const { list_leads, list_my_leads } = await import("@/src/api/leads.api");
+        const params = { page: 1, size: 50, status_group: "active", q: term };
+        let res;
+        try {
+          res = await list_leads(undefined, params);
+        } catch (e: any) {
+          if (e?.response?.status === 403) {
+            res = await list_my_leads(undefined, params);
+          } else {
+            throw e;
+          }
+        }
+        setLeadSearchResults(extractList(res));
+      } catch (err) {
+        console.error("Lead search error:", err);
+        setLeadSearchResults([]);
+      } finally {
+        setLeadSearchLoading(false);
+      }
+    }, 300);
+  };
+
+  // Опции для выпадашки лида: результаты серверного поиска (если ищем) либо
+  // стартовый список. Гарантируем, что выбранный лид присутствует в списке —
+  // иначе в кнопке не будет его подписи.
+  const getLeadPickerOptions = (selectedId: number) => {
+    const source = leadSearchResults ?? leads;
+    const opts = source.slice(0, 100).map(getLeadOption);
+    if (selectedId && !opts.some((o) => o.value === String(selectedId))) {
+      const sel =
+        leads.find((l) => l.id === selectedId) ||
+        (leadSearchResults || []).find((l) => l.id === selectedId);
+      if (sel) opts.unshift(getLeadOption(sel));
+    }
+    return opts;
   };
 
   // Calculate statistics
@@ -1934,7 +2008,9 @@ export default function DealsPage() {
                 placeholder="Выберите лид"
                 searchPlaceholder="Поиск лида..."
                 emptyText="Лид не найден"
-                options={leads.map(getLeadOption)}
+                options={getLeadPickerOptions(newDeal.lead_id)}
+                onSearchChange={handleLeadSearch}
+                loading={leadSearchLoading}
               />
               {!newDeal.lead_id && (
                 <p className="text-xs text-red-500">Выберите лид для продолжения</p>
@@ -2102,7 +2178,9 @@ export default function DealsPage() {
                 placeholder="Выберите лид"
                 searchPlaceholder="Поиск лида..."
                 emptyText="Лид не найден"
-                options={leads.map(getLeadOption)}
+                options={getLeadPickerOptions(editDeal.lead_id)}
+                onSearchChange={handleLeadSearch}
+                loading={leadSearchLoading}
               />
             </div>
 
