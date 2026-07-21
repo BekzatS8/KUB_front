@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ReportTableEditor } from "@/components/report-table-editor";
 import { getCurrentUser, getRoleCode } from "@/lib/auth";
+import { getMe } from "@/src/api/auth.api";
 import {
   getReportTable,
   listReportTableOwners,
@@ -34,7 +35,29 @@ import {
 } from "@/src/api/reports-table.api";
 
 export default function TeamReportsPage() {
-  const isAdmin = getRoleCode(getCurrentUser()) === "system_admin";
+  // isAdmin реактивен: сразу берём роль из кэша (сразу после логина она может
+  // быть ещё не проставлена в current_user), затем подтягиваем свежего
+  // пользователя с сервера. Раньше isAdmin вычислялся синхронно ОДИН раз и на
+  // первом заходе был false → кнопки «Редактировать/Удалить» не показывались,
+  // пока не сходишь на другую страницу (которая обновляла current_user).
+  const [isAdmin, setIsAdmin] = useState(
+    () => getRoleCode(getCurrentUser()) === "system_admin"
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    getMe()
+      .then((me) => {
+        if (!cancelled) setIsAdmin(getRoleCode(me) === "system_admin");
+      })
+      .catch(() => {
+        /* оставляем значение из кэша */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
