@@ -2,6 +2,7 @@
 
 import { RoleBasedSidebar } from "@/components/role-based-sidebar";
 import { TaskNotifications } from "@/components/task-notifications";
+import { NotificationSounds } from "@/components/notification-sounds";
 
 export default function MainLayout({
   children,
@@ -18,6 +19,8 @@ export default function MainLayout({
       </div>
       {/* Назойливые напоминания о задачах (ТЗ п.4.1) */}
       <TaskNotifications />
+      {/* Звуковые сигналы: новые лиды, сообщения мессенджера/чата, задачи */}
+      <NotificationSounds />
     </div>
   );
 }
