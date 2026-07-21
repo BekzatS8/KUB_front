@@ -496,6 +496,29 @@ export default function DocumentsPage() {
         return () => { cancelled = true }
     }, [effectiveSection, deptScope])
 
+    // Список типов документов для СОЗДАНИЯ, ограниченный шаблонами, которые
+    // админ разрешил отделу пользователя (Настройки → Шаблоны документов).
+    // Раньше в модалке был статический список всех типов (creatableDocTypes),
+    // без учёта роли. Тянем разрешённые для scope пользователя и оставляем из
+    // «основных» только их. Безопасный фолбэк: если ничего не пришло/не
+    // настроено — показываем полный список, чтобы создание не сломалось.
+    const [creatableAllowedTypes, setCreatableAllowedTypes] = useState<string[] | null>(null)
+    useEffect(() => {
+        const scope = deptScope || initialDeptScope
+        if (!scope) return
+        let cancelled = false
+        listDocumentTypes(scope)
+            .then((list: any[]) => { if (!cancelled) setCreatableAllowedTypes((list || []).map((t) => t.doc_type)) })
+            .catch(() => { if (!cancelled) setCreatableAllowedTypes(null) })
+        return () => { cancelled = true }
+    }, [deptScope, initialDeptScope])
+
+    const creatableForRole = (() => {
+        if (!creatableAllowedTypes || creatableAllowedTypes.length === 0) return creatableDocTypes
+        const filtered = creatableDocTypes.filter((t) => creatableAllowedTypes.includes(t.value))
+        return filtered.length > 0 ? filtered : creatableDocTypes
+    })()
+
     // Role-based fallback when permissions API hasn't loaded yet
     const docPermFallback: Record<string, string[]> = {
         system_admin: ['documents.view','documents.create','documents.update','documents.delete','documents.send','documents.download'],
@@ -1988,7 +2011,7 @@ export default function DocumentsPage() {
                                 value={createForm.doc_type}
                                 onChange={handleDocTypeChange}
                                 placeholder="Выберите тип"
-                                options={creatableDocTypes}
+                                options={creatableForRole}
                             />
                         </div>
 
