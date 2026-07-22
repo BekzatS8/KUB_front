@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getCurrentUser, getRoleCode } from "@/lib/auth";
+import { getCurrentUser, getLandingRoute } from "@/lib/auth";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -38,17 +38,16 @@ export default function DashboardPage() {
         }
       }
 
-      // Redirect based on role
-      const adminRoleIds = [50];
-      if (getRoleCode(user) === 'system_admin') {
-        console.log('Redirecting to /users based on role');
-        router.push("/users");
-      } else if (tokenRoleId && adminRoleIds.includes(tokenRoleId)) {
-        console.log('Redirecting to /users based on token role_id');
-        router.push("/users");
-      } else {
-        console.log('Redirecting to /feed');
+      // Стартовая страница по роли: админ/руководство → лента; остальные роли
+      // → своя рабочая страница (Лиды и т.п.). Раньше было наоборот: админ уходил
+      // на /users, а ВСЕ остальные — на /feed (которая у них скрыта из меню).
+      if (user) {
+        router.push(getLandingRoute(user));
+      } else if (tokenRoleId === 50) {
+        // user ещё не готов, но по токену это админ — на ленту.
         router.push("/feed");
+      } else {
+        router.push("/deals");
       }
       setIsLoading(false);
     };

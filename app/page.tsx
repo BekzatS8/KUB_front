@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { getLandingRoute } from "@/lib/auth"
 
 export default function HomePage() {
   const router = useRouter()
@@ -11,8 +12,9 @@ export default function HomePage() {
     const token = localStorage.getItem("auth_token")
 
     if (token) {
-      // Если пользователь авторизован, перенаправляем на ленту
-      router.push("/feed")
+      // Стартовая страница зависит от роли: админ/руководство — лента,
+      // остальные — своя рабочая страница (Лиды и т.п.).
+      router.push(getLandingRoute())
     } else {
       // Если не авторизован, перенаправляем на страницу входа
       router.push("/auth/login")

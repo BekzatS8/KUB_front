@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Phone, PhoneIncoming, PhoneMissed,
-  User, FileText, Activity, PlayCircle, RefreshCw, PhoneCall,
+  User, FileText, Activity, PlayCircle, RefreshCw, PhoneCall, MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -235,18 +235,30 @@ function OverviewSection({
                 <span className="text-sm text-muted-foreground">Телефон</span>
                 <span className="text-sm font-medium font-mono">{lead.phone}</span>
               </div>
-              {canCall && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="ml-2 h-7 gap-1"
-                  onClick={onCall}
-                  disabled={calling}
+              <div className="flex items-center gap-2">
+                {/* Открыть переписку с лидом сразу в нашем мессенджере (Wazzup),
+                    без ручного поиска (обратная связь заказчика 21.07.2026). */}
+                <a
+                  href={`/whatsapp?transport=${lead.source || "whatsapp"}&phone=${(lead.phone || "").replace(/\D/g, "")}`}
+                  className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-sm text-foreground hover:bg-muted"
+                  title="Открыть переписку в мессенджере"
                 >
-                  <PhoneCall className="w-3.5 h-3.5" />
-                  {calling ? "Звонок…" : "Позвонить"}
-                </Button>
-              )}
+                  <MessageCircle className="w-3.5 h-3.5 text-green-600" />
+                  Переписка
+                </a>
+                {canCall && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1"
+                    onClick={onCall}
+                    disabled={calling}
+                  >
+                    <PhoneCall className="w-3.5 h-3.5" />
+                    {calling ? "Звонок…" : "Позвонить"}
+                  </Button>
+                )}
+              </div>
             </div>
           )}
           {lead.source && (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AlertCircle, RefreshCw, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,14 +59,26 @@ export default function MessengerPage() {
     webhooks_base_url: "https://api.kubcrm.kz",
     enabled: true,
   });
-  const initialLoadRef = useRef(false);
+  // Deep-link на конкретную переписку: /whatsapp?phone=7700...&transport=whatsapp
+  // (из карточки клиента/лида). chat_id — синоним phone (для telegram/instagram
+  // это username). Открываем iframe сразу на этом чате.
+  const searchParams = useSearchParams();
+  const chatTransport = searchParams.get("transport") || "";
+  const rawChat = searchParams.get("chat_id") || searchParams.get("phone") || "";
+  // Для WhatsApp chat_id — это цифры номера; для Telegram/Instagram — username.
+  const chatId =
+    chatTransport === "telegram" || chatTransport === "instagram"
+      ? rawChat.replace(/^@/, "").trim()
+      : rawChat.replace(/\D/g, "");
 
   const loadWidget = useCallback(async () => {
     setWidgetState("loading");
     setWidgetError("");
 
     try {
-      const response = await getWazzupIframe({});
+      const response = await getWazzupIframe(
+        chatId ? { transport: chatTransport || "whatsapp", chat_id: chatId } : {}
+      );
       const nextUrl = response.iframe_url || response.url;
 
       if (!nextUrl) {
@@ -82,18 +95,15 @@ export default function MessengerPage() {
     } finally {
       setIsManualRefresh(false);
     }
-  }, []);
+  }, [chatId, chatTransport]);
 
   const refreshWidget = useCallback(async () => {
     setIsManualRefresh(true);
     await loadWidget();
   }, [loadWidget]);
 
+  // Перезагружаем виджет при первом заходе и при смене целевого чата (deep-link).
   useEffect(() => {
-    if (initialLoadRef.current) {
-      return;
-    }
-    initialLoadRef.current = true;
     loadWidget();
   }, [loadWidget]);
 

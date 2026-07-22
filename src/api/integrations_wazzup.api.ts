@@ -15,6 +15,9 @@ export interface WazzupSetupResponse {
 export interface WazzupIframeRequest {
   transport?: 'whatsapp' | 'telegram' | 'instagram' | string;
   channel_id?: string;
+  // Открыть iframe сразу на этой переписке (deep-link). Для WhatsApp — номер
+  // телефона (цифры), для Telegram/Instagram — username.
+  chat_id?: string;
 }
 
 export interface WazzupIframeResponse {

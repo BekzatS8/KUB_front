@@ -143,6 +143,25 @@ export function getRoleCode(user: any): string | undefined {
   return undefined
 }
 
+// Стартовая страница после входа зависит от роли (обратная связь 21.07.2026):
+// «Лента» — только для админа/руководства (у них она и в меню); остальные роли
+// попадают на свою рабочую страницу, а не на скрытую от них ленту.
+export function getLandingRoute(user?: any): string {
+  const role = getRoleCode(user ?? getCurrentUser())
+  switch (role) {
+    case 'system_admin':
+    case 'management':
+      return '/feed' // лента (заявки на подтверждение, события)
+    case 'hr':
+      return '/users' // кадры работают с сотрудниками
+    case 'legal':
+      return '/documents' // у юриста нет доступа в Лиды
+    default:
+      // sales / visa / partner / quality_control — все с доступом в Лиды
+      return '/deals'
+  }
+}
+
 // Функция для проверки прав доступа
 export function hasPermission(userRole: string | undefined, requiredPermissions: string[]): boolean {
   userRole = normalizeRoleCode(userRole)

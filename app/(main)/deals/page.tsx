@@ -971,10 +971,8 @@ export default function DealsPage() {
 
   // Handle create deal
   const handleCreateDeal = async () => {
-    if (!newDeal.lead_id) {
-      toast.error("Выберите лид");
-      return;
-    }
+    // Лид больше НЕ обязателен: клиент «с улицы» / давний клиент без лида —
+    // сделку всё равно можно создать (обратная связь заказчика 21.07.2026).
     if (!newDeal.client_id) {
       toast.error("Выберите клиента");
       return;
@@ -985,7 +983,7 @@ export default function DealsPage() {
     }
 
     const payload = {
-      lead_id: Number(newDeal.lead_id),
+      lead_id: newDeal.lead_id ? Number(newDeal.lead_id) : undefined,
       client_id: Number(newDeal.client_id),
       client_type: newDeal.client_type || "individual",
       owner_id: newDeal.owner_id ? Number(newDeal.owner_id) : undefined,
@@ -1999,22 +1997,19 @@ export default function DealsPage() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="lead_id">Лид <span className="text-red-500">*</span></Label>
+              <Label htmlFor="lead_id">Лид <span className="text-gray-400 text-xs font-normal">(необязательно)</span></Label>
               <ComboboxSelect
                 value={newDeal.lead_id?.toString() || ""}
                 onChange={(value) =>
                   setNewDeal({ ...newDeal, lead_id: parseInt(value) || 0 })
                 }
-                placeholder="Выберите лид"
+                placeholder="Без лида (клиент «с улицы»)"
                 searchPlaceholder="Поиск лида..."
                 emptyText="Лид не найден"
                 options={getLeadPickerOptions(newDeal.lead_id)}
                 onSearchChange={handleLeadSearch}
                 loading={leadSearchLoading}
               />
-              {!newDeal.lead_id && (
-                <p className="text-xs text-red-500">Выберите лид для продолжения</p>
-              )}
             </div>
 
             <div className="space-y-2">
@@ -2144,7 +2139,7 @@ export default function DealsPage() {
           </div>
           <DialogFooter>
             <DialogClose asChild><Button variant="ghost">Отмена</Button></DialogClose>
-            <Button onClick={handleCreateDeal} disabled={isLoading || !newDeal.client_id || !newDeal.lead_id}>
+            <Button onClick={handleCreateDeal} disabled={isLoading || !newDeal.client_id}>
               {isLoading ? (
                 <>
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />

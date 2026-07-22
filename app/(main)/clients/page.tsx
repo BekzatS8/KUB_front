@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
+import { ClientAttachments } from "@/components/client-attachments";
 import { Badge } from "@/components/ui/badge";
 import { CustomSelect } from "@/components/ui/custom-select";
 import {
@@ -1133,7 +1134,9 @@ export default function ClientsPage() {
 
     // Individual-specific required fields
     if (clientFormData.client_type === "individual") {
-      requiredFields.push('country', 'trip_purpose', 'last_name', 'first_name', 'birth_date', 'sex', 'citizenship', 'phone');
+      requiredFields.push('country', 'trip_purpose', 'last_name', 'first_name', 'birth_date', 'sex', 'citizenship', 'phone',
+        // Обязательны по просьбе заказчика 21.07.2026: адрес прописки/проживания и ИИН.
+        'registration_address', 'actual_address', 'iin');
     }
 
     // Legal-specific required fields
@@ -2032,7 +2035,7 @@ export default function ClientsPage() {
                         <Input id="middle_name" placeholder="Отчество" value={clientFormData.middle_name || ""} onChange={handleFormChange} />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="iin">ИИН</Label>
+                        <Label htmlFor="iin">ИИН <span className="text-red-500">*</span></Label>
                         <Input id="iin" placeholder="ИИН" value={clientFormData.iin || ""} onChange={handleFormChange} />
                       </div>
                       <div className="space-y-2">
@@ -2186,6 +2189,15 @@ export default function ClientsPage() {
                     </div>
                   </div>
 
+                  {/* Файлы и сканы — под разделом «Документы». Доступно только
+                      при редактировании существующего клиента (нужен clientId
+                      для загрузки). Запрос заказчика 21.07.2026. */}
+                  {editingClient?.id && (
+                    <div className="space-y-4 border-t pt-4">
+                      <ClientAttachments clientId={Number(editingClient.id)} canEdit={true} />
+                    </div>
+                  )}
+
                   {/* Marital Status Section */}
                   <div className="space-y-4 border-t pt-4">
                     <h3 className="font-semibold text-lg">СЕМЕЙНОЕ ПОЛОЖЕНИЕ</h3>
@@ -2249,11 +2261,11 @@ export default function ClientsPage() {
                     <Separator />
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="registration_address">Адрес прописки</Label>
+                        <Label htmlFor="registration_address">Адрес прописки <span className="text-red-500">*</span></Label>
                         <Textarea id="registration_address" placeholder="Адрес прописки" value={clientFormData.registration_address || ""} onChange={handleFormChange} rows={2} />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="actual_address">Адрес проживания</Label>
+                        <Label htmlFor="actual_address">Адрес проживания <span className="text-red-500">*</span></Label>
                         <Textarea id="actual_address" placeholder="Адрес проживания" value={clientFormData.actual_address || ""} onChange={handleFormChange} rows={2} />
                       </div>
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(360px,1fr)_minmax(240px,0.85fr)]">
