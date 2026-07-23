@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArchiveRestore, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,9 @@ import {
   deleteMyReportTable,
   getMyReportTable,
   listMyReportTables,
+  listMyReportTrash,
+  purgeMyReportTable,
+  restoreMyReportTable,
   saveMyReportTable,
   type ManagerReport,
   type ReportTableContent,
@@ -57,20 +60,23 @@ export default function MyReportsPage() {
   const [nameDialog, setNameDialog] = useState<{ reportId: number | null; value: string } | null>(null);
   const [nameSaving, setNameSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ManagerReport | null>(null);
+  const [purgeTarget, setPurgeTarget] = useState<ManagerReport | null>(null);
+  const [showTrash, setShowTrash] = useState(false);
 
   const loadList = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await listMyReportTables();
+      const res = showTrash ? await listMyReportTrash() : await listMyReportTables();
       const items = res.items || [];
       setReports(items);
-      // открываем первый отчёт, если ни один ещё не выбран
-      setActiveId((prev) => prev ?? items[0]?.id ?? null);
+      // открываем первый отчёт, если ни один ещё не выбран (только для активных)
+      if (!showTrash) setActiveId((prev) => prev ?? items[0]?.id ?? null);
     } catch (err: any) {
       toast.error(err?.message || "Не удалось загрузить список отчётов");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showTrash]);
 
   useEffect(() => {
     loadList();
@@ -154,11 +160,34 @@ export default function MyReportsPage() {
       const rest = reports.filter((r) => r.id !== deleteTarget.id);
       setReports(rest);
       if (activeId === deleteTarget.id) setActiveId(rest[0]?.id ?? null);
-      toast.success("Отчёт удалён");
+      toast.success("Отчёт перемещён в корзину");
     } catch (err: any) {
       toast.error(err?.message || "Не удалось удалить отчёт");
     } finally {
       setDeleteTarget(null);
+    }
+  };
+
+  const handleRestore = async (r: ManagerReport) => {
+    try {
+      await restoreMyReportTable(r.id);
+      setReports((prev) => prev.filter((x) => x.id !== r.id));
+      toast.success("Отчёт восстановлен из корзины");
+    } catch (err: any) {
+      toast.error(err?.message || "Не удалось восстановить отчёт");
+    }
+  };
+
+  const confirmPurge = async () => {
+    if (!purgeTarget) return;
+    try {
+      await purgeMyReportTable(purgeTarget.id);
+      setReports((prev) => prev.filter((x) => x.id !== purgeTarget.id));
+      toast.success("Отчёт удалён окончательно");
+    } catch (err: any) {
+      toast.error(err?.message || "Не удалось удалить отчёт");
+    } finally {
+      setPurgeTarget(null);
     }
   };
 
@@ -172,10 +201,21 @@ export default function MyReportsPage() {
             руководитель выбирает, какой открыть.
           </p>
         </div>
-        <Button onClick={() => setNameDialog({ reportId: null, value: "" })}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          Новый отчёт
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={showTrash ? "default" : "outline"}
+            onClick={() => { setActiveId(null); setShowTrash((v) => !v); }}
+          >
+            <Trash2 className="mr-1.5 h-4 w-4" />
+            {showTrash ? "К отчётам" : "Корзина"}
+          </Button>
+          {!showTrash && (
+            <Button onClick={() => setNameDialog({ reportId: null, value: "" })}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Новый отчёт
+            </Button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -184,15 +224,21 @@ export default function MyReportsPage() {
         <Card>
           <CardContent className="py-12 text-center text-slate-500">
             <FileSpreadsheet className="mx-auto mb-3 h-10 w-10 opacity-40" />
-            <p className="mb-4">У вас пока нет отчётов</p>
-            <Button variant="outline" onClick={() => setNameDialog({ reportId: null, value: "" })}>
-              <Plus className="mr-1.5 h-4 w-4" />
-              Создать первый отчёт
-            </Button>
+            {showTrash ? (
+              <p>Корзина пуста</p>
+            ) : (
+              <>
+                <p className="mb-4">У вас пока нет отчётов</p>
+                <Button variant="outline" onClick={() => setNameDialog({ reportId: null, value: "" })}>
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Создать первый отчёт
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
+        <div className={`grid grid-cols-1 gap-4 ${showTrash ? "" : "lg:grid-cols-[260px_1fr]"}`}>
           <div className="space-y-2">
             {reports.map((r) => (
               <div
@@ -203,8 +249,9 @@ export default function MyReportsPage() {
               >
                 <button
                   type="button"
-                  onClick={() => setActiveId(r.id)}
-                  className="min-w-0 flex-1 text-left"
+                  onClick={() => { if (!showTrash) setActiveId(r.id); }}
+                  disabled={showTrash}
+                  className={`min-w-0 flex-1 text-left ${showTrash ? "cursor-default" : ""}`}
                 >
                   <p className="truncate text-sm font-medium text-slate-900">{r.title}</p>
                   {r.updated_at && (
@@ -213,38 +260,63 @@ export default function MyReportsPage() {
                     </p>
                   )}
                 </button>
-                <button
-                  type="button"
-                  title="Переименовать"
-                  onClick={() => setNameDialog({ reportId: r.id, value: r.title })}
-                  className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  title="Удалить отчёт"
-                  onClick={() => setDeleteTarget(r)}
-                  className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                {showTrash ? (
+                  <>
+                    <button
+                      type="button"
+                      title="Восстановить"
+                      onClick={() => handleRestore(r)}
+                      className="rounded p-1.5 text-slate-400 hover:bg-green-50 hover:text-green-600"
+                    >
+                      <ArchiveRestore className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Удалить навсегда"
+                      onClick={() => setPurgeTarget(r)}
+                      className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      title="Переименовать"
+                      onClick={() => setNameDialog({ reportId: r.id, value: r.title })}
+                      className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Удалить отчёт"
+                      onClick={() => setDeleteTarget(r)}
+                      className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>
 
-          <div className="min-w-0">
-            {activeLoading || !active ? (
-              <Skeleton className="h-64 w-full rounded-lg" />
-            ) : (
-              <ReportTableEditor
-                key={active.id}
-                content={active.content as ReportTableContent}
-                saving={saving}
-                onSave={handleSave}
-              />
-            )}
-          </div>
+          {!showTrash && (
+            <div className="min-w-0">
+              {activeLoading || !active ? (
+                <Skeleton className="h-64 w-full rounded-lg" />
+              ) : (
+                <ReportTableEditor
+                  key={active.id}
+                  content={active.content as ReportTableContent}
+                  saving={saving}
+                  onSave={handleSave}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -289,7 +361,7 @@ export default function MyReportsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Удалить отчёт «{deleteTarget?.title}»?</AlertDialogTitle>
             <AlertDialogDescription>
-              Таблица и все её строки будут удалены безвозвратно.
+              Отчёт переместится в корзину. Его можно будет восстановить или удалить окончательно.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -299,6 +371,26 @@ export default function MyReportsPage() {
               className="bg-red-600 text-white hover:bg-red-700"
             >
               Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!purgeTarget} onOpenChange={(open) => !open && setPurgeTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить отчёт «{purgeTarget?.title}» навсегда?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Таблица и все её строки будут удалены безвозвратно. Это действие нельзя отменить.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmPurge}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Удалить навсегда
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -5,6 +5,7 @@ export type Deals_Create_deal_Request = {
   owner_id?: number
   funnel_id?: number | null
   amount: number
+  prepayment?: number
   currency: string
   status: string
 }
@@ -15,6 +16,7 @@ export type Deals_Update_deal_Request = {
   client_type?: string
   owner_id?: number
   amount?: number
+  prepayment?: number
   currency?: string
   status?: string
 }
@@ -42,6 +44,7 @@ export interface Deal {
   stage_id?: number | null
   branch_id?: number | null
   amount: number
+  prepayment?: number
   currency: string
   status: string
   created_at?: string

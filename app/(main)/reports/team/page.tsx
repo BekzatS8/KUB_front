@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { ArrowLeft, FileSpreadsheet, RefreshCw, User, Download, Pencil, Trash2, X } from "lucide-react";
+import { ArchiveRestore, ArrowLeft, FileSpreadsheet, RefreshCw, User, Download, Pencil, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,6 +29,9 @@ import {
   saveReportTable,
   deleteReportTable,
   exportReportTable,
+  listReportTrash,
+  restoreReportTable,
+  purgeReportTable,
   type ManagerReport,
   type ManagerReportOwner,
   type ReportTableContent,
@@ -70,6 +73,48 @@ export default function TeamReportsPage() {
 
   const [report, setReport] = useState<ManagerReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+
+  // Корзина админа: все удалённые отчёты сотрудников.
+  const [showTrash, setShowTrash] = useState(false);
+  const [trashItems, setTrashItems] = useState<ManagerReport[]>([]);
+  const [trashLoading, setTrashLoading] = useState(false);
+  const [purgeTarget, setPurgeTarget] = useState<ManagerReport | null>(null);
+
+  const loadTrash = () => {
+    setTrashLoading(true);
+    listReportTrash()
+      .then((res) => setTrashItems(res.items || []))
+      .catch((err: any) => toast.error(err?.message || "Не удалось загрузить корзину"))
+      .finally(() => setTrashLoading(false));
+  };
+
+  const openTrash = () => {
+    setShowTrash(true);
+    loadTrash();
+  };
+
+  const handleRestoreTrash = async (r: ManagerReport) => {
+    try {
+      await restoreReportTable(r.id);
+      setTrashItems((prev) => prev.filter((x) => x.id !== r.id));
+      toast.success("Отчёт восстановлен из корзины");
+    } catch (err: any) {
+      toast.error(err?.message || "Не удалось восстановить отчёт");
+    }
+  };
+
+  const confirmPurgeTrash = async () => {
+    if (!purgeTarget) return;
+    try {
+      await purgeReportTable(purgeTarget.id);
+      setTrashItems((prev) => prev.filter((x) => x.id !== purgeTarget.id));
+      toast.success("Отчёт удалён окончательно");
+    } catch (err: any) {
+      toast.error(err?.message || "Не удалось удалить отчёт");
+    } finally {
+      setPurgeTarget(null);
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -222,7 +267,8 @@ export default function TeamReportsPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Удалить отчёт «{report?.title}»?</AlertDialogTitle>
               <AlertDialogDescription>
-                Отчёт сотрудника {report?.user_name} будет удалён безвозвратно.
+                Отчёт сотрудника {report?.user_name} переместится в корзину. Его можно будет
+                восстановить или удалить окончательно.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -294,17 +340,67 @@ export default function TeamReportsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Отчёты сотрудников</h1>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {showTrash ? "Корзина отчётов" : "Отчёты сотрудников"}
+          </h1>
           <p className="text-sm text-slate-600">
-            Личные отчёты-таблицы менеджеров: выберите сотрудника, затем отчёт
+            {showTrash
+              ? "Удалённые отчёты сотрудников — восстановите или удалите окончательно"
+              : "Личные отчёты-таблицы менеджеров: выберите сотрудника, затем отчёт"}
           </p>
         </div>
-        <Button variant="outline" onClick={load} disabled={loading}>
-          <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-        </Button>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Button
+              variant={showTrash ? "default" : "outline"}
+              onClick={() => (showTrash ? setShowTrash(false) : openTrash())}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              {showTrash ? "К сотрудникам" : "Корзина"}
+            </Button>
+          )}
+          <Button variant="outline" onClick={showTrash ? loadTrash : load} disabled={showTrash ? trashLoading : loading}>
+            <RefreshCw className={(showTrash ? trashLoading : loading) ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+          </Button>
+        </div>
       </div>
 
-      {loading ? (
+      {showTrash ? (
+        trashLoading ? (
+          <Skeleton className="h-48 w-full rounded-lg" />
+        ) : trashItems.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center text-slate-500">
+              <FileSpreadsheet className="mx-auto mb-3 h-10 w-10 opacity-40" />
+              Корзина пуста
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {trashItems.map((r) => (
+              <div key={r.id} className="flex items-center gap-2 rounded-lg border bg-white p-3">
+                <FileSpreadsheet className="h-5 w-5 shrink-0 text-slate-400" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-slate-900">{r.title}</p>
+                  <p className="text-xs text-slate-500">
+                    {r.user_name || `Сотрудник #${r.user_id}`}
+                    {r.updated_at && (
+                      <> · {format(new Date(r.updated_at), "d MMM yyyy, HH:mm", { locale: ru })}</>
+                    )}
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" className="text-green-600 hover:bg-green-50 hover:text-green-700" onClick={() => handleRestoreTrash(r)}>
+                  <ArchiveRestore className="mr-1 h-4 w-4" />
+                  <span className="hidden sm:inline text-xs">Восстановить</span>
+                </Button>
+                <Button variant="ghost" size="icon" className="text-red-600 hover:bg-red-50 hover:text-red-700" title="Удалить навсегда" onClick={() => setPurgeTarget(r)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )
+      ) : loading ? (
         <Skeleton className="h-48 w-full rounded-lg" />
       ) : owners.length === 0 ? (
         <Card>
@@ -340,6 +436,23 @@ export default function TeamReportsPage() {
           ))}
         </div>
       )}
+
+      <AlertDialog open={!!purgeTarget} onOpenChange={(open) => !open && setPurgeTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить отчёт «{purgeTarget?.title}» навсегда?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Таблица и все её строки будут удалены безвозвратно. Это действие нельзя отменить.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPurgeTrash} className="bg-red-600 text-white hover:bg-red-700">
+              Удалить навсегда
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

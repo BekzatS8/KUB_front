@@ -58,6 +58,20 @@ export async function deleteMyReportTable(id: number): Promise<void> {
   await api.delete(`/reports/table/my/${id}`)
 }
 
+// Корзина сотрудника: список удалённых, восстановление, окончательное удаление.
+export async function listMyReportTrash(): Promise<{ items: ManagerReport[]; count: number }> {
+  const res = await api.get('/reports/table/my-trash')
+  return res.data
+}
+
+export async function restoreMyReportTable(id: number): Promise<void> {
+  await api.post(`/reports/table/my/${id}/restore`)
+}
+
+export async function purgeMyReportTable(id: number): Promise<void> {
+  await api.delete(`/reports/table/my/${id}/purge`)
+}
+
 export async function listReportTableOwners(): Promise<{ items: ManagerReportOwner[]; count: number }> {
   const res = await api.get('/reports/table')
   return res.data
@@ -84,6 +98,20 @@ export async function saveReportTable(
 
 export async function deleteReportTable(id: number): Promise<void> {
   await api.delete(`/reports/table/report/${id}`)
+}
+
+// Корзина админа: все удалённые отчёты, восстановление, окончательное удаление.
+export async function listReportTrash(): Promise<{ items: ManagerReport[]; count: number }> {
+  const res = await api.get('/reports/table/trash')
+  return res.data
+}
+
+export async function restoreReportTable(id: number): Promise<void> {
+  await api.post(`/reports/table/report/${id}/restore`)
+}
+
+export async function purgeReportTable(id: number): Promise<void> {
+  await api.delete(`/reports/table/report/${id}/purge`)
 }
 
 // Скачать отчёт в Excel (руководство/админ/КК). Возвращает blob для сохранения.

@@ -61,6 +61,17 @@ export async function unarchive_task(payload?: void, params?: Record<string, any
   return res.data
 }
 
+// Корзина (мягкое удаление): восстановление и окончательное удаление.
+export async function restore_task(payload?: void, params?: Record<string, any>): Promise<any> {
+  const res = await api.post(`/tasks/${params?.id}/restore`)
+  return res.data
+}
+
+export async function purge_task(payload?: void, params?: Record<string, any>): Promise<any> {
+  const res = await api.delete(`/tasks/${params?.id}/purge`)
+  return res.data
+}
+
 export async function getMyNewTaskCount(userId: number): Promise<number> {
   const res = await api.get(`/tasks`, {
     params: { paginate: true, status: 'new', per_page: 1, assignee_id: userId },

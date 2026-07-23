@@ -199,8 +199,10 @@ function getStatusDisplayName(status: string) {
   const statusMap: Record<string, string> = {
     'new': 'Новые',
     'in_progress': 'В работе',
+    'negotiation': 'Переговоры',
     'won': 'Выиграно',
     'lost': 'Проиграно',
+    'cancelled': 'Отменено',
     'pending': 'В ожидании',
     'contacted': 'Контактированы',
     'qualified': 'Квалифицированы',
@@ -213,8 +215,10 @@ function getStatusColor(status: string) {
   const colorMap: Record<string, string> = {
     'new': 'bg-blue-500',
     'in_progress': 'bg-yellow-500',
+    'negotiation': 'bg-orange-500',
     'won': 'bg-green-500',
     'lost': 'bg-red-500',
+    'cancelled': 'bg-gray-400',
     'pending': 'bg-gray-500',
     'contacted': 'bg-purple-500',
     'qualified': 'bg-indigo-500',

@@ -1742,6 +1742,7 @@ export default function DealsPage() {
                   <TableHead className="px-4">Клиент</TableHead>
                   <TableHead className="px-4">Лид</TableHead>
                   <TableHead className="px-4">Сумма</TableHead>
+                  <TableHead className="px-4">Взнос / Остаток</TableHead>
                   <TableHead className="px-4">Валюта</TableHead>
                   <TableHead className="px-4">Статус</TableHead>
                   <TableHead className="px-4">Дата</TableHead>
@@ -1751,7 +1752,7 @@ export default function DealsPage() {
               <TableBody>
                 {(!deals || deals.length === 0) ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                       Нет сделок
                     </TableCell>
                   </TableRow>
@@ -1774,6 +1775,12 @@ export default function DealsPage() {
                         <TableCell className="px-4 align-top">
                           <div className="font-medium">
                             {Number(deal.amount || 0).toLocaleString()}
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-4 align-top">
+                          <div className="text-sm whitespace-nowrap">
+                            <span className="font-medium">{Number((deal as any).prepayment || 0).toLocaleString()}</span>
+                            <span className="text-muted-foreground"> / {Math.max(0, Number(deal.amount || 0) - Number((deal as any).prepayment || 0)).toLocaleString()}</span>
                           </div>
                         </TableCell>
                         <TableCell className="px-4 align-top">

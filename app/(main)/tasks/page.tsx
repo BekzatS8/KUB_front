@@ -107,6 +107,8 @@ import {
   remind_later,
   archive_task,
   unarchive_task,
+  restore_task,
+  purge_task,
 } from "@/src/api/tasks.api"
 import { listUsers } from "@/src/api/users.api"
 import * as BranchesAPI from "@/src/api/branches.api"
@@ -380,6 +382,8 @@ export default function TasksPage() {
   const [viewTask, setViewTask] = useState<any>(null)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [deleteTaskId, setDeleteTaskId] = useState<any>(null)
+  const [isPurgeOpen, setIsPurgeOpen] = useState(false)
+  const [purgeTaskId, setPurgeTaskId] = useState<any>(null)
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [taskToChangeStatus, setTaskToChangeStatus] = useState<any>(null);
   const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
@@ -583,7 +587,7 @@ export default function TasksPage() {
     if (!deleteTaskId) return
     try {
       await delete_task(undefined, { id: deleteTaskId })
-      toast.success("Задача успешно удалена")
+      toast.success("Задача перемещена в корзину")
       await fetchTasks()
     } catch (err: any) {
       console.error("Delete error:", err)
@@ -626,6 +630,31 @@ export default function TasksPage() {
     } finally {
       setIsUnarchiveDialogOpen(false);
       setTaskToArchive(null);
+    }
+  };
+
+  // Корзина: восстановление и окончательное удаление (только админ).
+  const handleRestoreTask = async (taskId: number) => {
+    try {
+      await restore_task(undefined, { id: taskId });
+      toast.success("Задача восстановлена из корзины");
+      await fetchTasks();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || "Не удалось восстановить задачу");
+    }
+  };
+
+  const handlePurgeConfirm = async () => {
+    if (!purgeTaskId) return;
+    try {
+      await purge_task(undefined, { id: purgeTaskId });
+      toast.success("Задача удалена окончательно");
+      await fetchTasks();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || "Не удалось удалить задачу");
+    } finally {
+      setIsPurgeOpen(false);
+      setPurgeTaskId(null);
     }
   };
 
@@ -1090,6 +1119,7 @@ export default function TasksPage() {
                     <ArchiveFilter
                       value={archiveFilter}
                       onChange={setArchiveFilter}
+                      showTrash={isAdmin}
                     />
                   </div>
                   <div className="w-full sm:w-48 overflow-visible">
@@ -1331,34 +1361,58 @@ export default function TasksPage() {
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
-                              {isArchived ? (
-                                <DropdownMenuItem onClick={() => {
-                                  setTaskToArchive(task)
-                                  setIsUnarchiveDialogOpen(true)
-                                }}>
-                                  <ArchiveRestore className="h-4 w-4 mr-2" />
-                                  Разархивировать
-                                </DropdownMenuItem>
+                              {archiveFilter === "deleted" ? (
+                                /* Корзина: восстановить или удалить окончательно (админ) */
+                                isAdmin && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleRestoreTask(task.id)}>
+                                      <ArchiveRestore className="h-4 w-4 mr-2" />
+                                      Восстановить
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setPurgeTaskId(task.id)
+                                        setIsPurgeOpen(true)
+                                      }}
+                                      className="text-red-600"
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Удалить навсегда
+                                    </DropdownMenuItem>
+                                  </>
+                                )
                               ) : (
-                                <DropdownMenuItem onClick={() => {
-                                  setTaskToArchive(task)
-                                  setIsArchiveDialogOpen(true)
-                                }}>
-                                  <Archive className="h-4 w-4 mr-2" />
-                                  Архивировать
-                                </DropdownMenuItem>
-                              )}
-                              {isAdmin && (
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setDeleteTaskId(task.id)
-                                    setIsDeleteOpen(true)
-                                  }}
-                                  className="text-red-600"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Удалить
-                                </DropdownMenuItem>
+                                <>
+                                  {isArchived ? (
+                                    <DropdownMenuItem onClick={() => {
+                                      setTaskToArchive(task)
+                                      setIsUnarchiveDialogOpen(true)
+                                    }}>
+                                      <ArchiveRestore className="h-4 w-4 mr-2" />
+                                      Разархивировать
+                                    </DropdownMenuItem>
+                                  ) : (
+                                    <DropdownMenuItem onClick={() => {
+                                      setTaskToArchive(task)
+                                      setIsArchiveDialogOpen(true)
+                                    }}>
+                                      <Archive className="h-4 w-4 mr-2" />
+                                      Архивировать
+                                    </DropdownMenuItem>
+                                  )}
+                                  {isAdmin && (
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setDeleteTaskId(task.id)
+                                        setIsDeleteOpen(true)
+                                      }}
+                                      className="text-red-600"
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Удалить
+                                    </DropdownMenuItem>
+                                  )}
+                                </>
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -1575,13 +1629,31 @@ export default function TasksPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Удалить задачу?</AlertDialogTitle>
             <AlertDialogDescription>
-              Это действие нельзя будет отменить. Задача будет удалена навсегда.
+              Задача переместится в корзину. Её можно будет восстановить или удалить окончательно.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Отмена</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
               Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Purge (delete forever) Confirmation ────────────────── */}
+      <AlertDialog open={isPurgeOpen} onOpenChange={setIsPurgeOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить задачу навсегда?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Это действие нельзя отменить. Задача будет удалена из корзины безвозвратно.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handlePurgeConfirm} className="bg-red-600 hover:bg-red-700">
+              Удалить навсегда
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

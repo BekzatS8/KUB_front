@@ -23,6 +23,8 @@ interface Lead {
   description: string;
   phone?: string;
   source?: string;
+  messenger_transport?: string;
+  messenger_chat_id?: string;
   status: string;
   created_at?: string;
   owner_id: number;
@@ -259,6 +261,22 @@ function OverviewSection({
                   </Button>
                 )}
               </div>
+            </div>
+          )}
+          {/* Лиды из Telegram/Instagram приходят без телефона — переписку
+              открываем по external_chat_id, так же как WhatsApp по номеру
+              (обратная связь заказчика 23.07.2026). */}
+          {!lead.phone && lead.messenger_chat_id && (
+            <div className="flex items-center justify-between py-1">
+              <span className="text-sm text-muted-foreground">Переписка</span>
+              <a
+                href={`/whatsapp?transport=${lead.messenger_transport || lead.source || "whatsapp"}&chat_id=${encodeURIComponent(lead.messenger_chat_id)}`}
+                className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-sm text-foreground hover:bg-muted"
+                title="Открыть переписку в мессенджере"
+              >
+                <MessageCircle className="w-3.5 h-3.5 text-green-600" />
+                Открыть в мессенджере
+              </a>
             </div>
           )}
           {lead.source && (
