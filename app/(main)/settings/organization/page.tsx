@@ -136,8 +136,17 @@ export default function OrganizationSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Основная информация</CardTitle>
-          <CardDescription>Название и юридические реквизиты</CardDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle>Основная информация</CardTitle>
+              <CardDescription>Название и юридические реквизиты</CardDescription>
+            </div>
+            <img
+              src="/ziperion-logo.png"
+              alt="Ziperion logo"
+              className="h-12 w-auto shrink-0 object-contain"
+            />
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {field("name", "Название (отображаемое)", "KUB Travel")}
@@ -169,15 +178,6 @@ export default function OrganizationSettingsPage() {
           {field("telegram", "Telegram", "@company или ссылка")}
           {field("instagram", "Instagram", "@company")}
           {field("tiktok", "TikTok", "@company")}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Медиа</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {field("logo_url", "URL логотипа", "https://...")}
         </CardContent>
       </Card>
 
