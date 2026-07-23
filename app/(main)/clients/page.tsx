@@ -1504,16 +1504,18 @@ export default function ClientsPage() {
               <RefreshCw className="h-4 w-4 mr-2" />
               Обновить
             </Button>
-            {/* Архив клиентов — кнопка для админа (обратная связь 20.07.2026):
-                переключает список между активными и архивными. */}
+            {/* Фильтр для админа: Активные / Архив / Все / Корзина (удалённые).
+                Раньше здесь была простая кнопка «Архив», из-за чего «Корзина»
+                (мягко удалённые клиенты) была недоступна на видном месте
+                (обратная связь заказчика 21.07.2026). */}
             {isAdmin && (
-              <Button
-                onClick={() => setArchiveFilter(archiveFilter === "archived" ? "active" : "archived")}
-                variant={archiveFilter === "archived" ? "default" : "outline"}
-              >
-                <Archive className="h-4 w-4 mr-2" />
-                {archiveFilter === "archived" ? "Активные клиенты" : "Архив клиентов"}
-              </Button>
+              <div className="w-44">
+                <ArchiveFilter
+                  value={archiveFilter}
+                  onChange={setArchiveFilter}
+                  showTrash={isAdmin}
+                />
+              </div>
             )}
             {canCreate && (
               <Button onClick={handleCreateClick} className="gradient-primary hover:opacity-90">

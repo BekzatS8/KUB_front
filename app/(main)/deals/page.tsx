@@ -683,56 +683,34 @@ export default function DealsPage() {
           console.error("Error loading leads:", err);
         }
 
-        // Load users (for responsible) - only for system_admin/leadership
-        const metaRoleCode = getRoleCode(userData);
-        if (userData && (metaRoleCode === "system_admin" || metaRoleCode === "leadership")) {
-          try {
-            const { listUsers } = await import("@/src/api/users.api");
-            const res = await listUsers();
-            console.log('Users API response:', res);
-            const usersData = extractList(res);
+        // Список «Ответственный»: пытаемся загрузить ВСЕХ сотрудников — админу/
+        // руководству нужно уметь назначить сделку на любого. Раньше это
+        // гейтилось по точному коду роли ("system_admin"/"leadership"), и из-за
+        // расхождения кода/гонки загрузки роли админ видел ТОЛЬКО СЕБЯ. Теперь
+        // просто пробуем listUsers(); нет доступа (403 у sales/visa/partner) —
+        // остаётся текущий пользователь (они и так назначают сделку на себя).
+        const currentUserForDropdown = userData ? {
+          id: typeof userData.id === 'string' ? parseInt(userData.id) : userData.id,
+          full_name: userData.full_name || userData.company_name || '',
+          first_name: userData.first_name || '',
+          last_name: userData.last_name || '',
+          middle_name: userData.middle_name || '',
+          company_name: userData.company_name || '',
+          email: userData.email,
+          role: userData.role
+        } : null;
+        try {
+          const { listUsers } = await import("@/src/api/users.api");
+          const res = await listUsers();
+          const usersData = extractList(res);
+          if (Array.isArray(usersData) && usersData.length > 0) {
             setUsers(usersData);
-            console.log('Users loaded:', usersData.length);
-          } catch (err: any) {
-            console.error("Error loading users:", err);
-            console.error("Users error details:", {
-              message: err?.message,
-              status: err?.response?.status,
-              statusText: err?.response?.statusText,
-              data: err?.response?.data
-            });
-            // Fallback: at least include the current user
-            if (userData) {
-              const currentUserForDropdown = {
-                id: typeof userData.id === 'string' ? parseInt(userData.id) : userData.id,
-                full_name: userData.full_name || userData.company_name || '',
-                first_name: userData.first_name || '',
-                last_name: userData.last_name || '',
-                middle_name: userData.middle_name || '',
-                company_name: userData.company_name || '',
-                email: userData.email,
-                role: userData.role
-              };
-              setUsers([currentUserForDropdown]);
-              console.log('Using current user as fallback for responsible dropdown');
-            }
-          }
-        } else {
-          // For non-system_admin/leadership users, only include current user in dropdown
-          if (userData) {
-            const currentUserForDropdown = {
-              id: typeof userData.id === 'string' ? parseInt(userData.id) : userData.id,
-              full_name: userData.full_name || userData.company_name || '',
-              first_name: userData.first_name || '',
-              last_name: userData.last_name || '',
-              middle_name: userData.middle_name || '',
-              company_name: userData.company_name || '',
-              email: userData.email,
-              role: userData.role
-            };
+          } else if (currentUserForDropdown) {
             setUsers([currentUserForDropdown]);
-            console.log('Using current user only for responsible dropdown (role-based restriction)');
           }
+        } catch (err: any) {
+          // Нет права users.view — показываем только текущего пользователя.
+          if (currentUserForDropdown) setUsers([currentUserForDropdown]);
         }
 
       } catch (error) {

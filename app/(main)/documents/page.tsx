@@ -967,7 +967,12 @@ export default function DocumentsPage() {
         if (user) {
             fetchDocuments()
         }
-    }, [currentPage, statusFilter, docTypeFilter, dealIdFilter, clientIdFilter, clientTypeFilter, archiveFilter, sortBy, sortOrder, user, departmentScope, legalOnlyMode])
+        // Зависим от СТАБИЛЬНЫХ значений (id + роль), а не от объекта user —
+        // иначе смена ссылки объекта дёргала повторные запросы и список
+        // «мигал» (появлялся/исчезал). Роль в deps нужна, чтобы перечитать
+        // список, когда она приезжает асинхронно (getMe) и меняется scope.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage, statusFilter, docTypeFilter, dealIdFilter, clientIdFilter, clientTypeFilter, archiveFilter, sortBy, sortOrder, user?.id, getRoleCode(user), departmentScope, legalOnlyMode])
 
     // Update URL when filters change
     useEffect(() => {
