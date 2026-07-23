@@ -142,8 +142,8 @@ export default function OrganizationSettingsPage() {
               <CardDescription>Название и юридические реквизиты</CardDescription>
             </div>
             <img
-              src="/ziperion-logo.png"
-              alt="Ziperion logo"
+              src="/kub-logo.png"
+              alt="Kub logo"
               className="h-12 w-auto shrink-0 object-contain"
             />
           </div>
