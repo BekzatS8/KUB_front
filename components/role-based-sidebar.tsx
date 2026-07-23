@@ -430,12 +430,13 @@ export function RoleBasedSidebar() {
         <div className="flex items-center justify-between">
           {!isCollapsed && (
             <div className="flex items-center gap-3">
-              {/* Логотип без шестерёнки: сотрудники принимали её за кнопку
-                  настроек и постоянно нажимали (ТЗ п.7.4) */}
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 shadow-md">
-                <Building2 className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-lg font-bold text-slate-900">KUB CRM</span>
+              {/* Логотип Ziperion Business Platform. Файл лежит в
+                  KUB_front/public/ziperion-logo.png */}
+              <img
+                src="/ziperion-logo.png"
+                alt="Ziperion Business Platform"
+                className="h-9 w-auto max-w-[180px] object-contain"
+              />
             </div>
           )}
           <button
