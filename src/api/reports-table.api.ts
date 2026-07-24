@@ -7,6 +7,9 @@ import api from './index'
 export interface ReportTableContent {
   columns: string[]
   rows: string[][]
+  // Ширины столбцов в px (как в Excel — тянутся мышью). Необязательно: если нет
+  // или длина не совпадает с columns — берутся значения по умолчанию.
+  widths?: number[]
 }
 
 export interface ManagerReport {

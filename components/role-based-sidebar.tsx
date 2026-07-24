@@ -83,7 +83,7 @@ const MENU: NavEntry[] = [
     // Личные отчёты-таблицы сотрудника (ТЗ п.3) — замена Excel на Яндекс.Диске.
     // Руководству тоже открыто создание отчётов (обратная связь 20.07.2026).
     type: "item", title: "Мои отчёты", href: "/reports/my", icon: ClipboardList,
-    roles: ["sales", "visa", "partner", "quality_control", "hr", "legal", "management"],
+    roles: ["sales", "visa", "partner", "quality_control", "hr", "legal", "management", "admin"],
   },
   {
     // Отчёты всех сотрудников — руководству/админу/КК (ТЗ п.3)

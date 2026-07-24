@@ -6,6 +6,9 @@
  * Замена Excel-файлов на Яндекс.Диске: менеджер ведёт свой отчёт прямо в CRM
  * (дата, имя, телефон, комментарий, статус...), руководитель открывает отчёт
  * любого сотрудника на просмотр.
+ *
+ * Как в Excel: ширину столбцов можно тянуть мышью за границу заголовка, а
+ * ячейки — многострочные: при переносе текста высота строки растёт вниз.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -20,23 +23,24 @@ interface Props {
   onSave?: (content: ReportTableContent) => void;
 }
 
-// Ширина колонки подбирается по названию: дата — шире (чтобы был виден год),
-// телефон — узкий, комментарий — широкий (обратная связь 10.07.2026).
-function columnWidthClass(name: string): string {
+const ACTIONS_COL_WIDTH = 44;
+const MIN_COL_WIDTH = 60;
+
+// Ширина столбца по умолчанию (px), подобрана по названию: дата — под год,
+// телефон — узко, комментарий — широко (обратная связь 10.07.2026).
+function defaultWidth(name: string): number {
   const n = name.trim().toLowerCase();
-  if (n.includes("коммент")) return "min-w-[280px] w-[40%]";
-  if (n.includes("дата")) return "min-w-[128px] w-[140px]";
-  if (n.includes("телефон") || n.includes("номер")) return "min-w-[120px] w-[130px]";
-  if (n.includes("имя") || n.includes("фио")) return "min-w-[130px] w-[160px]";
-  return "min-w-[110px]";
+  if (n.includes("коммент")) return 320;
+  if (n.includes("дата")) return 140;
+  if (n.includes("телефон") || n.includes("номер")) return 130;
+  if (n.includes("имя") || n.includes("фио")) return 160;
+  return 150;
 }
 
 // Приведение колонок отчёта к канону (обратная связь 10.07.2026, п.1):
 //  • «Статус» → «Тип визы»;
 //  • «Город» скрываем (удаляем колонку и её ячейки);
 //  • «Комментарий» уводим в самый конец.
-// Применяется и к уже сохранённым отчётам, у которых колонки лежат в БД, а не
-// только к дефолтным — потому что перекладываем и заголовки, и ячейки строк.
 const HIDDEN_COLUMNS = ["город"];
 const RENAME_COLUMNS: Record<string, string> = { "статус": "Тип визы" };
 
@@ -54,28 +58,71 @@ function canonicalizeColumns(srcColumns: string[]): { label: string; srcIndex: n
   return [...kept, ...comments];
 }
 
-function normalize(content: ReportTableContent | null | undefined): ReportTableContent {
+function normalize(content: ReportTableContent | null | undefined): Required<ReportTableContent> {
   const srcColumns =
     content?.columns?.length ? content.columns : ["Дата", "Имя", "Телефон", "Тип визы", "Комментарий"];
   const mapping = canonicalizeColumns(srcColumns);
   const columns = mapping.map((m) => m.label);
   const rows = (content?.rows || []).map((r) => mapping.map((m) => r[m.srcIndex] ?? ""));
-  return { columns, rows };
+  // ширины переносим по тому же маппингу (индексы столбцов после каноникализации
+  // сдвигаются), недостающие — по умолчанию из названия столбца
+  const srcWidths = content?.widths;
+  const widths = mapping.map((m, i) => {
+    const w = srcWidths?.[m.srcIndex];
+    return typeof w === "number" && w >= MIN_COL_WIDTH ? w : defaultWidth(columns[i]);
+  });
+  return { columns, rows, widths };
+}
+
+// Многострочная ячейка: высота растёт под текст (авто-resize по scrollHeight).
+function AutoCell({
+  value,
+  width,
+  readOnly,
+  onChange,
+}: {
+  value: string;
+  width: number;
+  readOnly?: boolean;
+  onChange: (v: string) => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const resize = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+  useEffect(() => {
+    // пересчёт высоты и при смене текста, и при смене ширины столбца (перенос
+    // строк меняется — ячейка должна вырасти/сжаться)
+    resize();
+  }, [value, width]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      readOnly={readOnly}
+      rows={1}
+      onChange={(e) => onChange(e.target.value)}
+      onInput={resize}
+      className="block w-full resize-none overflow-hidden whitespace-pre-wrap break-words bg-transparent px-3 py-2 text-sm leading-5 focus:outline-none focus:ring-1 focus:ring-blue-300"
+    />
+  );
 }
 
 export function ReportTableEditor({ content, readOnly, saving, onSave }: Props) {
-  const [data, setData] = useState<ReportTableContent>(() => normalize(content));
+  const [data, setData] = useState<Required<ReportTableContent>>(() => normalize(content));
   const [dirty, setDirty] = useState(false);
   const initialised = useRef(false);
 
   useEffect(() => {
-    // подхватываем данные при первой загрузке/смене отчёта
     setData(normalize(content));
     setDirty(false);
     initialised.current = true;
   }, [content]);
 
-  const update = (fn: (prev: ReportTableContent) => ReportTableContent) => {
+  const update = (fn: (prev: Required<ReportTableContent>) => Required<ReportTableContent>) => {
     setData((prev) => fn(prev));
     setDirty(true);
   };
@@ -102,50 +149,96 @@ export function ReportTableEditor({ content, readOnly, saving, onSave }: Props) 
     update((prev) => ({
       columns: [...prev.columns, `Колонка ${prev.columns.length + 1}`],
       rows: prev.rows.map((r) => [...r, ""]),
+      widths: [...prev.widths, 150],
     }));
 
   const removeColumn = (ci: number) =>
     update((prev) => ({
       columns: prev.columns.filter((_, i) => i !== ci),
       rows: prev.rows.map((r) => r.filter((_, i) => i !== ci)),
+      widths: prev.widths.filter((_, i) => i !== ci),
     }));
+
+  const setWidth = (ci: number, w: number) =>
+    update((prev) => ({
+      ...prev,
+      widths: prev.widths.map((x, i) => (i === ci ? Math.max(MIN_COL_WIDTH, Math.round(w)) : x)),
+    }));
+
+  // Перетаскивание границы столбца (как в Excel).
+  const dragRef = useRef<{ ci: number; startX: number; startW: number } | null>(null);
+  const startResize = (e: React.MouseEvent, ci: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragRef.current = { ci, startX: e.clientX, startW: data.widths[ci] };
+    const onMove = (ev: MouseEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      setWidth(d.ci, d.startW + (ev.clientX - d.startX));
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  const tableWidth =
+    data.widths.reduce((s, w) => s + w, 0) + (readOnly ? 0 : ACTIONS_COL_WIDTH);
 
   return (
     <div className="space-y-3">
-      <div className="max-h-[70vh] overflow-auto rounded-lg border bg-white">
-        <table className="w-full text-sm">
+      <div className="max-h-[72vh] overflow-auto rounded-lg border bg-white">
+        <table className="border-collapse text-sm" style={{ tableLayout: "fixed", width: tableWidth }}>
+          <colgroup>
+            {data.columns.map((_, ci) => (
+              <col key={ci} style={{ width: data.widths[ci] }} />
+            ))}
+            {!readOnly && <col style={{ width: ACTIONS_COL_WIDTH }} />}
+          </colgroup>
           <thead className="sticky top-0 z-10">
-            <tr className="border-b bg-slate-50">
+            <tr className="bg-slate-50">
               {data.columns.map((col, ci) => (
-                <th key={ci} className={`${columnWidthClass(col)} bg-slate-50 p-1 text-left`}>
-                  <div className="flex items-center gap-1">
-                    <input
+                <th
+                  key={ci}
+                  className="relative border-b border-r bg-slate-50 p-1 text-left align-top"
+                >
+                  <div className="flex items-start gap-1">
+                    <textarea
                       value={col}
                       readOnly={readOnly}
+                      rows={1}
                       onChange={(e) => setColumn(ci, e.target.value)}
-                      className="w-full bg-transparent px-2 py-1.5 font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-300 rounded"
+                      className="block w-full resize-none overflow-hidden whitespace-pre-wrap break-words rounded bg-transparent px-2 py-1.5 font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-300"
                     />
                     {!readOnly && data.columns.length > 1 && (
                       <button
                         type="button"
                         title="Удалить колонку"
                         onClick={() => removeColumn(ci)}
-                        className="rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-500"
+                        className="mt-0.5 shrink-0 rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-500"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>
+                  {!readOnly && (
+                    /* граница-ручка: тянем ширину столбца */
+                    <div
+                      onMouseDown={(e) => startResize(e, ci)}
+                      title="Потяните, чтобы изменить ширину"
+                      className="absolute -right-[3px] top-0 z-20 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400/60"
+                    />
+                  )}
                 </th>
               ))}
-              {!readOnly && (
-                <th className="w-20 p-1">
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={addColumn}>
-                    <Plus className="mr-1 h-3 w-3" />
-                    Колонка
-                  </Button>
-                </th>
-              )}
+              {!readOnly && <th className="border-b bg-slate-50" />}
             </tr>
           </thead>
           <tbody>
@@ -160,19 +253,19 @@ export function ReportTableEditor({ content, readOnly, saving, onSave }: Props) 
               </tr>
             )}
             {data.rows.map((row, ri) => (
-              <tr key={ri} className="border-b last:border-b-0 hover:bg-slate-50/50">
+              <tr key={ri} className="hover:bg-slate-50/50">
                 {row.map((cell, ci) => (
-                  <td key={ci} className="p-0">
-                    <input
+                  <td key={ci} className="border-b border-r p-0 align-top">
+                    <AutoCell
                       value={cell}
+                      width={data.widths[ci]}
                       readOnly={readOnly}
-                      onChange={(e) => setCell(ri, ci, e.target.value)}
-                      className="w-full bg-transparent px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-300"
+                      onChange={(v) => setCell(ri, ci, v)}
                     />
                   </td>
                 ))}
                 {!readOnly && (
-                  <td className="p-1 text-center">
+                  <td className="border-b p-1 text-center align-top">
                     <button
                       type="button"
                       title="Удалить строку"
@@ -190,10 +283,14 @@ export function ReportTableEditor({ content, readOnly, saving, onSave }: Props) 
       </div>
 
       {!readOnly && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={addRow}>
             <Plus className="mr-1.5 h-4 w-4" />
             Добавить строку
+          </Button>
+          <Button variant="outline" size="sm" onClick={addColumn}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            Добавить колонку
           </Button>
           <Button size="sm" onClick={() => onSave?.(data)} disabled={saving || !dirty}>
             <Save className="mr-1.5 h-4 w-4" />

@@ -237,86 +237,92 @@ export default function MyReportsPage() {
             )}
           </CardContent>
         </Card>
+      ) : showTrash ? (
+        /* Корзина — вертикальный список с восстановлением/удалением */
+        <div className="space-y-2">
+          {reports.map((r) => (
+            <div
+              key={r.id}
+              className="group flex items-center gap-1 rounded-lg border bg-white p-2"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-slate-900">{r.title}</p>
+                {r.updated_at && (
+                  <p className="text-xs text-slate-500">
+                    {format(new Date(r.updated_at), "d MMM yyyy, HH:mm", { locale: ru })}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                title="Восстановить"
+                onClick={() => handleRestore(r)}
+                className="rounded p-1.5 text-slate-400 hover:bg-green-50 hover:text-green-600"
+              >
+                <ArchiveRestore className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                title="Удалить навсегда"
+                onClick={() => setPurgeTarget(r)}
+                className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
       ) : (
-        <div className={`grid grid-cols-1 gap-4 ${showTrash ? "" : "lg:grid-cols-[260px_1fr]"}`}>
-          <div className="space-y-2">
+        /* Активные отчёты: вкладки-отчёты сверху, таблица — на всю ширину страницы */
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
             {reports.map((r) => (
               <div
                 key={r.id}
-                className={`group flex items-center gap-1 rounded-lg border p-2 transition-colors ${
+                className={`group flex items-center gap-0.5 rounded-lg border px-2 py-1.5 transition-colors ${
                   r.id === activeId ? "border-blue-300 bg-blue-50" : "bg-white hover:bg-slate-50"
                 }`}
               >
                 <button
                   type="button"
-                  onClick={() => { if (!showTrash) setActiveId(r.id); }}
-                  disabled={showTrash}
-                  className={`min-w-0 flex-1 text-left ${showTrash ? "cursor-default" : ""}`}
+                  onClick={() => setActiveId(r.id)}
+                  className="max-w-[220px] truncate text-left text-sm font-medium text-slate-900"
+                  title={r.title}
                 >
-                  <p className="truncate text-sm font-medium text-slate-900">{r.title}</p>
-                  {r.updated_at && (
-                    <p className="text-xs text-slate-500">
-                      {format(new Date(r.updated_at), "d MMM yyyy, HH:mm", { locale: ru })}
-                    </p>
-                  )}
+                  {r.title}
                 </button>
-                {showTrash ? (
-                  <>
-                    <button
-                      type="button"
-                      title="Восстановить"
-                      onClick={() => handleRestore(r)}
-                      className="rounded p-1.5 text-slate-400 hover:bg-green-50 hover:text-green-600"
-                    >
-                      <ArchiveRestore className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Удалить навсегда"
-                      onClick={() => setPurgeTarget(r)}
-                      className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      title="Переименовать"
-                      onClick={() => setNameDialog({ reportId: r.id, value: r.title })}
-                      className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Удалить отчёт"
-                      onClick={() => setDeleteTarget(r)}
-                      className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </>
-                )}
+                <button
+                  type="button"
+                  title="Переименовать"
+                  onClick={() => setNameDialog({ reportId: r.id, value: r.title })}
+                  className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Удалить отчёт"
+                  onClick={() => setDeleteTarget(r)}
+                  className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
             ))}
           </div>
 
-          {!showTrash && (
-            <div className="min-w-0">
-              {activeLoading || !active ? (
-                <Skeleton className="h-64 w-full rounded-lg" />
-              ) : (
-                <ReportTableEditor
-                  key={active.id}
-                  content={active.content as ReportTableContent}
-                  saving={saving}
-                  onSave={handleSave}
-                />
-              )}
-            </div>
-          )}
+          <div className="min-w-0">
+            {activeLoading || !active ? (
+              <Skeleton className="h-64 w-full rounded-lg" />
+            ) : (
+              <ReportTableEditor
+                key={active.id}
+                content={active.content as ReportTableContent}
+                saving={saving}
+                onSave={handleSave}
+              />
+            )}
+          </div>
         </div>
       )}
 

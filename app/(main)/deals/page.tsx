@@ -820,18 +820,31 @@ export default function DealsPage() {
   };
 
   // Open edit dialog
-  const openEditDialog = (deal: any) => {
-    const dealClient = clients.find(c => String(c.id) === String(deal.client_id));
-    setCurrentDeal(deal);
+  const openEditDialog = async (deal: any) => {
+    // Источник может быть карточкой канбан-доски (FunnelBoardDeal), в которой нет
+    // поля prepayment и части других — из-за этого взнос показывался как 0.
+    // Догружаем полную сделку по id, чтобы форма всегда была с корректными данными.
+    let full = deal;
+    if (deal?.id) {
+      try {
+        const { get_deal } = await import("@/src/api/deals.api");
+        const res = await get_deal(undefined, { id: deal.id });
+        full = res?.data || res || deal;
+      } catch {
+        full = deal;
+      }
+    }
+    const dealClient = clients.find(c => String(c.id) === String(full.client_id));
+    setCurrentDeal(full);
     setEditDeal({
-      lead_id: deal.lead_id || 0,
-      client_id: deal.client_id || 0,
-      client_type: deal.client_type || getClientType(dealClient) || "individual",
-      owner_id: deal.owner_id || (user?.id ? parseInt(user.id) : 0),
-      amount: Number(deal.amount) || 0,
-      prepayment: Number(deal.prepayment) || 0,
-      currency: deal.currency || "KZT",
-      status: deal.status || "new",
+      lead_id: full.lead_id || 0,
+      client_id: full.client_id || 0,
+      client_type: full.client_type || getClientType(dealClient) || "individual",
+      owner_id: full.owner_id || (user?.id ? parseInt(user.id) : 0),
+      amount: Number(full.amount) || 0,
+      prepayment: Number(full.prepayment) || 0,
+      currency: full.currency || "KZT",
+      status: full.status || "new",
     } as any);
     setIsEditDialogOpen(true);
   };
