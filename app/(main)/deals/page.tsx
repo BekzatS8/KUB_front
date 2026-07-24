@@ -781,15 +781,19 @@ export default function DealsPage() {
       const currentUser = getCurrentUser();
       console.log('Manual refresh - current user role:', currentUser?.role);
       
-      // Use list_my_leads for non-system_admin/leadership users to avoid 403 errors
+      // Все менеджеры видят общий пул лидов (обратная связь 24.07.2026):
+      // тянем list_leads для всех, чтобы в выпадашке были все лиды, а не только
+      // свои. list_my_leads остаётся запасным вариантом на случай 403.
       let leadsRes;
-      const roleCode = getRoleCode(currentUser) || getRoleCode(user);
-      if (roleCode === 'system_admin' || roleCode === 'leadership') {
-        console.log('MANUAL REFRESH: Using list_leads for system_admin/leadership user');
+      try {
         leadsRes = await list_leads(undefined, { page: 1, size: 1000, status_group: "active" });
-      } else {
-        console.log('MANUAL REFRESH: Using list_my_leads for non-system_admin/leadership user (sales/restricted)');
-        leadsRes = await list_my_leads(undefined, { page: 1, size: 1000, status_group: "active" });
+      } catch (leadsErr: any) {
+        if (leadsErr?.response?.status === 403 || leadsErr?.status === 403) {
+          console.log('MANUAL REFRESH: list_leads 403 — fallback to list_my_leads');
+          leadsRes = await list_my_leads(undefined, { page: 1, size: 1000, status_group: "active" });
+        } else {
+          throw leadsErr;
+        }
       }
         
       const leadsData = extractList(leadsRes);
