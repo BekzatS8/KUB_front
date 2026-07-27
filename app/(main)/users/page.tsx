@@ -607,7 +607,7 @@ export default function UsersPage() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-4 m-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 m-3 sm:m-6">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
             Пользователи
@@ -685,7 +685,7 @@ export default function UsersPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
             <div>
               <CardTitle>Список пользователей</CardTitle>
               <CardDescription>
@@ -693,14 +693,14 @@ export default function UsersPage() {
               </CardDescription>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex rounded-md border overflow-hidden">
+              <div className="flex overflow-x-auto rounded-md border">
                 {(["all", "active", "blocked", "deleted"] as const).map((f) => (
                   <button
                     key={f}
                     type="button"
                     onClick={() => setStatusFilter(f)}
                     className={cn(
-                      "px-3 py-1.5 text-sm font-medium transition-colors",
+                      "whitespace-nowrap shrink-0 px-3 py-1.5 text-sm font-medium transition-colors",
                       statusFilter === f
                         ? "bg-primary text-primary-foreground"
                         : "bg-background text-muted-foreground hover:bg-muted"

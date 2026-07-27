@@ -287,7 +287,7 @@ export default function FunnelsPage() {
           <h1 className="text-3xl font-bold text-slate-900">Воронки</h1>
           <p className="text-slate-600">Управление CRM-воронками по отделам и филиалам</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={load} disabled={isLoading}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Обновить

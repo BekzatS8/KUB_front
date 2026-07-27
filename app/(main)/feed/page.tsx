@@ -759,7 +759,7 @@ function FeedEventCard({
   return (
     <Card className={`transition-shadow hover:shadow-sm ${event.status === "pending" ? "border-yellow-200" : ""}`}>
       <CardContent className="p-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${statusIconBg(event.status)}`}>
             <FileText className="h-4 w-4" />
           </div>
@@ -834,7 +834,7 @@ function UserRequestCard({
   return (
     <Card className={`transition-shadow hover:shadow-sm ${req.status === "pending" ? "border-yellow-200" : ""}`}>
       <CardContent className="p-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${statusIconBg(req.status)}`}>
             <UserCheck className="h-4 w-4" />
           </div>
