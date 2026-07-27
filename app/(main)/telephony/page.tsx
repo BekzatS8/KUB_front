@@ -89,7 +89,7 @@ interface Stats {
 function StatsCards({ stats, loading }: { stats: Stats | null; loading: boolean }) {
   if (loading) {
     return (
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[0, 1, 2].map((i) => (
           <Card key={i}>
             <CardContent className="pt-4 pb-3">
@@ -103,7 +103,7 @@ function StatsCards({ stats, loading }: { stats: Stats | null; loading: boolean 
   }
   if (!stats) return null;
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <Card>
         <CardContent className="pt-4 pb-3 flex items-center gap-3">
           <Phone className="w-5 h-5 text-slate-400 shrink-0" />

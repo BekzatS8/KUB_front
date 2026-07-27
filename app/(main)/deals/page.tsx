@@ -1742,7 +1742,7 @@ export default function DealsPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-hidden rounded-md border">
-            <Table className="w-full table-fixed">
+            <Table className="w-full min-w-[880px] table-fixed">
               <colgroup>
                 <col className="w-[6%]" />
                 <col className="w-[19%]" />
@@ -2322,7 +2322,7 @@ export default function DealsPage() {
           </DialogHeader>
           {currentDeal && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm text-gray-500">ID</Label>
                   <p className="font-medium">#{currentDeal.id}</p>

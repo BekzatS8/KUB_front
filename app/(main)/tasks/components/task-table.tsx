@@ -21,7 +21,7 @@ type TaskTableProps = {
 
 export function TaskTable({ tasks, onEditTask, onTaskDeleted, onTaskUpdated }: TaskTableProps) {
   return (
-    <Table className="w-full table-fixed">
+    <Table className="w-full min-w-[760px] table-fixed">
       <colgroup>
         <col className="w-[22%]" />
         <col className="w-[30%]" />

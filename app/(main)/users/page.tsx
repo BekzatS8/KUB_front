@@ -730,7 +730,7 @@ export default function UsersPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-hidden rounded-md border">
-            <Table className="w-full table-fixed">
+            <Table className="w-full min-w-[760px] table-fixed">
               <colgroup>
                 <col className="w-[24%]" />
                 <col className="w-[24%]" />
@@ -1058,7 +1058,7 @@ export default function UsersPage() {
             <DialogDescription>{getUserFullName(viewingUser)}</DialogDescription>
           </DialogHeader>
           {isLoading ? <Spinner /> : (
-            <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
               <div className="col-span-2 flex items-center gap-3">
                 <Avatar className="h-14 w-14">
                   <AuthenticatedAvatarImage src={getAvatarUrl(viewingUser)} alt={getUserFullName(viewingUser)} className="h-full w-full object-cover" />

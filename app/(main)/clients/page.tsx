@@ -1658,7 +1658,7 @@ export default function ClientsPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-hidden rounded-md border">
-            <Table className="w-full table-fixed animate-fade-in">
+            <Table className="w-full min-w-[760px] table-fixed animate-fade-in">
               {/* 6 колонок = 6 <col>. Раньше их было 7, лишняя добавляла
                   пустой столбец справа от «Действий». Сумма ширин = 100%. */}
               <colgroup>

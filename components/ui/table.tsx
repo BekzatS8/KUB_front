@@ -6,7 +6,9 @@ const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-hidden rounded-xl border border-slate-200/60 bg-white shadow-soft">
+  // overflow-x-auto: широкие таблицы прокручиваются по горизонтали на мобильных
+  // и планшетах вместо обрезки.
+  <div className="relative w-full overflow-x-auto rounded-xl border border-slate-200/60 bg-white shadow-soft">
     <table
       ref={ref}
       className={cn('w-full caption-bottom text-sm', className)}

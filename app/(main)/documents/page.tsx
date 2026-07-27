@@ -1718,7 +1718,7 @@ export default function DocumentsPage() {
                         </div>
                     ) : (
                         <div className="overflow-hidden rounded-md border">
-                            <Table className="w-full table-fixed">
+                            <Table className="w-full min-w-[760px] table-fixed">
                                 <colgroup>
                                     <col className="w-[5%]" />
                                     <col className="w-[18%]" />
@@ -2077,7 +2077,7 @@ export default function DocumentsPage() {
                     </DialogHeader>
                     {selectedDoc && (
                         <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <Label className="text-sm text-gray-500">Тип</Label>
                                     <p className="font-medium">{docTypeLabels[selectedDoc.doc_type] || selectedDoc.doc_type}</p>

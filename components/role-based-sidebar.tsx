@@ -23,6 +23,7 @@ import {
   Target,
   UserCheck,
   Users,
+  X,
 } from "lucide-react";
 
 import { AuthenticatedAvatarImage } from "@/components/authenticated-avatar-image";
@@ -232,7 +233,13 @@ function parseHref(href: string): { path: string; dept: string | null } {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-export function RoleBasedSidebar() {
+export function RoleBasedSidebar({
+  mobileOpen = false,
+  onMobileClose,
+}: {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+} = {}) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [user, setUser] = useState<Auth_Login_Response["user"] | null>(null);
   const [permissions, setPermissions] = useState<PermissionsMe | null>(null);
@@ -390,7 +397,11 @@ export function RoleBasedSidebar() {
 
   if (isLoading) {
     return (
-      <div className="sticky top-0 z-30 flex h-screen w-64 flex-col border-r border-slate-200/60 bg-white shadow-soft">
+      <div className={cn(
+        "fixed inset-y-0 left-0 z-50 flex h-screen w-64 flex-col border-r border-slate-200/60 bg-white shadow-soft transition-transform duration-300",
+        "lg:sticky lg:top-0 lg:z-30 lg:translate-x-0",
+        mobileOpen ? "translate-x-0" : "-translate-x-full",
+      )}>
         <div className="border-b border-slate-200/60 p-4">
           <div className="flex items-center gap-3">
             <Skeleton className="h-8 w-8 rounded-lg" />
@@ -421,27 +432,40 @@ export function RoleBasedSidebar() {
   return (
     <div
       className={cn(
-        "sticky top-0 z-30 flex h-screen flex-col border-r border-slate-200/60 bg-white shadow-soft transition-all duration-300",
-        isCollapsed ? "w-16" : "w-64"
+        // Мобильные/планшеты (<lg): выезжающая панель (drawer) поверх контента.
+        // Десктоп (lg+): обычная прилипшая колонка, сворачиваемая по ширине.
+        "fixed inset-y-0 left-0 z-50 flex h-screen w-64 flex-col border-r border-slate-200/60 bg-white shadow-soft transition-transform duration-300",
+        "lg:sticky lg:top-0 lg:z-30 lg:translate-x-0 lg:transition-all",
+        mobileOpen ? "translate-x-0" : "-translate-x-full",
+        isCollapsed ? "lg:w-16" : "lg:w-64"
       )}
     >
       {/* ── Header ── */}
       <div className="border-b border-slate-200/60 p-4">
         <div className="flex items-center justify-between">
-          {!isCollapsed && (
-            <div className="flex items-center gap-3">
-              {/* Логотип Ziperion Business Platform. Файл лежит в
-                  KUB_front/public/ziperion-logo.png */}
-              <img
-                src="/ziperion-logo.png"
-                alt="Ziperion Business Platform"
-                className="h-9 w-auto max-w-[180px] object-contain"
-              />
-            </div>
-          )}
+          {/* На мобильном сайдбар всегда полноширинный (w-64) — логотип показываем,
+              когда не свёрнут на десктопе ИЛИ мы на мобильном drawer. */}
+          <div className={cn("flex items-center gap-3", isCollapsed && "lg:hidden")}>
+            {/* Логотип Ziperion Business Platform. Файл лежит в
+                KUB_front/public/ziperion-logo.png */}
+            <img
+              src="/ziperion-logo.png"
+              alt="Ziperion Business Platform"
+              className="h-9 w-auto max-w-[180px] object-contain"
+            />
+          </div>
+          {/* Мобильный: кнопка закрытия drawer */}
+          <button
+            onClick={onMobileClose}
+            className="rounded-lg p-2 transition-colors hover:bg-slate-100 lg:hidden"
+            aria-label="Закрыть меню"
+          >
+            <X className="h-5 w-5 text-slate-600" />
+          </button>
+          {/* Десктоп: сворачивание по ширине */}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="rounded-lg p-2 transition-colors hover:bg-slate-100"
+            className="hidden rounded-lg p-2 transition-colors hover:bg-slate-100 lg:inline-flex"
             aria-label={isCollapsed ? "Развернуть меню" : "Свернуть меню"}
           >
             {isCollapsed

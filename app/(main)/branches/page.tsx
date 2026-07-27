@@ -265,7 +265,7 @@ export default function BranchesPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-hidden rounded-md border">
-            <Table className="w-full table-fixed">
+            <Table className="w-full min-w-[760px] table-fixed">
               <colgroup>
                 <col className="w-[6%]" />
                 <col className="w-[24%]" />
