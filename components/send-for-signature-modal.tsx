@@ -171,19 +171,17 @@ export function SendForSignatureModal({
                 onValueChange={(value) => setSelectedChannel(value as SignChannel)}
                 className="w-full"
               >
+                {/* Показываем ОБЕ вкладки всегда: если у клиента нет телефона или
+                    email на файле, менеджер может ввести адрес/номер вручную. */}
                 <TabsList className="grid w-full grid-cols-2">
-                  {contactOptions.available_channels.includes('sms') && (
-                    <TabsTrigger value="sms" className="flex items-center gap-2">
-                      <Phone className="h-4 w-4" />
-                      SMS
-                    </TabsTrigger>
-                  )}
-                  {contactOptions.available_channels.includes('email') && (
-                    <TabsTrigger value="email" className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      Email
-                    </TabsTrigger>
-                  )}
+                  <TabsTrigger value="sms" className="flex items-center gap-2">
+                    <Phone className="h-4 w-4" />
+                    SMS
+                  </TabsTrigger>
+                  <TabsTrigger value="email" className="flex items-center gap-2">
+                    <Mail className="h-4 w-4" />
+                    Email
+                  </TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
