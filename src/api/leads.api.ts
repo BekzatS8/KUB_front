@@ -64,6 +64,15 @@ export async function move_lead_stage(
   return res.data
 }
 
+// Перемещение лида в другую воронку (напр. вернуть ошибочно переданный лид).
+export async function move_lead_to_funnel(
+  leadId: number | string,
+  funnelId: number
+): Promise<any> {
+  const res = await api.patch(`/leads/${leadId}/funnel`, { funnel_id: funnelId })
+  return res.data
+}
+
 // Корзина (ТЗ п.7.1)
 export async function restore_lead(payload?: void, params?: Record<string, any>): Promise<any> {
   const res = await api.post(`/leads/${params?.id}/restore`)

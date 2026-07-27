@@ -41,7 +41,14 @@ export function CustomSelect({
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [highlightedIndex, setHighlightedIndex] = React.useState(0);
-  const [dropdownPosition, setDropdownPosition] = React.useState<{ top: number; left: number; width: number } | null>(null);
+  const [dropdownPosition, setDropdownPosition] = React.useState<{
+    left: number;
+    width: number;
+    openUp: boolean;
+    top?: number;
+    bottom?: number;
+    maxHeight: number;
+  } | null>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
@@ -50,17 +57,28 @@ export function CustomSelect({
   const selectedOption = options.find((opt) => opt.value === value);
 
   const updateDropdownPosition = React.useCallback(() => {
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      const width = dropdownWidth || rect.width;
-      const viewportLeft = window.scrollX + 8;
-      const viewportRight = window.scrollX + window.innerWidth - width - 8;
-      setDropdownPosition({
-        top: rect.bottom + window.scrollY + 4,
-        left: Math.max(viewportLeft, Math.min(rect.left + window.scrollX, viewportRight)),
-        width: rect.width,
-      });
-    }
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const width = dropdownWidth || rect.width;
+    const margin = 8;
+    // Позиция fixed — координаты относительно окна (без scrollX/scrollY).
+    const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
+
+    const spaceBelow = window.innerHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    // Открываем вверх, если снизу мало места, а сверху его больше — тогда
+    // нижние опции не обрезаются за краем экрана.
+    const openUp = spaceBelow < 200 && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(140, Math.min(352, openUp ? spaceAbove : spaceBelow));
+
+    setDropdownPosition({
+      left,
+      width: rect.width,
+      openUp,
+      top: openUp ? undefined : rect.bottom + 4,
+      bottom: openUp ? window.innerHeight - rect.top + 4 : undefined,
+      maxHeight,
+    });
   }, [dropdownWidth]);
 
   // Calculate dropdown position when opening and keep it attached while scrolling.
@@ -233,7 +251,9 @@ export function CustomSelect({
             "animate-in fade-in-0 zoom-in-95",
           )}
           style={{
-            top: `${dropdownPosition.top}px`,
+            ...(dropdownPosition.top !== undefined
+              ? { top: `${dropdownPosition.top}px` }
+              : { bottom: `${dropdownPosition.bottom}px` }),
             left: `${dropdownPosition.left}px`,
             width: `${dropdownWidth || dropdownPosition.width}px`,
             zIndex: 99999,
@@ -244,8 +264,9 @@ export function CustomSelect({
         >
           <div
             ref={listRef}
+            style={{ maxHeight: `${dropdownPosition.maxHeight}px` }}
             className={cn(
-              "max-h-[min(22rem,calc(100vh-8rem))] overflow-y-auto overscroll-contain p-1 touch-pan-y [-webkit-overflow-scrolling:touch]",
+              "overflow-y-auto overscroll-contain p-1 touch-pan-y [-webkit-overflow-scrolling:touch]",
               listClassName,
             )}
           >

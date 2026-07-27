@@ -12,9 +12,12 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
+import { CustomSelect } from "@/components/ui/custom-select";
 import * as leadsApi from "@/src/api/leads.api";
+import { listFunnels } from "@/src/api/funnels.api";
 import { getLeadCalls, initiateCall } from "@/src/api/telephony.api";
 import type { TelephonyCall } from "@/src/models/telephony.model";
+import { getCurrentUser, getRoleCode } from "@/lib/auth";
 
 // Full lead type as returned by backend
 interface Lead {
@@ -198,11 +201,13 @@ function OverviewSection({
   onCall,
   calling,
   canCall,
+  onChanged,
 }: {
   lead: Lead;
   onCall: () => void;
   calling: boolean;
   canCall: boolean;
+  onChanged: () => void;
 }) {
   return (
     <div className="space-y-4">
@@ -299,7 +304,84 @@ function OverviewSection({
           </div>
         </div>
       </Card>
+
+      {/* Перемещение лида в другую воронку (напр. вернуть ошибочно переданный
+          лид) — обратная связь заказчика 26.07.2026. */}
+      <LeadFunnelMove lead={lead} onMoved={onChanged} />
     </div>
+  );
+}
+
+// LeadFunnelMove — выбор воронки и перенос лида в неё. Доступно ролям с правом
+// leads.move_between_funnels (админ/руководство).
+function LeadFunnelMove({ lead, onMoved }: { lead: Lead; onMoved: () => void }) {
+  const { toast } = useToast();
+  const [funnels, setFunnels] = useState<{ id: number; name: string }[]>([]);
+  const [target, setTarget] = useState<string>("");
+  const [moving, setMoving] = useState(false);
+  // Право leads.move_between_funnels на бэке — у админа и руководства.
+  const roleCode = getRoleCode(getCurrentUser()) || "";
+  const canMove = ["system_admin", "admin", "management", "leadership"].includes(roleCode);
+
+  useEffect(() => {
+    if (!canMove) return;
+    listFunnels()
+      .then((list) => setFunnels((list || []).map((f: any) => ({ id: f.id, name: f.name }))))
+      .catch(() => setFunnels([]));
+  }, [canMove]);
+
+  if (!canMove) return null;
+
+  const currentFunnel = funnels.find((f) => f.id === lead.funnel_id);
+  const options = funnels
+    .filter((f) => f.id !== lead.funnel_id)
+    .map((f) => ({ value: String(f.id), label: f.name }));
+
+  const handleMove = async () => {
+    const funnelId = Number(target);
+    if (!funnelId) return;
+    setMoving(true);
+    try {
+      await leadsApi.move_lead_to_funnel(lead.id, funnelId);
+      toast({ title: "Лид перемещён", description: "Лид перенесён в выбранную воронку" });
+      setTarget("");
+      onMoved();
+    } catch (err: any) {
+      toast({
+        title: "Не удалось переместить",
+        description: err?.response?.data?.message ?? err?.message ?? "Ошибка",
+        variant: "destructive",
+      });
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  return (
+    <Card className="p-4">
+      <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+        <RefreshCw className="w-4 h-4 text-muted-foreground" /> Воронка
+      </h3>
+      <div className="space-y-2">
+        <div className="flex flex-col sm:grid sm:grid-cols-[140px_1fr] gap-1 sm:gap-2 py-1">
+          <span className="text-sm text-muted-foreground">Текущая</span>
+          <span className="text-sm font-medium">{currentFunnel?.name ?? "—"}</span>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            <CustomSelect
+              value={target}
+              onChange={setTarget}
+              options={options}
+              placeholder="Выберите воронку для переноса"
+            />
+          </div>
+          <Button onClick={handleMove} disabled={!target || moving} className="shrink-0">
+            {moving ? "Перемещение…" : "Переместить"}
+          </Button>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -321,6 +403,14 @@ export default function LeadDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<SectionKey>("overview");
   const [calling, setCalling] = useState(false);
+
+  const reloadLead = useCallback(() => {
+    if (!id) return;
+    leadsApi
+      .get_lead(undefined, { id })
+      .then((data) => setLead(data))
+      .catch(() => {});
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -436,6 +526,7 @@ export default function LeadDetailPage() {
               onCall={handleCall}
               calling={calling}
               canCall={!!lead.phone}
+              onChanged={reloadLead}
             />
           )}
           {activeSection === "calls" && <CallsSection leadId={lead.id} />}
