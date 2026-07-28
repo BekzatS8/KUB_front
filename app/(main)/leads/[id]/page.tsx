@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ArrowLeft, Phone, PhoneIncoming, PhoneMissed,
+  ArrowLeft, Phone, PhoneIncoming, PhoneOutgoing,
   User, FileText, Activity, PlayCircle, RefreshCw, PhoneCall, MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -157,7 +157,7 @@ function CallsSection({ leadId }: { leadId: number }) {
             {call.direction === "inbound" ? (
               <PhoneIncoming className="w-4 h-4 text-emerald-500 shrink-0" />
             ) : (
-              <PhoneMissed className="w-4 h-4 text-blue-500 shrink-0" />
+              <PhoneOutgoing className="w-4 h-4 text-blue-500 shrink-0" />
             )}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
