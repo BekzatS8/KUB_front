@@ -1742,16 +1742,20 @@ export default function DealsPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-hidden rounded-md border">
-            <Table className="w-full min-w-[880px] table-fixed">
+            <Table className="w-full min-w-[1040px] table-fixed">
+              {/* 9 колонок: ID, Клиент, Лид, Сумма, Взнос/Остаток, Валюта,
+                  Статус, Дата, Действия. Раньше col для «Действия» отсутствовал —
+                  колонка выпадала за ширину таблицы (белый фон, съехавшие иконки). */}
               <colgroup>
-                <col className="w-[6%]" />
-                <col className="w-[19%]" />
-                <col className="w-[17%]" />
+                <col className="w-[5%]" />
+                <col className="w-[15%]" />
+                <col className="w-[14%]" />
+                <col className="w-[9%]" />
                 <col className="w-[11%]" />
-                <col className="w-[8%]" />
-                <col className="w-[16%]" />
-                <col className="w-[10%]" />
-                <col className="w-[13%]" />
+                <col className="w-[7%]" />
+                <col className="w-[11%]" />
+                <col className="w-[9%]" />
+                <col className="w-[19%]" />
               </colgroup>
               <TableHeader>
                 <TableRow>
@@ -1763,7 +1767,7 @@ export default function DealsPage() {
                   <TableHead className="px-4">Валюта</TableHead>
                   <TableHead className="px-4">Статус</TableHead>
                   <TableHead className="px-4">Дата</TableHead>
-                  <TableHead className="px-4 text-right">Действия</TableHead>
+                  <TableHead className="px-2 text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1833,7 +1837,7 @@ export default function DealsPage() {
                             "-"
                           )}
                         </TableCell>
-                        <TableCell className="px-4 align-middle whitespace-nowrap">
+                        <TableCell className="px-2 align-middle whitespace-nowrap">
                           <div className="flex flex-nowrap items-center justify-end gap-1">
                             <Button
                               variant="ghost"
