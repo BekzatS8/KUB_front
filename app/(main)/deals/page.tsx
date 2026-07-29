@@ -1870,8 +1870,8 @@ export default function DealsPage() {
                             {isAdmin && archiveFilter === "deleted" && (
                               <Button
                                 variant="ghost"
-                                size="sm"
-                                className="h-8 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                size="icon"
+                                className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
                                 onClick={async () => {
                                   try {
                                     const { restore_deal } = await import("@/src/api/deals.api");
@@ -1884,8 +1884,7 @@ export default function DealsPage() {
                                 }}
                                 title="Восстановить из корзины"
                               >
-                                <ArchiveRestore className="h-4 w-4 mr-1" />
-                                <span className="hidden sm:inline text-xs">Восстановить</span>
+                                <ArchiveRestore className="h-4 w-4" />
                               </Button>
                             )}
                             {canWrite && !isSales && (isArchived ? (
@@ -1904,16 +1903,15 @@ export default function DealsPage() {
                             ) : (
                               <Button
                                 variant="ghost"
-                                size="sm"
-                                className="h-8 px-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                size="icon"
+                                className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                                 onClick={() => {
                                   setDealToArchive(deal);
                                   setIsArchiveDialogOpen(true);
                                 }}
                                 title="В архив"
                               >
-                                <Archive className="h-4 w-4 mr-1" />
-                                <span className="hidden sm:inline text-xs">В архив</span>
+                                <Archive className="h-4 w-4" />
                               </Button>
                             ))}
                             {(isAdmin || isManagement) && (
