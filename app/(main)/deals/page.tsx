@@ -1833,8 +1833,8 @@ export default function DealsPage() {
                             "-"
                           )}
                         </TableCell>
-                        <TableCell className="px-4 align-top">
-                          <div className="flex flex-wrap justify-end gap-1">
+                        <TableCell className="px-4 align-middle whitespace-nowrap">
+                          <div className="flex flex-nowrap items-center justify-end gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
