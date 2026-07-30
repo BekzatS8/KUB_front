@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { CustomSelect } from "@/components/ui/custom-select"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   CheckCircle,
   XCircle,
@@ -59,6 +60,7 @@ const EVENT_TYPE_LABELS: Record<FeedEventType, string> = {
   pending_create_document: "Создание документа",
   pending_edit_document: "Редактирование документа",
   pending_delete_document: "Удаление документа",
+  pending_send_document: "Отправка документа на подпись",
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -174,6 +176,13 @@ export default function FeedPage() {
   const [eventToReject, setEventToReject] = useState<FeedEvent | null>(null)
   const [rejectReason, setRejectReason] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
+  // Массовый выбор заявок (#3): отдельные наборы id для feed-событий и
+  // пользовательских заявок, т.к. это разные сущности с разными endpoint'ами.
+  const [selectedFeedIds, setSelectedFeedIds] = useState<Set<string>>(new Set())
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<number>>(new Set())
+  const [bulkProcessing, setBulkProcessing] = useState(false)
+  const [isBulkRejectOpen, setIsBulkRejectOpen] = useState(false)
+  const [bulkRejectReason, setBulkRejectReason] = useState("")
 
   const [userRequests, setUserRequests] = useState<UserApprovalRequest[]>([])
   const [userRequestsLoading, setUserRequestsLoading] = useState(false)
@@ -308,6 +317,83 @@ export default function FeedPage() {
     }
   }
 
+  // ── Массовый выбор и действия (#3) ─────────────────────────────────────────────
+  const pendingFeedIds = events.filter((e) => e.status === "pending").map((e) => e.id)
+  const pendingUserIds = userRequests.filter((r) => r.status === "pending").map((r) => r.id)
+  const totalSelected = selectedFeedIds.size + selectedUserIds.size
+  const totalPending = pendingFeedIds.length + pendingUserIds.length
+  const allSelected = totalPending > 0 && totalSelected === totalPending
+
+  const toggleFeedSelected = (id: string) =>
+    setSelectedFeedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  const toggleUserSelected = (id: number) =>
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  const clearSelection = () => {
+    setSelectedFeedIds(new Set())
+    setSelectedUserIds(new Set())
+  }
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      clearSelection()
+    } else {
+      setSelectedFeedIds(new Set(pendingFeedIds))
+      setSelectedUserIds(new Set(pendingUserIds))
+    }
+  }
+
+  const handleBulkApprove = async () => {
+    if (totalSelected === 0) return
+    setBulkProcessing(true)
+    let ok = 0
+    let failed = 0
+    try {
+      for (const id of selectedFeedIds) {
+        try { await FeedAPI.approveFeedEvent(id); ok++ } catch { failed++ }
+      }
+      for (const id of selectedUserIds) {
+        try { await UserRequestsAPI.approveUserRequest(id); ok++ } catch { failed++ }
+      }
+      toast.success(`Одобрено: ${ok}${failed ? `, с ошибкой: ${failed}` : ""}`)
+      clearSelection()
+      fetchEvents()
+      if (user) fetchUserRequests(user)
+    } finally {
+      setBulkProcessing(false)
+    }
+  }
+
+  const handleBulkReject = async () => {
+    if (totalSelected === 0) return
+    setBulkProcessing(true)
+    let ok = 0
+    let failed = 0
+    const reason = bulkRejectReason.trim() || undefined
+    try {
+      for (const id of selectedFeedIds) {
+        try { await FeedAPI.rejectFeedEvent(id, reason); ok++ } catch { failed++ }
+      }
+      for (const id of selectedUserIds) {
+        try { await UserRequestsAPI.rejectUserRequest(id, reason); ok++ } catch { failed++ }
+      }
+      toast.success(`Отклонено: ${ok}${failed ? `, с ошибкой: ${failed}` : ""}`)
+      clearSelection()
+      setIsBulkRejectOpen(false)
+      setBulkRejectReason("")
+      fetchEvents()
+      if (user) fetchUserRequests(user)
+    } finally {
+      setBulkProcessing(false)
+    }
+  }
+
   // ── Derived data ──────────────────────────────────────────────────────────────
   const leadEvents = events.filter((e) => e.type.includes("lead"))
   const dealEvents = events.filter((e) => e.type.includes("deal"))
@@ -385,6 +471,41 @@ export default function FeedPage() {
           />
         </div>
 
+        {/* Массовые действия (#3): выбрать несколько/все ожидающие и одобрить
+            или отклонить одной кнопкой. */}
+        {isElevated && totalPending > 0 && (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-slate-50 px-4 py-2.5">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
+              <span className="text-sm text-slate-600">
+                {allSelected ? "Снять выделение" : "Выбрать все ожидающие"} ({totalPending})
+              </span>
+            </label>
+            {totalSelected > 0 && (
+              <div className="flex items-center gap-2 sm:ml-auto">
+                <span className="text-sm font-medium text-slate-700">Выбрано: {totalSelected}</span>
+                <Button
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700"
+                  disabled={bulkProcessing}
+                  onClick={handleBulkApprove}
+                >
+                  Одобрить
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-red-600 border-red-200 hover:bg-red-50"
+                  disabled={bulkProcessing}
+                  onClick={() => setIsBulkRejectOpen(true)}
+                >
+                  Отклонить
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Content */}
         {isLoading ? (
           <div className="space-y-4">
@@ -429,30 +550,52 @@ export default function FeedPage() {
                   <div className="space-y-2">
                     {kind === "feed"
                       ? (items as FeedEvent[]).map((event) => (
-                          <FeedEventCard
-                            key={event.id}
-                            event={event}
-                            isElevated={isElevated}
-                            isProcessing={isProcessing}
-                            onDetail={() => { setSelectedEvent(event); setIsDetailOpen(true) }}
-                            onApprove={() => handleApprove(event)}
-                            onReject={() => openRejectDialog(event)}
-                          />
+                          <div key={event.id} className="flex items-start gap-2">
+                            {isElevated && event.status === "pending" && (
+                              <div className="pt-4">
+                                <Checkbox
+                                  checked={selectedFeedIds.has(event.id)}
+                                  onCheckedChange={() => toggleFeedSelected(event.id)}
+                                />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <FeedEventCard
+                                event={event}
+                                isElevated={isElevated}
+                                isProcessing={isProcessing}
+                                onDetail={() => { setSelectedEvent(event); setIsDetailOpen(true) }}
+                                onApprove={() => handleApprove(event)}
+                                onReject={() => openRejectDialog(event)}
+                              />
+                            </div>
+                          </div>
                         ))
                       : (items as UserApprovalRequest[]).map((req) => (
-                          <UserRequestCard
-                            key={req.id}
-                            req={req}
-                            isAdmin={isAdmin}
-                            isProcessing={isProcessing}
-                            onDetail={() => { setSelectedUserRequest(req); setIsUserRequestDetailOpen(true) }}
-                            onApprove={() => handleApproveUserRequest(req)}
-                            onReject={() => {
-                              setUserRequestToReject(req)
-                              setUserRejectReason("")
-                              setIsUserRejectDialogOpen(true)
-                            }}
-                          />
+                          <div key={req.id} className="flex items-start gap-2">
+                            {isAdmin && req.status === "pending" && (
+                              <div className="pt-4">
+                                <Checkbox
+                                  checked={selectedUserIds.has(req.id)}
+                                  onCheckedChange={() => toggleUserSelected(req.id)}
+                                />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <UserRequestCard
+                                req={req}
+                                isAdmin={isAdmin}
+                                isProcessing={isProcessing}
+                                onDetail={() => { setSelectedUserRequest(req); setIsUserRequestDetailOpen(true) }}
+                                onApprove={() => handleApproveUserRequest(req)}
+                                onReject={() => {
+                                  setUserRequestToReject(req)
+                                  setUserRejectReason("")
+                                  setIsUserRejectDialogOpen(true)
+                                }}
+                              />
+                            </div>
+                          </div>
                         ))}
                   </div>
                 </section>
@@ -568,6 +711,35 @@ export default function FeedPage() {
             <AlertDialogCancel>Отмена</AlertDialogCancel>
             <AlertDialogAction onClick={handleReject} className="bg-red-600 hover:bg-red-700" disabled={isProcessing}>
               Отклонить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Массовое отклонение (#3): одна причина на все выбранные заявки. */}
+      <AlertDialog open={isBulkRejectOpen} onOpenChange={setIsBulkRejectOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Отклонить выбранные ({totalSelected})?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Причина будет применена ко всем выбранным заявкам (необязательно).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Label htmlFor="bulk-reject-reason">Причина отказа</Label>
+            <Textarea
+              id="bulk-reject-reason"
+              placeholder="Укажите причину отклонения..."
+              value={bulkRejectReason}
+              onChange={(e) => setBulkRejectReason(e.target.value)}
+              className="mt-1"
+              rows={3}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkProcessing}>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkReject} className="bg-red-600 hover:bg-red-700" disabled={bulkProcessing}>
+              Отклонить {totalSelected}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

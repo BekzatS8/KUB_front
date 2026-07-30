@@ -2444,6 +2444,7 @@ export default function DocumentsPage() {
                 document={newSignDoc}
                 onSuccess={handleNewSignSuccess}
                 docTypeLabel={newSignDoc ? (docTypeLabels[newSignDoc.doc_type] || newSignDoc.doc_type) : undefined}
+                requiresApproval={!isAdmin}
             />
 
             {/* ── Archive Dialog ─────────────────────────────────────────── */}

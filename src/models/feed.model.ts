@@ -11,6 +11,7 @@ export type FeedEventType =
   | 'pending_create_document'
   | 'pending_edit_document'
   | 'pending_delete_document'
+  | 'pending_send_document'
 
 export type FeedEventStatus = 'pending' | 'approved' | 'rejected'
 

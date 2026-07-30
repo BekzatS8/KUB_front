@@ -43,6 +43,7 @@ const emptyStageForm: UpsertFunnelStageRequest = {
   description: "",
   is_active: true,
   auto_archive: false,
+  is_rejection: false,
 }
 
 export default function FunnelsPage() {
@@ -203,6 +204,7 @@ export default function FunnelsPage() {
       description: stage.description || "",
       is_active: stage.is_active,
       auto_archive: stage.auto_archive ?? false,
+      is_rejection: stage.is_rejection ?? false,
     })
     setIsStageDialogOpen(true)
   }
@@ -559,6 +561,20 @@ export default function FunnelsPage() {
                 id="stage_auto_archive"
                 checked={Boolean(stageForm.auto_archive)}
                 onCheckedChange={(checked) => setStageForm({ ...stageForm, auto_archive: checked })}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="pr-3">
+                <Label htmlFor="stage_is_rejection">Этап отказа</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  При переходе карточки на этот этап она получает статус «отказ»,
+                  уходит из воронки и попадает в «Отказники».
+                </p>
+              </div>
+              <Switch
+                id="stage_is_rejection"
+                checked={Boolean(stageForm.is_rejection)}
+                onCheckedChange={(checked) => setStageForm({ ...stageForm, is_rejection: checked })}
               />
             </div>
           </div>

@@ -15,6 +15,8 @@ export interface FunnelStage {
   is_active: boolean
   /** При переходе на этот этап карточка автоматически уходит в архив. */
   auto_archive?: boolean
+  /** Этап отказа: карточка получает статус «отказ» и уходит в «Отказники». */
+  is_rejection?: boolean
   created_at?: string
   updated_at?: string
 }
@@ -28,6 +30,7 @@ export interface UpsertFunnelStageRequest {
   description?: string
   is_active?: boolean
   auto_archive?: boolean
+  is_rejection?: boolean
 }
 
 export type FunnelBoardCardKind = "deal" | "lead"

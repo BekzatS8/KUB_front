@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { getSignContactOptions, startSignWithChannel } from '@/src/api/documents.api'
+import { createFeedEvent } from '@/src/api/feed.api'
 import type { SignChannel, SignContactOptions, Document } from '@/src/models/documents.model'
 
 interface SendForSignatureModalProps {
@@ -26,6 +27,8 @@ interface SendForSignatureModalProps {
   document: Document | null
   onSuccess?: () => void
   docTypeLabel?: string
+  /** Для не-админов отправка уходит администратору на одобрение в Ленту. */
+  requiresApproval?: boolean
 }
 
 export function SendForSignatureModal({
@@ -34,6 +37,7 @@ export function SendForSignatureModal({
   document,
   onSuccess,
   docTypeLabel,
+  requiresApproval = false,
 }: SendForSignatureModalProps) {
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -128,7 +132,26 @@ export function SendForSignatureModal({
         }
       }
 
-      const result = await startSignWithChannel(document.id, payload)
+      // Не-админ не отправляет напрямую — запрос уходит администратору в Ленту,
+      // документ уйдёт клиенту после одобрения (#4).
+      if (requiresApproval) {
+        await createFeedEvent({
+          type: 'pending_send_document',
+          resource_id: document.id,
+          payload: {
+            document_id: document.id,
+            channel: selectedChannel,
+            manual_phone: selectedChannel === 'sms' ? (manualPhone || '') : '',
+            manual_email: selectedChannel === 'email' ? (manualEmail || '') : '',
+          },
+        })
+        toast.success('Запрос на отправку документа отправлен администратору на одобрение')
+        onSuccess?.()
+        onOpenChange(false)
+        return
+      }
+
+      await startSignWithChannel(document.id, payload)
 
       toast.success('Ссылка и код отправлены клиенту')
       onSuccess?.()
