@@ -102,3 +102,12 @@ export async function changeUserPassword(id: string, password: string): Promise<
     throw new Error(translateUserError(error, 'Не удалось изменить пароль.'));
   }
 }
+
+// Самостоятельная смена своего пароля (с подтверждением текущего).
+export async function changeOwnPassword(currentPassword: string, newPassword: string): Promise<void> {
+  try {
+    await api.put(`/users/me/password`, { current_password: currentPassword, new_password: newPassword });
+  } catch (error: any) {
+    throw new Error(translateUserError(error, 'Не удалось изменить пароль.'));
+  }
+}

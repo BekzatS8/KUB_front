@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/components/ui/use-toast";
 import { AuthenticatedAvatarImage } from "@/components/authenticated-avatar-image";
 import * as ProfileAPI from "@/src/api/profile.api";
+import { changeOwnPassword } from "@/src/api/users.api";
 import type { User } from "@/src/models/users.model";
 import { getRoleName } from "@/src/models/roles.enum";
 
@@ -59,6 +60,33 @@ export default function ProfilePage() {
   const lastPoint = useRef<{ x: number; y: number } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
+  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
+  const [pwSaving, setPwSaving] = useState(false);
+
+  async function changePassword() {
+    if (!pwForm.current || !pwForm.next) {
+      toast({ title: "Заполните текущий и новый пароль", variant: "destructive" });
+      return;
+    }
+    if (pwForm.next.length < 6) {
+      toast({ title: "Новый пароль не короче 6 символов", variant: "destructive" });
+      return;
+    }
+    if (pwForm.next !== pwForm.confirm) {
+      toast({ title: "Новый пароль и подтверждение не совпадают", variant: "destructive" });
+      return;
+    }
+    setPwSaving(true);
+    try {
+      await changeOwnPassword(pwForm.current, pwForm.next);
+      toast({ title: "Пароль изменён" });
+      setPwForm({ current: "", next: "", confirm: "" });
+    } catch (e: any) {
+      toast({ title: "Ошибка", description: e?.message || "Не удалось изменить пароль", variant: "destructive" });
+    } finally {
+      setPwSaving(false);
+    }
+  }
 
   const roleName = useMemo(() => {
     const id = user?.role?.id || 0;
@@ -321,6 +349,37 @@ export default function ProfilePage() {
                 Отмена
               </Button>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Смена пароля</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="pw_current">Текущий пароль</Label>
+              <Input id="pw_current" type="password" autoComplete="current-password" value={pwForm.current}
+                onChange={(e) => setPwForm((p) => ({ ...p, current: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pw_next">Новый пароль</Label>
+              <Input id="pw_next" type="password" autoComplete="new-password" value={pwForm.next}
+                onChange={(e) => setPwForm((p) => ({ ...p, next: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pw_confirm">Повторите новый</Label>
+              <Input id="pw_confirm" type="password" autoComplete="new-password" value={pwForm.confirm}
+                onChange={(e) => setPwForm((p) => ({ ...p, confirm: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={changePassword} disabled={pwSaving}>
+              <Save className="h-4 w-4 mr-2" />
+              {pwSaving ? "Сохранение…" : "Изменить пароль"}
+            </Button>
           </div>
         </CardContent>
       </Card>
