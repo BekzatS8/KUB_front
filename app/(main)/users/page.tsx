@@ -58,7 +58,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Check, ChevronsUpDown, Search, Plus, Edit, Trash2, Users, UserCheck, Shield, RefreshCw, Eye, KeyRound, Ban, CircleCheck } from "lucide-react";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, getRoleCode } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import * as UserAPI from "@/src/api/users.api";
 import * as RolesAPI from "@/src/api/roles.api";
@@ -245,7 +245,16 @@ export default function UsersPage() {
   // Блокировка пользователя выполняется напрямую (без подтверждения админа) —
   // HR/юрист/руководство/админ имеют users.block.
   const canBlock = Boolean(permissionScopes["users.block"]);
-  const canChangePassword = currentUser?.role?.id === Roles.SYSTEM_ADMIN || currentUser?.role?.id === Roles.MANAGEMENT;
+  // Смена пароля другого сотрудника доступна администратору. role.id из
+  // localStorage может прийти строкой — сравниваем через Number(), плюс роль-код,
+  // иначе кнопка пропадала у админа (обратная связь 31.07.2026). Бэкенд всё равно
+  // гейтит по CanAssignRoles (только system_admin).
+  const canChangePasswordRoleCode = getRoleCode(currentUser);
+  const canChangePassword =
+    Number(currentUser?.role?.id) === Roles.SYSTEM_ADMIN ||
+    Number(currentUser?.role?.id) === Roles.MANAGEMENT ||
+    canChangePasswordRoleCode === "system_admin" ||
+    canChangePasswordRoleCode === "admin";
   // HR, юрист и руководство управляют пользователями только через заявку на подтверждение админу
   const userActionsNeedApproval = [Roles.HR, Roles.LEGAL, Roles.MANAGEMENT].includes(currentUser?.role?.id as number);
 
