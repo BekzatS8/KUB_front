@@ -245,14 +245,16 @@ export default function UsersPage() {
   // Блокировка пользователя выполняется напрямую (без подтверждения админа) —
   // HR/юрист/руководство/админ имеют users.block.
   const canBlock = Boolean(permissionScopes["users.block"]);
-  // Смена пароля другого сотрудника доступна администратору. role.id из
-  // localStorage может прийти строкой — сравниваем через Number(), плюс роль-код,
-  // иначе кнопка пропадала у админа (обратная связь 31.07.2026). Бэкенд всё равно
-  // гейтит по CanAssignRoles (только system_admin).
+  // Смена пароля другого сотрудника доступна только администратору (бэкенд:
+  // CanAssignRoles = system_admin). Гейтим по admin-only праву users.move_branch
+  // из permissionScopes — тот же надёжный источник, что и users.update (кнопка
+  // «редактировать»). Прежний гейт по role.id из localStorage не срабатывал —
+  // роль оттуда не резолвилась (обратная связь 31.07.2026). Роль-код оставляем
+  // запасным вариантом.
   const canChangePasswordRoleCode = getRoleCode(currentUser);
   const canChangePassword =
-    Number(currentUser?.role?.id) === Roles.SYSTEM_ADMIN ||
-    Number(currentUser?.role?.id) === Roles.MANAGEMENT ||
+    Boolean(permissionScopes["users.move_branch"]) ||
+    Boolean(permissionScopes["users.move_department"]) ||
     canChangePasswordRoleCode === "system_admin" ||
     canChangePasswordRoleCode === "admin";
   // HR, юрист и руководство управляют пользователями только через заявку на подтверждение админу
