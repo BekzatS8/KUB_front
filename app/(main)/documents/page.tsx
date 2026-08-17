@@ -1762,6 +1762,12 @@ export default function DocumentsPage() {
                                                 <TableCell className="px-4 align-top text-sm">
                                                     <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
                                                         {(() => {
+                                                            // Имя из бэкенда (резолвится в SQL по клиенту документа/сделки)
+                                                            // надёжнее клиентского поиска: массивы deals/clients на фронте
+                                                            // сужены (list_my_* у МОП) и не содержат чужих сущностей.
+                                                            if (doc.client_name) {
+                                                                return doc.client_name;
+                                                            }
                                                             if (doc.client_id) {
                                                                 return getClientLabel(doc.client_id);
                                                             }
@@ -2096,7 +2102,7 @@ export default function DocumentsPage() {
                                 </div>
                                 <div>
                                     <Label className="text-sm text-gray-500">Клиент</Label>
-                                    <p className="font-medium">{selectedDoc.client_id ? getClientLabel(selectedDoc.client_id) : "—"}</p>
+                                    <p className="font-medium">{selectedDoc.client_name || (selectedDoc.client_id ? getClientLabel(selectedDoc.client_id) : (selectedDoc.deal_id ? getClientFromDeal(selectedDoc.deal_id) : "—"))}</p>
                                 </div>
                                 <div>
                                     <Label className="text-sm text-gray-500">Дата создания</Label>

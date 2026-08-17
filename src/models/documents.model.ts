@@ -26,6 +26,7 @@ export interface Document {
   is_archived?: boolean;
   deal_id: number;
   client_id?: number;
+  client_name?: string;
   doc_type: DocType;
   status: DocStatus | string;
   sign_status?: SignStatus | string;
