@@ -1780,7 +1780,11 @@ export default function DocumentsPage() {
                                                 </TableCell>
                                                 <TableCell className="px-4 align-top text-sm">
                                                     <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
-                                                        {doc.deal_id ? getDealLabel(doc.deal_id) : "—"}
+                                                        {doc.deal_id
+                                                            ? (doc.deal_amount != null
+                                                                ? `${Number(doc.deal_amount).toLocaleString()} ₸ (#${doc.deal_id})`
+                                                                : getDealLabel(doc.deal_id))
+                                                            : "—"}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="px-4 align-top">
@@ -2098,7 +2102,11 @@ export default function DocumentsPage() {
                                 </div>
                                 <div>
                                     <Label className="text-sm text-gray-500">ID Сделки</Label>
-                                    <p className="font-medium">{selectedDoc.deal_id ? getDealLabel(selectedDoc.deal_id) : "—"}</p>
+                                    <p className="font-medium">{selectedDoc.deal_id
+                                        ? (selectedDoc.deal_amount != null
+                                            ? `${Number(selectedDoc.deal_amount).toLocaleString()} ₸ (#${selectedDoc.deal_id})`
+                                            : getDealLabel(selectedDoc.deal_id))
+                                        : "—"}</p>
                                 </div>
                                 <div>
                                     <Label className="text-sm text-gray-500">Клиент</Label>

@@ -27,6 +27,7 @@ export interface Document {
   deal_id: number;
   client_id?: number;
   client_name?: string;
+  deal_amount?: number;
   doc_type: DocType;
   status: DocStatus | string;
   sign_status?: SignStatus | string;
