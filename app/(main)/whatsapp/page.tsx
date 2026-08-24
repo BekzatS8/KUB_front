@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertCircle, RefreshCw, Settings } from "lucide-react";
+import { AlertCircle, RefreshCw, Send, Settings } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,11 +15,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { getCurrentUser, getRoleCode } from "@/lib/auth";
 import {
   getWazzupIframe,
   setupWazzup,
+  getWazzupChannels,
+  sendWazzupMessage,
+  type WazzupChannel,
 } from "@/src/api/integrations_wazzup.api";
 
 type WidgetState = "loading" | "ready" | "error";
@@ -59,6 +64,68 @@ export default function MessengerPage() {
     webhooks_base_url: "https://api.kubcrm.kz",
     enabled: true,
   });
+
+  // «Написать первым»: KUB сам создаёт диалог через API Wazzup (iframe не умеет
+  // начинать переписку с новым контактом). Канал = с какого филиала/номера писать.
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeChannels, setComposeChannels] = useState<WazzupChannel[]>([]);
+  const [composeChannelId, setComposeChannelId] = useState(""); // external_channel_id
+  const [composeTo, setComposeTo] = useState("");
+  const [composeText, setComposeText] = useState("");
+  const [composeSending, setComposeSending] = useState(false);
+
+  const selectedComposeChannel = composeChannels.find(
+    (c) => c.channel_id === composeChannelId,
+  );
+  const composeTransport = selectedComposeChannel?.transport || "whatsapp";
+
+  useEffect(() => {
+    if (!composeOpen) return;
+    getWazzupChannels()
+      .then((res) => {
+        const list = res?.value || [];
+        setComposeChannels(list);
+        setComposeChannelId((prev) => prev || list[0]?.channel_id || "");
+      })
+      .catch(() => setComposeChannels([]));
+  }, [composeOpen]);
+
+  const handleComposeSend = async () => {
+    const text = composeText.trim();
+    if (!composeChannelId) {
+      toast.error("Выберите канал");
+      return;
+    }
+    if (!composeTo.trim() || !text) {
+      toast.error("Заполните получателя и текст");
+      return;
+    }
+    // whatsapp — только цифры номера; telegram/instagram — username без @.
+    const recipient =
+      composeTransport === "whatsapp"
+        ? composeTo.replace(/\D/g, "")
+        : composeTo.replace(/^@/, "").trim();
+    if (!recipient) {
+      toast.error("Некорректный получатель");
+      return;
+    }
+    setComposeSending(true);
+    try {
+      await sendWazzupMessage(recipient, text, composeTransport, composeChannelId);
+      toast.success("Сообщение отправлено. Переписка появится в списке чатов.");
+      setComposeOpen(false);
+      setComposeTo("");
+      setComposeText("");
+      refreshWidget();
+    } catch (err: any) {
+      toast.error(
+        err?.response?.data?.error ||
+          "Не удалось отправить. Проверьте интеграцию и тип канала (для официального WABA нужен шаблон).",
+      );
+    } finally {
+      setComposeSending(false);
+    }
+  };
   // Deep-link на конкретную переписку: /whatsapp?phone=7700...&transport=whatsapp
   // (из карточки клиента/лида). chat_id — синоним phone (для telegram/instagram
   // это username). Открываем iframe сразу на этом чате.
@@ -186,12 +253,16 @@ export default function MessengerPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={() => setComposeOpen(true)}>
+            <Send className="mr-2 h-4 w-4" />
+            Написать
+          </Button>
           <Button variant="outline" onClick={refreshWidget}>
             <RefreshCw className={cn("mr-2 h-4 w-4", isManualRefresh && "animate-spin")} />
             Обновить
           </Button>
           {isAdmin && (
-            <Button onClick={() => setIsSetupModalOpen(true)}>
+            <Button variant="outline" onClick={() => setIsSetupModalOpen(true)}>
               <Settings className="mr-2 h-4 w-4" />
               Настройки
             </Button>
@@ -250,6 +321,77 @@ export default function MessengerPage() {
             <Button onClick={handleSetup} disabled={isSetupLoading}>
               {isSetupLoading && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
               Сохранить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* «Написать первым» — KUB отправляет первое сообщение через API Wazzup,
+          после чего диалог появляется в списке чатов (iframe сам это не умеет). */}
+      <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-md">
+          <DialogHeader>
+            <DialogTitle>Написать первым</DialogTitle>
+            <DialogDescription>
+              Сообщение отправится клиенту с выбранного канала (филиала). После
+              отправки переписка появится в списке чатов.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Канал (филиал)</Label>
+              <select
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm"
+                value={composeChannelId}
+                onChange={(e) => setComposeChannelId(e.target.value)}
+              >
+                {composeChannels.length === 0 && <option value="">Каналы не найдены</option>}
+                {composeChannels.map((ch) => (
+                  <option key={ch.id} value={ch.channel_id}>
+                    {ch.name || ch.phone || ch.channel_id}
+                    {ch.branch_name ? ` · ${ch.branch_name}` : ""}
+                    {` · ${ch.transport}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="compose-to">
+                {composeTransport === "whatsapp" ? "Номер телефона" : "Username / телефон"}
+              </Label>
+              <Input
+                id="compose-to"
+                value={composeTo}
+                onChange={(e) => setComposeTo(e.target.value)}
+                placeholder={composeTransport === "whatsapp" ? "77001234567" : "username"}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="compose-text">Сообщение</Label>
+              <Textarea
+                id="compose-text"
+                rows={4}
+                value={composeText}
+                onChange={(e) => setComposeText(e.target.value)}
+                placeholder="Введите сообщение..."
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setComposeOpen(false)}>
+              Отмена
+            </Button>
+            <Button onClick={handleComposeSend} disabled={composeSending}>
+              {composeSending ? (
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="mr-2 h-4 w-4" />
+              )}
+              Отправить
             </Button>
           </DialogFooter>
         </DialogContent>
