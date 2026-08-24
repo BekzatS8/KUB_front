@@ -19,7 +19,11 @@ import { getCurrentUser, getRoleCode } from "@/lib/auth";
 import {
   getWazzupIframe,
   setupWazzup,
+  getWazzupChannels,
+  setWazzupChannelBranch,
+  type WazzupChannel,
 } from "@/src/api/integrations_wazzup.api";
+import { listBranches, type Branch } from "@/src/api/branches.api";
 
 type WidgetState = "loading" | "ready" | "error";
 
@@ -59,6 +63,40 @@ export default function MessengerPage() {
     webhooks_base_url: "https://api.kubcrm.kz",
     enabled: true,
   });
+
+  // Привязка каналов Wazzup к филиалам: входящий лид из канала попадает в его
+  // филиал (разделение по филиалам). Настраивает только админ.
+  const [channels, setChannels] = useState<WazzupChannel[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [savingChannelId, setSavingChannelId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isSetupModalOpen || !isAdmin) return;
+    (async () => {
+      try {
+        const [chRes, brRes] = await Promise.all([getWazzupChannels(), listBranches()]);
+        setChannels(chRes?.value || []);
+        setBranches(Array.isArray(brRes) ? brRes : brRes?.data || []);
+      } catch {
+        // Панель просто не покажет каналы — не блокируем настройку интеграции.
+      }
+    })();
+  }, [isSetupModalOpen, isAdmin]);
+
+  const handleChannelBranchChange = async (channelId: number, branchIdRaw: string) => {
+    const branchId = branchIdRaw ? Number(branchIdRaw) : null;
+    setSavingChannelId(channelId);
+    try {
+      await setWazzupChannelBranch(channelId, branchId);
+      setChannels((prev) =>
+        prev.map((c) => (c.id === channelId ? { ...c, branch_id: branchId } : c)),
+      );
+    } catch {
+      // no-op
+    } finally {
+      setSavingChannelId(null);
+    }
+  };
   // Deep-link на конкретную переписку: /whatsapp?phone=7700...&transport=whatsapp
   // (из карточки клиента/лида). chat_id — синоним phone (для telegram/instagram
   // это username). Открываем iframe сразу на этом чате.
@@ -241,6 +279,38 @@ export default function MessengerPage() {
               />
               Включить интеграцию
             </label>
+
+            {channels.length > 0 && (
+              <div className="space-y-2 border-t pt-3">
+                <Label>Каналы → филиалы</Label>
+                <p className="text-xs text-slate-500">
+                  Входящие лиды из канала попадают в выбранный филиал. Так менеджеры
+                  филиала видят только своих клиентов.
+                </p>
+                <div className="space-y-2">
+                  {channels.map((ch) => (
+                    <div key={ch.id} className="flex items-center gap-2">
+                      <span className="flex-1 truncate text-sm text-slate-700">
+                        {ch.name || ch.phone || ch.channel_id}
+                      </span>
+                      <select
+                        className="h-9 w-40 rounded-md border border-slate-300 bg-white px-2 text-sm"
+                        value={ch.branch_id ? String(ch.branch_id) : ""}
+                        disabled={savingChannelId === ch.id}
+                        onChange={(e) => handleChannelBranchChange(ch.id, e.target.value)}
+                      >
+                        <option value="">— без филиала —</option>
+                        {branches.map((b) => (
+                          <option key={b.id} value={String(b.id)}>
+                            {b.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>

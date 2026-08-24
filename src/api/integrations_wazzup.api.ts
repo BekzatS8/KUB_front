@@ -60,6 +60,8 @@ export interface WazzupChannel {
   phone?: string;
   status: string;
   provider: string;
+  branch_id?: number | null;
+  branch_name?: string;
   updated_at: string;
 }
 
@@ -119,6 +121,18 @@ export const getWazzupStatus = async (): Promise<WazzupStatus> => {
 
 export const getWazzupChannels = async (): Promise<WazzupListResponse<WazzupChannel>> => {
   const response = await api.get('/integrations/wazzup/channels');
+  return response.data;
+};
+
+// Привязать канал Wazzup к филиалу (branchId=null снимает привязку). Только
+// админ/руководство. Входящие лиды из этого канала попадают в указанный филиал.
+export const setWazzupChannelBranch = async (
+  channelId: number,
+  branchId: number | null,
+): Promise<{ status: string }> => {
+  const response = await api.patch(`/integrations/wazzup/channels/${channelId}/branch`, {
+    branch_id: branchId,
+  });
   return response.data;
 };
 
