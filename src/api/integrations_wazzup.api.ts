@@ -160,9 +160,14 @@ export const sendWazzupDialogMessage = async (
   return response.data;
 };
 
-// Send message via Wazzup
-export const sendWazzupMessage = async (chatId: string, text: string): Promise<{ message_id: string }> => {
-  const response = await api.post('/integrations/wazzup/send', { chat_id: chatId, text });
+// Send message via Wazzup. transport (тип канала) обязателен для Wazzup, чтобы
+// создать диалог (написать первым). По умолчанию WhatsApp.
+export const sendWazzupMessage = async (
+  chatId: string,
+  text: string,
+  transport: 'whatsapp' | 'telegram' | 'instagram' | string = 'whatsapp',
+): Promise<{ message_id: string }> => {
+  const response = await api.post('/integrations/wazzup/send', { chat_id: chatId, text, transport });
   return response.data;
 };
 
