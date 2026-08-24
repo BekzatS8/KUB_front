@@ -159,6 +159,8 @@ const MENU: NavEntry[] = [
       // раскладка шаблонов документов по отделам
       { type: "item", title: "Шаблоны документов", href: "/settings/document-templates", icon: FileText, permission: "documents.update" },
       { type: "item", title: "Переходы между воронками", href: "/settings/funnel-transitions", icon: ArrowRightLeft, permission: "funnels.update" },
+      // Привязка каналов Wazzup к филиалам (разделение лидов по филиалам)
+      { type: "item", title: "Каналы мессенджера", href: "/settings/messenger-channels", icon: MessageCircle, permission: "messenger.view" },
       { type: "item", title: "Пользователи", href: "/users", icon: UserCheck, permission: "users.view" },
     ],
   },
