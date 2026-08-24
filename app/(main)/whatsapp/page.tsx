@@ -69,19 +69,25 @@ export default function MessengerPage() {
   const [channels, setChannels] = useState<WazzupChannel[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [savingChannelId, setSavingChannelId] = useState<number | null>(null);
+  const [channelsLoading, setChannelsLoading] = useState(false);
+
+  const loadChannelsAndBranches = useCallback(async () => {
+    setChannelsLoading(true);
+    try {
+      const [chRes, brRes] = await Promise.all([getWazzupChannels(), listBranches()]);
+      setChannels(chRes?.value || []);
+      setBranches(Array.isArray(brRes) ? brRes : brRes?.data || []);
+    } catch {
+      // Не блокируем настройку интеграции, если каналы не загрузились.
+    } finally {
+      setChannelsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isSetupModalOpen || !isAdmin) return;
-    (async () => {
-      try {
-        const [chRes, brRes] = await Promise.all([getWazzupChannels(), listBranches()]);
-        setChannels(chRes?.value || []);
-        setBranches(Array.isArray(brRes) ? brRes : brRes?.data || []);
-      } catch {
-        // Панель просто не покажет каналы — не блокируем настройку интеграции.
-      }
-    })();
-  }, [isSetupModalOpen, isAdmin]);
+    loadChannelsAndBranches();
+  }, [isSetupModalOpen, isAdmin, loadChannelsAndBranches]);
 
   const handleChannelBranchChange = async (channelId: number, branchIdRaw: string) => {
     const branchId = branchIdRaw ? Number(branchIdRaw) : null;
@@ -280,13 +286,31 @@ export default function MessengerPage() {
               Включить интеграцию
             </label>
 
-            {channels.length > 0 && (
-              <div className="space-y-2 border-t pt-3">
+            <div className="space-y-2 border-t pt-3">
+              <div className="flex items-center justify-between">
                 <Label>Каналы → филиалы</Label>
-                <p className="text-xs text-slate-500">
-                  Входящие лиды из канала попадают в выбранный филиал. Так менеджеры
-                  филиала видят только своих клиентов.
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={loadChannelsAndBranches}
+                  disabled={channelsLoading}
+                >
+                  <RefreshCw className={cn("mr-2 h-3.5 w-3.5", channelsLoading && "animate-spin")} />
+                  Обновить
+                </Button>
+              </div>
+              <p className="text-xs text-slate-500">
+                Входящие лиды из канала попадают в выбранный филиал. Так менеджеры
+                филиала видят только своих лидов и клиентов.
+              </p>
+              {channels.length === 0 ? (
+                <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+                  {channelsLoading
+                    ? "Загрузка каналов..."
+                    : "Каналы не найдены. Убедитесь, что интеграция включена, откройте мессенджер один раз для синхронизации, затем нажмите «Обновить»."}
                 </p>
+              ) : (
                 <div className="space-y-2">
                   {channels.map((ch) => (
                     <div key={ch.id} className="flex items-center gap-2">
@@ -309,8 +333,8 @@ export default function MessengerPage() {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           <DialogFooter>
