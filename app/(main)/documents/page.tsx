@@ -794,7 +794,18 @@ export default function DocumentsPage() {
 
     const handleDownload = async (doc: Document) => {
         try {
-            await downloadDocument(doc.id)
+            // Подписанный документ → скачивается подписанный PDF (бэкенд отдаёт его
+            // для format=pdf, если статус signed). Раньше blob получали, но НЕ
+            // сохраняли — кнопка «скачивала» пустоту.
+            const blob = await downloadDocument(doc.id)
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `${docTypeLabels[doc.doc_type] || "document"}_${doc.id}.pdf`
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            URL.revokeObjectURL(url)
             toast.success("Документ скачан")
         } catch (err: any) {
             toast.error(err?.message || "Ошибка при скачивании документа")
