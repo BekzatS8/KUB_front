@@ -61,6 +61,7 @@ const EVENT_TYPE_LABELS: Record<FeedEventType, string> = {
   pending_edit_document: "Редактирование документа",
   pending_delete_document: "Удаление документа",
   pending_send_document: "Отправка документа на подпись",
+  pending_review_document: "Документ на проверку",
 }
 
 const STATUS_LABELS: Record<string, string> = {

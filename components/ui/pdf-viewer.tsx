@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Loader2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, X } from "lucide-react"
 import { toast } from "sonner"
+import { downloadDocument } from "@/src/api/documents.api"
 
 interface PdfViewerProps {
   isOpen: boolean
@@ -138,12 +139,9 @@ export function PdfViewer({ isOpen, onClose, documentId, documentName }: PdfView
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(`/api/documents/${documentId}/download`)
-      if (!response.ok) {
-        throw new Error('Failed to download document')
-      }
-      
-      const blob = await response.blob()
+      // Через авторизованный API (format=pdf → подписанный PDF, если подписан).
+      // Прямой fetch на Next-прокси шёл без токена → 401.
+      const blob = await downloadDocument(documentId, "pdf")
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

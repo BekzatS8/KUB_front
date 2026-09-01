@@ -823,6 +823,24 @@ export default function DocumentsPage() {
         setActionLoading(true)
         try {
             await submitDocument(doc.id)
+            // Менеджер (без права ревью, documents.update) отправил документ на
+            // проверку → создаём событие в Ленте, чтобы админ увидел и одобрил.
+            if (!canUpdateDocs) {
+                try {
+                    await FeedAPI.createFeedEvent({
+                        type: 'pending_review_document',
+                        resource_id: doc.id,
+                        payload: {
+                            document_id: doc.id,
+                            doc_type: doc.doc_type,
+                            title: doc.title,
+                        },
+                    })
+                } catch (feedErr) {
+                    // Не блокируем submit, если Лента недоступна.
+                    console.error("Failed to create review feed event:", feedErr)
+                }
+            }
             toast.success("Документ отправлен на проверку")
             await fetchDocuments()
         } catch (err: any) {
@@ -1855,8 +1873,9 @@ export default function DocumentsPage() {
                                                             )}
                                                             <DropdownMenuSeparator />
 
-                                                            {/* Lifecycle actions */}
-                                                            {canUpdateDocs && canSubmit && (
+                                                            {/* Lifecycle actions. Submit доступен и создателю (documents.create),
+                                                                не только documents.update — бэкенд разрешает submit по create. */}
+                                                            {(canCreateDocs || canUpdateDocs) && canSubmit && (
                                                                 <DropdownMenuItem onClick={() => handleSubmit(doc)}>
                                                                     <Send className="h-4 w-4 mr-2" />
                                                                     Отправить на проверку
