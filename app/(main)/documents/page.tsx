@@ -826,25 +826,9 @@ export default function DocumentsPage() {
     const handleSubmit = async (doc: Document) => {
         setActionLoading(true)
         try {
+            // Событие в Ленту («на проверку» для админа) создаёт БЭКЕНД в Submit
+            // для не-ревьюеров — надёжнее, не зависит от прав/логики фронта.
             await submitDocument(doc.id)
-            // Менеджер (без права ревью, documents.update) отправил документ на
-            // проверку → создаём событие в Ленте, чтобы админ увидел и одобрил.
-            if (!canUpdateDocs) {
-                try {
-                    await FeedAPI.createFeedEvent({
-                        type: 'pending_review_document',
-                        resource_id: doc.id,
-                        payload: {
-                            document_id: doc.id,
-                            doc_type: doc.doc_type,
-                            title: doc.title,
-                        },
-                    })
-                } catch (feedErr) {
-                    // Не блокируем submit, если Лента недоступна.
-                    console.error("Failed to create review feed event:", feedErr)
-                }
-            }
             toast.success("Документ отправлен на проверку")
             await fetchDocuments()
         } catch (err: any) {
