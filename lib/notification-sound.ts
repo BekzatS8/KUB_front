@@ -7,6 +7,7 @@ export type NotificationSoundType =
   | "chat"
   | "messenger"
   | "task"
+  | "feed"
   | "default";
 
 // Частоты (Гц) и «мелодия»: массив = последовательность коротких бипов.
@@ -15,6 +16,7 @@ const TONES: Record<NotificationSoundType, number[]> = {
   chat: [660], // короткий средний
   messenger: [784], // чуть выше, отличимый от чата
   task: [880, 880], // два одинаковых — как было у задач
+  feed: [1047, 784], // нисходящий — «новое в Ленте на одобрение»
   default: [880],
 };
 

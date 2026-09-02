@@ -6,6 +6,7 @@ import { Menu } from "lucide-react";
 import { RoleBasedSidebar } from "@/components/role-based-sidebar";
 import { TaskNotifications } from "@/components/task-notifications";
 import { NotificationSounds } from "@/components/notification-sounds";
+import { FeedBell } from "@/components/feed-bell";
 
 export default function MainLayout({
   children,
@@ -59,6 +60,8 @@ export default function MainLayout({
       <TaskNotifications />
       {/* Звуковые сигналы: новые лиды, сообщения мессенджера/чата, задачи */}
       <NotificationSounds />
+      {/* Колокольчик Ленты заявок: непросмотренные заявки на одобрение + звук */}
+      <FeedBell />
     </div>
   );
 }

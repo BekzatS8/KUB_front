@@ -124,6 +124,18 @@ export const getWazzupChannels = async (): Promise<WazzupListResponse<WazzupChan
   return response.data;
 };
 
+// Ссылка на встроенный iframe добавления канала (White Label). transport
+// опционален: без него — общий экран выбора канала. Бросает при 404 (White Label
+// не настроен) — вызывающий откатывается на кабинет Wazzup.
+export const getWazzupChannelConnectLink = async (
+  transport?: string,
+): Promise<{ link: string }> => {
+  const response = await api.get('/integrations/wazzup/channels/connect-link', {
+    params: transport ? { transport } : undefined,
+  });
+  return response.data;
+};
+
 // Привязать канал Wazzup к филиалу (branchId=null снимает привязку). Только
 // админ/руководство. Входящие лиды из этого канала попадают в указанный филиал.
 export const setWazzupChannelBranch = async (

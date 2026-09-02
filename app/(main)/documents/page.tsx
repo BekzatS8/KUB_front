@@ -543,6 +543,10 @@ export default function DocumentsPage() {
     const canDownloadDocs = docPermSet.has('documents.download')
     const canSendDocs = docPermSet.has('documents.send')
     const canUpdateDocs = docPermSet.has('documents.update')
+    // Ревью (утвердить/вернуть) — ТОЛЬКО ревьюеры по роли (админ/руководство/ОКК).
+    // МОП (sales/visa/partner) НЕ утверждает свои документы — он отправляет на
+    // проверку, а одобряет админ через Ленту (обратная связь 02.09.2026).
+    const canReviewDocs = ['system_admin', 'management', 'quality_control'].includes(roleCode || '')
     
     // Fetch fresh user data on mount
     useEffect(() => {
@@ -1881,7 +1885,7 @@ export default function DocumentsPage() {
                                                                     Отправить на проверку
                                                                 </DropdownMenuItem>
                                                             )}
-                                                            {canUpdateDocs && canReview && (
+                                                            {canReviewDocs && canReview && (
                                                                 <DropdownMenuItem onClick={() => { setReviewDoc(doc); setIsReviewOpen(true) }}>
                                                                     <ShieldCheck className="h-4 w-4 mr-2" />
                                                                     Ревью

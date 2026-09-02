@@ -2,16 +2,21 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
-import { RefreshCw } from "lucide-react"
+import { Plus, RefreshCw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   getWazzupChannels,
   setWazzupChannelBranch,
+  getWazzupChannelConnectLink,
   type WazzupChannel,
 } from "@/src/api/integrations_wazzup.api"
 import { listBranches, type Branch } from "@/src/api/branches.api"
+
+// Кабинет Wazzup — фолбэк, если White Label не настроен (встроить нельзя).
+const WAZZUP_CABINET_URL = "https://lk.wazzup24.com"
 
 const TRANSPORT_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
@@ -24,6 +29,12 @@ export default function MessengerChannelsPage() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<number | null>(null)
+
+  // Добавление канала: встроенный iframe Wazzup (White Label). Если WL не
+  // настроен — открываем кабинет Wazzup в новой вкладке.
+  const [addOpen, setAddOpen] = useState(false)
+  const [connectLink, setConnectLink] = useState("")
+  const [connectLoading, setConnectLoading] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -41,6 +52,23 @@ export default function MessengerChannelsPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  const handleAddChannel = async () => {
+    setConnectLink("")
+    setConnectLoading(true)
+    setAddOpen(true)
+    try {
+      const res = await getWazzupChannelConnectLink()
+      setConnectLink(res.link)
+    } catch (err: any) {
+      // White Label не настроен (404) или ошибка → откат на кабинет Wazzup.
+      setAddOpen(false)
+      toast.info("Добавление канала открывается в кабинете Wazzup")
+      window.open(WAZZUP_CABINET_URL, "_blank")
+    } finally {
+      setConnectLoading(false)
+    }
+  }
 
   const handleChange = async (channelId: number, branchIdRaw: string) => {
     const branchId = branchIdRaw ? Number(branchIdRaw) : null
@@ -67,10 +95,16 @@ export default function MessengerChannelsPage() {
             Привязка каналов WhatsApp / Telegram / Instagram к филиалам
           </p>
         </div>
-        <Button variant="outline" onClick={load} disabled={loading}>
-          <RefreshCw className={loading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
-          Обновить
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleAddChannel} disabled={connectLoading}>
+            <Plus className="mr-2 h-4 w-4" />
+            Добавить канал
+          </Button>
+          <Button variant="outline" onClick={load} disabled={loading}>
+            <RefreshCw className={loading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
+            Обновить
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -126,6 +160,40 @@ export default function MessengerChannelsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Встроенный iframe Wazzup для подключения канала (QR/номер/аккаунт).
+          После добавления закройте окно и нажмите «Обновить». */}
+      <Dialog
+        open={addOpen}
+        onOpenChange={(open) => {
+          setAddOpen(open)
+          if (!open) load() // подтянуть только что добавленный канал
+        }}
+      >
+        <DialogContent className="max-w-3xl p-0">
+          <DialogHeader className="p-4 pb-2 border-b">
+            <DialogTitle>Добавить канал</DialogTitle>
+          </DialogHeader>
+          <div className="h-[70vh] w-full">
+            {connectLoading ? (
+              <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                Загрузка…
+              </div>
+            ) : connectLink ? (
+              <iframe
+                src={connectLink}
+                className="h-full w-full border-0"
+                title="Добавление канала Wazzup"
+                allow="camera; clipboard-write"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                Не удалось загрузить форму добавления канала.
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
