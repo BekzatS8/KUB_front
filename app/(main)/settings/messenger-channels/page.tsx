@@ -61,10 +61,18 @@ export default function MessengerChannelsPage() {
       const res = await getWazzupChannelConnectLink()
       setConnectLink(res.link)
     } catch (err: any) {
-      // White Label не настроен (404) или ошибка → откат на кабинет Wazzup.
-      setAddOpen(false)
-      toast.info("Добавление канала открывается в кабинете Wazzup")
-      window.open(WAZZUP_CABINET_URL, "_blank")
+      const status = err?.response?.status
+      if (status === 404) {
+        // White Label не настроен → открываем кабинет Wazzup (fallback).
+        setAddOpen(false)
+        toast.info("Добавление канала открывается в кабинете Wazzup")
+        window.open(WAZZUP_CABINET_URL, "_blank")
+      } else {
+        // White Label настроен, но флоу упал — показываем причину (OAUTH_* и т.п.).
+        setAddOpen(false)
+        const detail = err?.response?.data?.detail || err?.message || "Неизвестная ошибка"
+        toast.error(`Ошибка White Label: ${detail}`)
+      }
     } finally {
       setConnectLoading(false)
     }
