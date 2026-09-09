@@ -169,7 +169,8 @@ export default function FeedPage() {
   const [user, setUser] = useState<any>(null)
   const [events, setEvents] = useState<FeedEvent[]>([])
   const [feedLoading, setFeedLoading] = useState(true)
-  const [statusFilter, setStatusFilter] = useState("all")
+  // По умолчанию открываем ленту на «Ожидает» — что требует действия (обратная связь 09.09.2026).
+  const [statusFilter, setStatusFilter] = useState("pending")
 
   const [selectedEvent, setSelectedEvent] = useState<FeedEvent | null>(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
