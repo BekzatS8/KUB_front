@@ -195,11 +195,22 @@ export default function MessengerChannelsPage() {
           if (!open) load() // подтянуть только что добавленный канал
         }}
       >
-        <DialogContent className="max-w-3xl p-0">
-          <DialogHeader className="p-4 pb-2 border-b">
-            <DialogTitle>Добавить канал</DialogTitle>
+        <DialogContent className="flex h-[92vh] w-[96vw] max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:p-0">
+          <DialogHeader className="shrink-0 border-b px-4 py-3">
+            <DialogTitle className="flex items-center gap-3 text-base">
+              Добавить канал
+              {connectLink && (
+                <button
+                  type="button"
+                  onClick={() => setConnectLink("")}
+                  className="text-xs font-normal text-slate-500 underline hover:text-slate-700"
+                >
+                  ← выбрать другой тип
+                </button>
+              )}
+            </DialogTitle>
           </DialogHeader>
-          <div className="h-[70vh] w-full">
+          <div className="min-h-0 w-full flex-1">
             {connectLoading ? (
               <div className="flex h-full items-center justify-center text-sm text-slate-500">
                 Загрузка…
