@@ -196,9 +196,9 @@ export default function FeedPage() {
   const roleCode = getRoleCode(user)
   const isAdmin = roleCode === "system_admin"
   const isHROrLegal = roleCode === "hr" || roleCode === "legal"
-  // Только администратор одобряет/отклоняет заявки ленты (бэкенд тоже это требует).
-  // Остальные роли видят лишь свои собственные заявки (без кнопок согласования).
-  const isElevated = isAdmin
+  // Одобряют/отклоняют заявки ленты админ И руководство (бэкенд тоже это требует,
+  // обратная связь 09.09.2026). Остальные видят лишь свои заявки без кнопок.
+  const isElevated = isAdmin || roleCode === "management"
 
   // ── Fetch feed events ────────────────────────────────────────────────────────
   const fetchEvents = useCallback(async () => {

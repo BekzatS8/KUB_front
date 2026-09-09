@@ -1917,18 +1917,20 @@ export default function DocumentsPage() {
                                                                             Архивировать
                                                                         </DropdownMenuItem>
                                                                     )}
-                                                                    {canDeleteDocs && (
-                                                                        <>
-                                                                            <DropdownMenuSeparator />
-                                                                            <DropdownMenuItem
-                                                                                onClick={() => { setDeleteId(doc.id); setIsDeleteOpen(true) }}
-                                                                                className="text-red-600"
-                                                                            >
-                                                                                <Trash2 className="h-4 w-4 mr-2" />
-                                                                                {canRequestDocDelete ? "Удалить (запрос админу)" : "Удалить"}
-                                                                            </DropdownMenuItem>
-                                                                        </>
-                                                                    )}
+                                                                </>
+                                                            )}
+                                                            {/* Удаление — отдельный блок (не зависит от права архивации).
+                                                                Админ удаляет любой документ, включая подписанный. */}
+                                                            {canDeleteDocs && (
+                                                                <>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => { setDeleteId(doc.id); setIsDeleteOpen(true) }}
+                                                                        className="text-red-600"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4 mr-2" />
+                                                                        {canRequestDocDelete ? "Удалить (запрос админу)" : "Удалить"}
+                                                                    </DropdownMenuItem>
                                                                 </>
                                                             )}
                                                         </DropdownMenuContent>

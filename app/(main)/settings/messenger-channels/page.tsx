@@ -21,12 +21,15 @@ const TRANSPORT_LABELS: Record<string, string> = {
   instagram: "Instagram",
 }
 
-// Типы каналов для встроенного подключения (значения transport для провайдера).
+// Типы каналов для встроенного подключения через iframe. Значения transport —
+// строго допустимые провайдером для /v2/iframe-links/channels (подтверждено
+// поддержкой 09.09.2026): whatsapp, wapi, tgapi, maxbot, max, vk, cian.
+// Instagram здесь НЕ поддерживается — подключается отдельным методом создания
+// канала (POST /v2/channels), не через iframe.
 const CHANNEL_TYPES: { transport: string; label: string }[] = [
   { transport: "whatsapp", label: "WhatsApp (по QR / номеру)" },
   { transport: "wapi", label: "WhatsApp Business (WABA)" },
   { transport: "tgapi", label: "Telegram" },
-  { transport: "instagram", label: "Instagram" },
   { transport: "max", label: "MAX" },
   { transport: "vk", label: "ВКонтакте" },
   { transport: "cian", label: "Циан" },

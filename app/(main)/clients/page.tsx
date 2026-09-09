@@ -1445,7 +1445,7 @@ export default function ClientsPage() {
         await ClientAPI.createClientWithPhoto(payload as any, selectedPhotoFile || undefined);
         toast({ title: "Успех", description: "Клиент успешно создан." });
       }
-      void fetchClients(); // Refresh list
+      await fetchClients(); // дожидаемся обновления списка, чтобы изменения были видны сразу
       setIsFormOpen(false);
       resetForm();
     } catch (err: any) {
