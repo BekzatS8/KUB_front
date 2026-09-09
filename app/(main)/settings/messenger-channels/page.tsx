@@ -24,6 +24,18 @@ const TRANSPORT_LABELS: Record<string, string> = {
   instagram: "Instagram",
 }
 
+// Типы каналов для встроенного подключения (значения transport — как требует
+// Wazzup /v2/iframe-links/channels). Instagram/Viber через этот метод не идут —
+// их подключают в кабинете Wazzup (кнопка «Открыть кабинет» в модалке).
+const CHANNEL_TYPES: { transport: string; label: string }[] = [
+  { transport: "whatsapp", label: "WhatsApp (по QR / номеру)" },
+  { transport: "wapi", label: "WhatsApp Business (WABA)" },
+  { transport: "tgapi", label: "Telegram" },
+  { transport: "max", label: "MAX" },
+  { transport: "vk", label: "ВКонтакте" },
+  { transport: "cian", label: "Циан" },
+]
+
 export default function MessengerChannelsPage() {
   const [channels, setChannels] = useState<WazzupChannel[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
@@ -53,12 +65,18 @@ export default function MessengerChannelsPage() {
     load()
   }, [load])
 
-  const handleAddChannel = async () => {
+  // Открыть модалку с выбором типа канала (iframe грузим уже после выбора).
+  const openAdd = () => {
+    setConnectLink("")
+    setAddOpen(true)
+  }
+
+  // Получить ссылку на iframe для конкретного транспорта (обязателен для Wazzup).
+  const fetchConnectLink = async (transport: string) => {
     setConnectLink("")
     setConnectLoading(true)
-    setAddOpen(true)
     try {
-      const res = await getWazzupChannelConnectLink()
+      const res = await getWazzupChannelConnectLink(transport)
       setConnectLink(res.link)
     } catch (err: any) {
       const status = err?.response?.status
@@ -69,7 +87,6 @@ export default function MessengerChannelsPage() {
         window.open(WAZZUP_CABINET_URL, "_blank")
       } else {
         // White Label настроен, но флоу упал — показываем причину (OAUTH_* и т.п.).
-        setAddOpen(false)
         const detail = err?.response?.data?.detail || err?.message || "Неизвестная ошибка"
         toast.error(`Ошибка White Label: ${detail}`)
       }
@@ -104,7 +121,7 @@ export default function MessengerChannelsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={handleAddChannel} disabled={connectLoading}>
+          <Button onClick={openAdd}>
             <Plus className="mr-2 h-4 w-4" />
             Добавить канал
           </Button>
@@ -195,8 +212,28 @@ export default function MessengerChannelsPage() {
                 allow="camera; clipboard-write"
               />
             ) : (
-              <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                Не удалось загрузить форму добавления канала.
+              // Шаг 1: выбор типа канала (transport обязателен для Wazzup).
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
+                <p className="text-sm text-slate-600">Выберите тип канала для подключения:</p>
+                <div className="grid w-full max-w-md grid-cols-2 gap-2">
+                  {CHANNEL_TYPES.map((t) => (
+                    <Button
+                      key={t.transport}
+                      variant="outline"
+                      className="h-auto py-3"
+                      onClick={() => fetchConnectLink(t.transport)}
+                    >
+                      {t.label}
+                    </Button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => window.open(WAZZUP_CABINET_URL, "_blank")}
+                  className="mt-2 text-xs text-slate-500 underline hover:text-slate-700"
+                >
+                  Instagram, Viber и др. — подключить в кабинете Wazzup
+                </button>
               </div>
             )}
           </div>
