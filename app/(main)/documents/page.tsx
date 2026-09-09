@@ -826,23 +826,9 @@ export default function DocumentsPage() {
     const handleSubmit = async (doc: Document) => {
         setActionLoading(true)
         try {
+            // Заявку в Ленту («на проверку») создаёт БЭКЕНД в Submit по роли из JWT
+            // (для не-ревьюеров) — надёжно, не зависит от прав/логики фронта.
             await submitDocument(doc.id)
-            // Не-ревьюер (МОП/визовый/партнёр) отправил на проверку → создаём
-            // заявку в Ленту для админа/руководства. Ключ — РОЛЬ ревьюера, не право
-            // documents.update (у МОП оно может быть). Создаём на фронте — так же,
-            // как остальные события ленты (надёжно, не зависит от деплоя бэка).
-            if (!canReviewDocs) {
-                try {
-                    await FeedAPI.createFeedEvent({
-                        type: 'pending_review_document',
-                        resource_id: doc.id,
-                        payload: { document_id: doc.id, doc_type: doc.doc_type, title: doc.title },
-                    })
-                } catch (feedErr: any) {
-                    console.error("Failed to create review feed event:", feedErr)
-                    toast.error("Документ на проверке, но не удалось уведомить в Ленте")
-                }
-            }
             toast.success("Документ отправлен на проверку")
             await fetchDocuments()
         } catch (err: any) {

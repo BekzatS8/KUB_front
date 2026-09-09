@@ -18,7 +18,6 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { getSignContactOptions, startSignWithChannel } from '@/src/api/documents.api'
-import { createFeedEvent } from '@/src/api/feed.api'
 import type { SignChannel, SignContactOptions, Document } from '@/src/models/documents.model'
 
 interface SendForSignatureModalProps {
@@ -132,28 +131,17 @@ export function SendForSignatureModal({
         }
       }
 
-      // Не-админ не отправляет напрямую — запрос уходит администратору в Ленту,
-      // документ уйдёт клиенту после одобрения (#4).
-      if (requiresApproval) {
-        await createFeedEvent({
-          type: 'pending_send_document',
-          resource_id: document.id,
-          payload: {
-            document_id: document.id,
-            channel: selectedChannel,
-            manual_phone: selectedChannel === 'sms' ? (manualPhone || '') : '',
-            manual_email: selectedChannel === 'email' ? (manualEmail || '') : '',
-          },
-        })
-        toast.success('Запрос на отправку документа отправлен администратору на одобрение')
-        onSuccess?.()
-        onOpenChange(false)
-        return
+      // Решение принимает БЭКЕНД по роли из JWT: не-ревьюер (МОП/визовый/партнёр)
+      // → запрос уходит в Ленту на одобрение (ответ status='pending_approval');
+      // ревьюер (админ/руководство) → отправка клиенту сразу. Фронт больше не
+      // определяет это сам (раньше зависело от прав и не срабатывало).
+      const res: any = await startSignWithChannel(document.id, payload)
+
+      if (res?.status === 'pending_approval') {
+        toast.success('Запрос на отправку отправлен администратору/руководству на одобрение')
+      } else {
+        toast.success('Ссылка и код отправлены клиенту')
       }
-
-      await startSignWithChannel(document.id, payload)
-
-      toast.success('Ссылка и код отправлены клиенту')
       onSuccess?.()
       onOpenChange(false)
     } catch (error: any) {
