@@ -82,6 +82,22 @@ const USER_ACTION_LABELS: Record<string, string> = {
   update: "Редактирование пользователя",
 }
 
+// errorText достаёт понятное сообщение из ответа API (интерцептор кладёт
+// message бэкенда в Error.message).
+function errorText(err: any): string {
+  return (
+    err?.response?.data?.message ||
+    err?.message ||
+    "Неизвестная ошибка"
+  )
+}
+
+// uniqueReasons склеивает причины в короткий список без повторов — в массовой
+// операции обычно одна и та же причина на все заявки.
+function uniqueReasons(reasons: string[]): string {
+  return Array.from(new Set(reasons)).slice(0, 3).join("; ")
+}
+
 function formatPayloadPreview(type: FeedEventType, payload: Record<string, any>): string {
   switch (type) {
     case "pending_create_lead":
@@ -355,15 +371,21 @@ export default function FeedPage() {
     if (totalSelected === 0) return
     setBulkProcessing(true)
     let ok = 0
-    let failed = 0
+    const errors: string[] = []
     try {
       for (const id of selectedFeedIds) {
-        try { await FeedAPI.approveFeedEvent(id); ok++ } catch { failed++ }
+        try { await FeedAPI.approveFeedEvent(id); ok++ } catch (err: any) { errors.push(errorText(err)) }
       }
       for (const id of selectedUserIds) {
-        try { await UserRequestsAPI.approveUserRequest(id); ok++ } catch { failed++ }
+        try { await UserRequestsAPI.approveUserRequest(id); ok++ } catch (err: any) { errors.push(errorText(err)) }
       }
-      toast.success(`Одобрено: ${ok}${failed ? `, с ошибкой: ${failed}` : ""}`)
+      // Причина отказа обязана быть видна: раньше показывался только счётчик
+      // «с ошибкой: N», и админ не знал, что чинить.
+      if (errors.length) {
+        toast.error(`Одобрено: ${ok}, с ошибкой: ${errors.length}`, { description: uniqueReasons(errors) })
+      } else {
+        toast.success(`Одобрено: ${ok}`)
+      }
       clearSelection()
       fetchEvents()
       if (user) fetchUserRequests(user)
@@ -378,14 +400,19 @@ export default function FeedPage() {
     let ok = 0
     let failed = 0
     const reason = bulkRejectReason.trim() || undefined
+    const errors: string[] = []
     try {
       for (const id of selectedFeedIds) {
-        try { await FeedAPI.rejectFeedEvent(id, reason); ok++ } catch { failed++ }
+        try { await FeedAPI.rejectFeedEvent(id, reason); ok++ } catch (err: any) { failed++; errors.push(errorText(err)) }
       }
       for (const id of selectedUserIds) {
-        try { await UserRequestsAPI.rejectUserRequest(id, reason); ok++ } catch { failed++ }
+        try { await UserRequestsAPI.rejectUserRequest(id, reason); ok++ } catch (err: any) { failed++; errors.push(errorText(err)) }
       }
-      toast.success(`Отклонено: ${ok}${failed ? `, с ошибкой: ${failed}` : ""}`)
+      if (failed) {
+        toast.error(`Отклонено: ${ok}, с ошибкой: ${failed}`, { description: uniqueReasons(errors) })
+      } else {
+        toast.success(`Отклонено: ${ok}`)
+      }
       clearSelection()
       setIsBulkRejectOpen(false)
       setBulkRejectReason("")
