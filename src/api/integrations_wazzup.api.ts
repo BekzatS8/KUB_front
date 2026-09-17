@@ -148,6 +148,15 @@ export const setWazzupChannelBranch = async (
   return response.data;
 };
 
+// Удаление канала из справочника CRM. Нужно для «мусорных» строк: канал
+// отключили в Wazzup, а в CRM он остался и продолжал попадать в списки.
+// Переписка не затрагивается — уходит только запись справочника с привязкой
+// к филиалу.
+export const deleteWazzupChannel = async (channelId: number): Promise<{ status: string }> => {
+  const response = await api.delete(`/integrations/wazzup/channels/${channelId}`);
+  return response.data;
+};
+
 export const getWazzupDialogs = async (transport: string): Promise<WazzupListResponse<WazzupDialog>> => {
   const response = await api.get('/integrations/wazzup/dialogs', { params: { transport } });
   return response.data;

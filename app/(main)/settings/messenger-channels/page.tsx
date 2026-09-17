@@ -2,15 +2,26 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Plus, RefreshCw } from "lucide-react"
+import { Plus, RefreshCw, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   getWazzupChannels,
   setWazzupChannelBranch,
   getWazzupChannelConnectLink,
+  deleteWazzupChannel,
   type WazzupChannel,
 } from "@/src/api/integrations_wazzup.api"
 import { listBranches, type Branch } from "@/src/api/branches.api"
@@ -40,6 +51,10 @@ export default function MessengerChannelsPage() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<number | null>(null)
+  // Удаление «мусорного» канала: строка остаётся в CRM после отключения канала
+  // в Wazzup, потому что синхронизация только добавляет и обновляет записи.
+  const [channelToDelete, setChannelToDelete] = useState<WazzupChannel | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   // Добавление канала: встроенный iframe провайдера (White Label). Выбор типа
   // канала → ссылка на iframe для этого транспорта.
@@ -91,6 +106,21 @@ export default function MessengerChannelsPage() {
     }
   }
 
+  const handleDelete = async () => {
+    if (!channelToDelete) return
+    setDeleting(true)
+    try {
+      await deleteWazzupChannel(channelToDelete.id)
+      setChannels((prev) => prev.filter((c) => c.id !== channelToDelete.id))
+      toast.success("Канал удалён из списка")
+      setChannelToDelete(null)
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || "Не удалось удалить канал")
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const handleChange = async (channelId: number, branchIdRaw: string) => {
     const branchId = branchIdRaw ? Number(branchIdRaw) : null
     setSavingId(channelId)
@@ -134,7 +164,9 @@ export default function MessengerChannelsPage() {
           <CardDescription>
             Входящий лид из канала попадает в выбранный филиал. Так менеджеры филиала
             видят только своих лидов и клиентов. Если филиал не выбран — лид получает
-            филиал владельца интеграции.
+            филиал владельца интеграции. Список подтягивается из Wazzup при открытии
+            страницы и по кнопке «Обновить»; отключённые в Wazzup каналы удаляются
+            автоматически, а корзиной можно убрать оставшиеся вручную.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -161,19 +193,30 @@ export default function MessengerChannelsPage() {
                       {ch.phone ? ` · ${ch.phone}` : ""}
                     </div>
                   </div>
-                  <select
-                    className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm sm:w-56"
-                    value={ch.branch_id ? String(ch.branch_id) : ""}
-                    disabled={savingId === ch.id}
-                    onChange={(e) => handleChange(ch.id, e.target.value)}
-                  >
-                    <option value="">— без филиала —</option>
-                    {branches.map((b) => (
-                      <option key={b.id} value={String(b.id)}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm sm:w-56"
+                      value={ch.branch_id ? String(ch.branch_id) : ""}
+                      disabled={savingId === ch.id}
+                      onChange={(e) => handleChange(ch.id, e.target.value)}
+                    >
+                      <option value="">— без филиала —</option>
+                      {branches.map((b) => (
+                        <option key={b.id} value={String(b.id)}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                      title="Удалить канал из списка"
+                      onClick={() => setChannelToDelete(ch)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -240,6 +283,37 @@ export default function MessengerChannelsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={channelToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setChannelToDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить канал из списка?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {channelToDelete
+                ? `«${channelToDelete.name || channelToDelete.phone || channelToDelete.channel_id}» будет убран из списка каналов и из выбора в «Написать первым», привязка к филиалу снимется. Переписка и история сообщений останутся на месте. Если канал ещё подключён в Wazzup, он вернётся при следующем обновлении — уже без филиала.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                handleDelete()
+              }}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting ? "Удаление…" : "Удалить"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
