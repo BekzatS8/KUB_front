@@ -231,6 +231,13 @@ export default function DealsPage() {
 
   // Kanban view state
   const [viewMode, setViewMode] = useState<"kanban" | "table">("table");
+  // Фильтры канбана (обратная связь заказчика 17.09.2026): по умолчанию менеджер
+  // видит свои карточки и новые «ничьи» лиды; «Все лиды филиала» показывает всё,
+  // что доступно по филиалу; отдельный выбор менеджера — «сортировка по
+  // менеджерам». Поиск нужен, чтобы не листать сотни карточек ради переноса.
+  const [boardOwnerFilter, setBoardOwnerFilter] = useState<string>("mine");
+  const [boardSearchInput, setBoardSearchInput] = useState("");
+  const [boardSearch, setBoardSearch] = useState("");
   const [canViewFunnels, setCanViewFunnels] = useState(false);
   // Роли визового/партнёрского отдела видят канбан (funnels.view), но НЕ имеют
   // deals.view — список сделок им отдаёт 403. Держим флаг, чтобы не грузить
@@ -933,6 +940,18 @@ export default function DealsPage() {
   const isSales = getRoleCode(user) === 'sales';
   const isManagement = getRoleCode(user) === 'management';
 
+  // Дебаунс поиска по доске: без него каждый символ — запрос на сервер.
+  useEffect(() => {
+    const t = setTimeout(() => setBoardSearch(boardSearchInput), 350);
+    return () => clearTimeout(t);
+  }, [boardSearchInput]);
+
+  // Режим владельца и конкретный менеджер разъезжаются по разным параметрам API.
+  const boardOwnerScope: "mine" | "all" | undefined =
+    boardOwnerFilter === "mine" ? "mine" : boardOwnerFilter === "all" ? "all" : undefined;
+  const boardOwnerId =
+    boardOwnerFilter === "mine" || boardOwnerFilter === "all" ? null : Number(boardOwnerFilter) || null;
+
   // Get status badge
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
@@ -1528,6 +1547,44 @@ export default function DealsPage() {
         </Card>
       </div>
 
+      {/* Панель фильтров канбана: поиск лида + чьи карточки показывать. */}
+      {viewMode === "kanban" && canViewFunnels && funnels.length > 0 && (
+        <Card className="mb-4">
+          <CardContent className="p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Поиск лида: имя, телефон, описание..."
+                  value={boardSearchInput}
+                  onChange={(e) => setBoardSearchInput(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <select
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm sm:w-72"
+                value={boardOwnerFilter}
+                onChange={(e) => setBoardOwnerFilter(e.target.value)}
+              >
+                <option value="mine">Мои и новые заявки</option>
+                <option value="all">Все лиды филиала</option>
+                {users
+                  .filter((u: any) => String(u.id) !== String(user?.id))
+                  .map((u: any) => (
+                    <option key={u.id} value={String(u.id)}>
+                      {getUserDisplayName(u)}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <p className="mt-2 text-xs text-gray-500">
+              По умолчанию показаны ваши карточки и новые заявки, которые ещё никто не взял.
+              Лиды другого филиала не показываются ни в одном из режимов.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Kanban view: все доступные воронки вертикальным списком (ТЗ п.1.3) */}
       {viewMode === "kanban" && canViewFunnels && (
         funnels.length > 0 ? (
@@ -1551,6 +1608,9 @@ export default function DealsPage() {
                     }
                   }}
                   refreshKey={kanbanRefreshKey}
+                  owner={boardOwnerScope}
+                  ownerId={boardOwnerId}
+                  query={boardSearch}
                   canWrite={canWrite}
                   isSales={isSales}
                   isAdmin={isAdmin}

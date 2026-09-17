@@ -41,7 +41,25 @@ export async function duplicateFunnelStage(id: number): Promise<FunnelStage> {
   return res.data
 }
 
-export async function getFunnelBoard(funnelId: number): Promise<FunnelBoard> {
-  const res = await api.get(`/funnels/${funnelId}/board`)
+// Фильтры доски (обратная связь заказчика 17.09.2026):
+//   owner    — "mine" (свои + новые ничьи) | "all" (все лиды филиала);
+//              по умолчанию бэкенд сам ставит mine менеджеру и all руководству;
+//   ownerId  — конкретный менеджер (сортировка по менеджерам);
+//   q        — поиск лида по названию/телефону, чтобы не листать сотни карточек.
+export interface FunnelBoardParams {
+  owner?: "mine" | "all"
+  ownerId?: number | null
+  q?: string
+}
+
+export async function getFunnelBoard(
+  funnelId: number,
+  params: FunnelBoardParams = {},
+): Promise<FunnelBoard> {
+  const query: Record<string, string | number> = {}
+  if (params.owner) query.owner = params.owner
+  if (params.ownerId) query.owner_id = params.ownerId
+  if (params.q && params.q.trim()) query.q = params.q.trim()
+  const res = await api.get(`/funnels/${funnelId}/board`, { params: query })
   return res.data
 }

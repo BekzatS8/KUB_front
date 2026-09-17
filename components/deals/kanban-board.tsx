@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { Building2, User, RefreshCw, Pencil, Archive, Trash2, MessageCircle, Phone } from "lucide-react";
 import type { FunnelStage } from "@/src/models/funnel-stages.model";
 import * as FunnelStagesAPI from "@/src/api/funnel-stages.api";
+import type { FunnelBoardParams } from "@/src/api/funnel-stages.api";
 import { move_deal_stage } from "@/src/api/deals.api";
 import { move_lead_stage } from "@/src/api/leads.api";
 import { useBoardSocket } from "@/hooks/useBoardSocket";
@@ -30,10 +31,16 @@ import type {
   FunnelBoardDeal,
 } from "@/src/models/funnel-stages.model";
 
-// Кэш досок по funnelId, живёт на уровне модуля (переживает перемонтирование).
-// Позволяет показать воронку МГНОВЕННО из кэша при возврате на страницу, а
-// свежие данные подтянуть в фоне (stale-while-revalidate) — без ожидания.
-const boardCache = new Map<number, FunnelBoard>();
+// Кэш досок, живёт на уровне модуля (переживает перемонтирование). Позволяет
+// показать воронку МГНОВЕННО из кэша при возврате на страницу, а свежие данные
+// подтянуть в фоне (stale-while-revalidate) — без ожидания.
+// Ключ включает фильтры: у «мои лиды» и «все лиды филиала» разное содержимое,
+// иначе при переключении фильтра показывалась бы чужая доска из кэша.
+const boardCache = new Map<string, FunnelBoard>();
+
+function boardCacheKey(funnelId: number, params: FunnelBoardParams): string {
+  return [funnelId, params.owner || "", params.ownerId || "", (params.q || "").trim().toLowerCase()].join("|");
+}
 
 const STATUS_LABELS: Record<string, string> = {
   new: "Новая",
@@ -338,6 +345,11 @@ interface KanbanBoardProps extends DealActions {
   canMove?: boolean;
   onDealClick?: (deal: FunnelBoardDeal) => void;
   refreshKey?: number;
+  // Фильтры доски (обратная связь заказчика 17.09.2026): режим владельца,
+  // конкретный менеджер и поиск лида.
+  owner?: "mine" | "all";
+  ownerId?: number | null;
+  query?: string;
 }
 
 export function KanbanBoard({
@@ -345,13 +357,24 @@ export function KanbanBoard({
   canMove = true,
   onDealClick,
   refreshKey,
+  owner,
+  ownerId,
+  query,
   ...actions
 }: KanbanBoardProps) {
+  const boardParams: FunnelBoardParams = { owner, ownerId, q: query };
+  const cacheKey = boardCacheKey(funnelId, boardParams);
+  // Держим актуальные параметры в ref: фоновые обновления (WebSocket, поллинг,
+  // возврат фокуса) стартуют из колбэков, созданных на старом рендере.
+  const boardParamsRef = useRef<FunnelBoardParams>(boardParams);
+  boardParamsRef.current = boardParams;
+  const cacheKeyRef = useRef(cacheKey);
+  cacheKeyRef.current = cacheKey;
   // Инициализируем из кэша — при возврате на страницу доска рисуется мгновенно.
   const [board, setBoard] = useState<FunnelBoard | null>(
-    () => (funnelId ? boardCache.get(funnelId) ?? null : null)
+    () => (funnelId ? boardCache.get(cacheKey) ?? null : null)
   );
-  const [isLoading, setIsLoading] = useState(() => !(funnelId && boardCache.has(funnelId)));
+  const [isLoading, setIsLoading] = useState(() => !(funnelId && boardCache.has(cacheKey)));
   const [activeDeal, setActiveDeal] = useState<FunnelBoardDeal | null>(null);
 
   // Горизонтальный скролл воронки: у высоких колонок нижняя полоса прокрутки
@@ -394,9 +417,9 @@ export function KanbanBoard({
   const loadBoard = async () => {
     setIsLoading(true);
     try {
-      const data = await FunnelStagesAPI.getFunnelBoard(funnelId);
+      const data = await FunnelStagesAPI.getFunnelBoard(funnelId, boardParamsRef.current);
       setBoard(data);
-      boardCache.set(funnelId, data);
+      boardCache.set(cacheKeyRef.current, data);
     } catch (err: any) {
       console.error("Error loading funnel board:", err);
       toast.error("Ошибка при загрузке воронки");
@@ -410,9 +433,9 @@ export function KanbanBoard({
   const refreshBoard = async () => {
     if (!funnelId) return;
     try {
-      const data = await FunnelStagesAPI.getFunnelBoard(funnelId);
+      const data = await FunnelStagesAPI.getFunnelBoard(funnelId, boardParamsRef.current);
       setBoard(data);
-      boardCache.set(funnelId, data);
+      boardCache.set(cacheKeyRef.current, data);
     } catch (err) {
       console.error("Error refreshing funnel board:", err);
     }
@@ -422,13 +445,15 @@ export function KanbanBoard({
   // (она уже в state) и лишь тихо обновляем в фоне; иначе грузим со скелетоном.
   useEffect(() => {
     if (!funnelId) return;
-    if (boardCache.has(funnelId)) {
+    if (boardCache.has(cacheKey)) {
+      // Доска с ЭТИМИ фильтрами уже в кэше — показываем сразу, обновляем тихо.
+      setBoard(boardCache.get(cacheKey) ?? null);
       refreshBoard();
     } else {
       loadBoard();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [funnelId]);
+  }, [funnelId, cacheKey]);
 
   // Обновления, инициированные родителем (перенос через модалку, архивация,
   // изменения на детальной странице) — тихо, без скелетона, чтобы доска не
