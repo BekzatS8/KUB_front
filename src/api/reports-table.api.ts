@@ -61,6 +61,13 @@ export async function deleteMyReportTable(id: number): Promise<void> {
   await api.delete(`/reports/table/my/${id}`)
 }
 
+// Порядок вкладок «Мои отчёты»: ids идут в нужном порядке слева направо.
+// Открытие отчёта (getMyReportTable) само поднимает его в начало списка на
+// сервере — этот вызов нужен для ручной перестановки.
+export async function reorderMyReportTables(ids: number[]): Promise<void> {
+  await api.put(`/reports/table/my/order`, { ids })
+}
+
 // Корзина сотрудника: список удалённых, восстановление, окончательное удаление.
 export async function listMyReportTrash(): Promise<{ items: ManagerReport[]; count: number }> {
   const res = await api.get('/reports/table/my-trash')

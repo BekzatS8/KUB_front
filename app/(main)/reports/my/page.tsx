@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { ArchiveRestore, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArchiveRestore, ChevronLeft, ChevronRight, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,7 @@ import {
   listMyReportTables,
   listMyReportTrash,
   purgeMyReportTable,
+  reorderMyReportTables,
   restoreMyReportTable,
   saveMyReportTable,
   type ManagerReport,
@@ -62,6 +63,7 @@ export default function MyReportsPage() {
   const [deleteTarget, setDeleteTarget] = useState<ManagerReport | null>(null);
   const [purgeTarget, setPurgeTarget] = useState<ManagerReport | null>(null);
   const [showTrash, setShowTrash] = useState(false);
+  const [reordering, setReordering] = useState(false);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -153,6 +155,30 @@ export default function MyReportsPage() {
     }
   };
 
+  // Ручная перестановка вкладок стрелками. Порядок применяем сразу, на сервер
+  // отправляем весь список — так он не разъедется, если параллельно открыли
+  // отчёт в другой вкладке браузера. Открытие отчёта сервер сам поднимает в
+  // начало списка, но это видно уже при следующей загрузке страницы, чтобы
+  // вкладки не прыгали под курсором во время переключения.
+  const moveReport = async (id: number, direction: -1 | 1) => {
+    const from = reports.findIndex((r) => r.id === id);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= reports.length) return;
+    const next = [...reports];
+    [next[from], next[to]] = [next[to], next[from]];
+    const previous = reports;
+    setReports(next);
+    setReordering(true);
+    try {
+      await reorderMyReportTables(next.map((r) => r.id));
+    } catch (err: any) {
+      setReports(previous);
+      toast.error(err?.message || "Не удалось сохранить порядок отчётов");
+    } finally {
+      setReordering(false);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
@@ -198,7 +224,8 @@ export default function MyReportsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Мои отчёты</h1>
           <p className="text-sm text-slate-600">
             Ежедневные отчёты: дата, клиент, телефон, пометки. Можно вести несколько отчётов —
-            руководитель выбирает, какой открыть.
+            руководитель выбирает, какой открыть. Порядок вкладок настраивается стрелками,
+            а последний открытый отчёт встаёт первым при следующем заходе на страницу.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -276,7 +303,7 @@ export default function MyReportsPage() {
         /* Активные отчёты: вкладки-отчёты сверху, таблица — на всю ширину страницы */
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            {reports.map((r) => (
+            {reports.map((r, index) => (
               <div
                 key={r.id}
                 className={`group flex items-center gap-0.5 rounded-lg border px-2 py-1.5 transition-colors ${
@@ -290,6 +317,24 @@ export default function MyReportsPage() {
                   title={r.title}
                 >
                   {r.title}
+                </button>
+                <button
+                  type="button"
+                  title="Переместить левее"
+                  disabled={reordering || index === 0}
+                  onClick={() => moveReport(r.id, -1)}
+                  className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Переместить правее"
+                  disabled={reordering || index === reports.length - 1}
+                  onClick={() => moveReport(r.id, 1)}
+                  className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
                 </button>
                 <button
                   type="button"
