@@ -311,6 +311,16 @@ export default function MessengerChannelsPage() {
               // Шаг 1: выбор типа канала (transport обязателен).
               <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
                 <p className="text-sm text-slate-600">Выберите тип канала для подключения:</p>
+                {/* Канал подключается в тот аккаунт Wazzup, который настроен на
+                    сервере для этой формы. Если он не совпадает с рабочим
+                    аккаунтом CRM, канал не появится в списке и не будет
+                    присылать входящие — см. docs/integrations/wazzup.md. */}
+                <p className="max-w-md text-center text-xs text-slate-500">
+                  Instagram здесь не подключается — его добавляют в кабинете Wazzup,
+                  после чего он появится в списке по кнопке «Обновить». Если после
+                  подключения канал не появился в списке, он ушёл в другой аккаунт
+                  Wazzup — обратитесь к администратору сервера.
+                </p>
                 <div className="grid w-full max-w-md grid-cols-2 gap-2">
                   {CHANNEL_TYPES.map((t) => (
                     <Button
