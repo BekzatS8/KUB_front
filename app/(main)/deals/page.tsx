@@ -235,7 +235,12 @@ export default function DealsPage() {
   // видит свои карточки и новые «ничьи» лиды; «Все лиды филиала» показывает всё,
   // что доступно по филиалу; отдельный выбор менеджера — «сортировка по
   // менеджерам». Поиск нужен, чтобы не листать сотни карточек ради переноса.
-  const [boardOwnerFilter, setBoardOwnerFilter] = useState<string>("mine");
+  // Режим по умолчанию зависит от роли: менеджеру — «мои и новые», а
+  // админу/руководству/контролю — все лиды. Раньше здесь жёстко стояло "mine",
+  // и админ видел не все лиды (обратная связь заказчика 18.09.2026).
+  // null = роль ещё не загрузилась, параметр owner в запрос не уходит и бэкенд
+  // сам выбирает режим по роли из JWT.
+  const [boardOwnerFilter, setBoardOwnerFilter] = useState<string | null>(null);
   const [boardSearchInput, setBoardSearchInput] = useState("");
   const [boardSearch, setBoardSearch] = useState("");
   const [canViewFunnels, setCanViewFunnels] = useState(false);
@@ -940,6 +945,17 @@ export default function DealsPage() {
   const isSales = getRoleCode(user) === 'sales';
   const isManagement = getRoleCode(user) === 'management';
 
+  // Роли, которые по умолчанию смотрят всё — те же, что и на бэкенде
+  // (resolveBoardFilter → boardDefaultsToOwnCards).
+  const seesAllCardsByDefault = isAdmin || isManagement || getRoleCode(user) === 'quality_control';
+
+  // Подставляем дефолт роли, как только стала известна роль. Выбор пользователя
+  // после этого не перетираем.
+  useEffect(() => {
+    if (!user) return;
+    setBoardOwnerFilter((prev) => prev ?? (seesAllCardsByDefault ? "all" : "mine"));
+  }, [user, seesAllCardsByDefault]);
+
   // Дебаунс поиска по доске: без него каждый символ — запрос на сервер.
   useEffect(() => {
     const t = setTimeout(() => setBoardSearch(boardSearchInput), 350);
@@ -950,7 +966,9 @@ export default function DealsPage() {
   const boardOwnerScope: "mine" | "all" | undefined =
     boardOwnerFilter === "mine" ? "mine" : boardOwnerFilter === "all" ? "all" : undefined;
   const boardOwnerId =
-    boardOwnerFilter === "mine" || boardOwnerFilter === "all" ? null : Number(boardOwnerFilter) || null;
+    !boardOwnerFilter || boardOwnerFilter === "mine" || boardOwnerFilter === "all"
+      ? null
+      : Number(boardOwnerFilter) || null;
 
   // Get status badge
   const getStatusBadge = (status: string) => {
@@ -1563,11 +1581,13 @@ export default function DealsPage() {
               </div>
               <select
                 className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm sm:w-72"
-                value={boardOwnerFilter}
+                value={boardOwnerFilter ?? (seesAllCardsByDefault ? "all" : "mine")}
                 onChange={(e) => setBoardOwnerFilter(e.target.value)}
               >
                 <option value="mine">Мои и новые заявки</option>
-                <option value="all">Все лиды филиала</option>
+                <option value="all">
+                  {seesAllCardsByDefault ? "Все лиды (все филиалы)" : "Все лиды филиала"}
+                </option>
                 {users
                   .filter((u: any) => String(u.id) !== String(user?.id))
                   .map((u: any) => (
@@ -1578,8 +1598,9 @@ export default function DealsPage() {
               </select>
             </div>
             <p className="mt-2 text-xs text-gray-500">
-              По умолчанию показаны ваши карточки и новые заявки, которые ещё никто не взял.
-              Лиды другого филиала не показываются ни в одном из режимов.
+              {seesAllCardsByDefault
+                ? "По умолчанию показаны все лиды — по всем филиалам и менеджерам."
+                : "По умолчанию показаны ваши карточки и новые заявки, которые ещё никто не взял. Лиды другого филиала не показываются ни в одном из режимов."}
             </p>
           </CardContent>
         </Card>
