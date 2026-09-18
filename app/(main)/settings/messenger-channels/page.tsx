@@ -22,7 +22,10 @@ import {
   setWazzupChannelBranch,
   getWazzupChannelConnectLink,
   deleteWazzupChannel,
+  setWazzupChannelDepartment,
+  getMessengerDepartments,
   type WazzupChannel,
+  type MessengerDepartment,
 } from "@/src/api/integrations_wazzup.api"
 import { listBranches, type Branch } from "@/src/api/branches.api"
 
@@ -49,6 +52,7 @@ const CHANNEL_TYPES: { transport: string; label: string }[] = [
 export default function MessengerChannelsPage() {
   const [channels, setChannels] = useState<WazzupChannel[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
+  const [departments, setDepartments] = useState<MessengerDepartment[]>([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<number | null>(null)
   // Удаление «мусорного» канала: строка остаётся в CRM после отключения канала
@@ -65,9 +69,14 @@ export default function MessengerChannelsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [chRes, brRes] = await Promise.all([getWazzupChannels(), listBranches()])
+      const [chRes, brRes, depRes] = await Promise.all([
+        getWazzupChannels(),
+        listBranches(),
+        getMessengerDepartments().catch(() => ({ value: [], count: 0 })),
+      ])
       setChannels(chRes?.value || [])
       setBranches(Array.isArray(brRes) ? brRes : brRes?.data || [])
+      setDepartments(depRes?.value || [])
     } catch {
       toast.error("Не удалось загрузить каналы")
     } finally {
@@ -121,6 +130,24 @@ export default function MessengerChannelsPage() {
     }
   }
 
+  // Отдел-получатель: выделенная линия (напр. жалобы и претензии ОКК) уводит
+  // входящие из общего пула филиалов в свой отдел.
+  const handleDepartmentChange = async (channelId: number, departmentIdRaw: string) => {
+    const departmentId = departmentIdRaw ? Number(departmentIdRaw) : null
+    setSavingId(channelId)
+    try {
+      await setWazzupChannelDepartment(channelId, departmentId)
+      setChannels((prev) =>
+        prev.map((c) => (c.id === channelId ? { ...c, department_id: departmentId } : c)),
+      )
+      toast.success("Отдел канала сохранён")
+    } catch (err: any) {
+      toast.error(err?.message || "Не удалось сохранить отдел канала")
+    } finally {
+      setSavingId(null)
+    }
+  }
+
   const handleChange = async (channelId: number, branchIdRaw: string) => {
     const branchId = branchIdRaw ? Number(branchIdRaw) : null
     setSavingId(channelId)
@@ -160,11 +187,14 @@ export default function MessengerChannelsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Канал → филиал</CardTitle>
+          <CardTitle>Канал → филиал и отдел</CardTitle>
           <CardDescription>
             Входящий лид из канала попадает в выбранный филиал. Так менеджеры филиала
             видят только своих лидов и клиентов. Если филиал не выбран — лид получает
-            филиал владельца интеграции. Список подтягивается из Wazzup при открытии
+            филиал владельца интеграции. Отдел нужен для выделенных линий: например
+            номер жалоб и претензий отдела контроля качества — такие обращения не
+            попадают в общий пул лидов филиалов, их видит только сам отдел,
+            руководство и админ. Список подтягивается из Wazzup при открытии
             страницы и по кнопке «Обновить»; отключённые в Wazzup каналы удаляются
             автоматически, а корзиной можно убрать оставшиеся вручную.
           </CardDescription>
@@ -193,9 +223,9 @@ export default function MessengerChannelsPage() {
                       {ch.phone ? ` · ${ch.phone}` : ""}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
                     <select
-                      className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm sm:w-56"
+                      className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm sm:w-48"
                       value={ch.branch_id ? String(ch.branch_id) : ""}
                       disabled={savingId === ch.id}
                       onChange={(e) => handleChange(ch.id, e.target.value)}
@@ -204,6 +234,21 @@ export default function MessengerChannelsPage() {
                       {branches.map((b) => (
                         <option key={b.id} value={String(b.id)}>
                           {b.name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm sm:w-56"
+                      value={ch.department_id ? String(ch.department_id) : ""}
+                      disabled={savingId === ch.id}
+                      onChange={(e) => handleDepartmentChange(ch.id, e.target.value)}
+                      title="Отдел-получатель входящих с этого канала"
+                    >
+                      <option value="">— общий (без отдела) —</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={String(d.id)}>
+                          {d.name}
+                          {d.is_private ? " (закрытый)" : ""}
                         </option>
                       ))}
                     </select>

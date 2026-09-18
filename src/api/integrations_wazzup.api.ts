@@ -62,7 +62,18 @@ export interface WazzupChannel {
   provider: string;
   branch_id?: number | null;
   branch_name?: string;
+  department_id?: number | null;
+  department_name?: string;
   updated_at: string;
+}
+
+// Отдел-получатель входящих с канала. Нужен для выделенных линий: например
+// номер жалоб и претензий отдела контроля качества.
+export interface MessengerDepartment {
+  id: number;
+  name: string;
+  code: string;
+  is_private: boolean;
 }
 
 export interface WazzupDialog {
@@ -145,6 +156,24 @@ export const setWazzupChannelBranch = async (
   const response = await api.patch(`/integrations/wazzup/channels/${channelId}/branch`, {
     branch_id: branchId,
   });
+  return response.data;
+};
+
+// Привязать канал к отделу (departmentId=null снимает привязку). Входящие с
+// такого канала становятся лидами этого отдела; если отдел закрытый
+// (is_private), менеджеры других отделов их не видят.
+export const setWazzupChannelDepartment = async (
+  channelId: number,
+  departmentId: number | null,
+): Promise<{ status: string }> => {
+  const response = await api.patch(`/integrations/wazzup/channels/${channelId}/department`, {
+    department_id: departmentId,
+  });
+  return response.data;
+};
+
+export const getMessengerDepartments = async (): Promise<WazzupListResponse<MessengerDepartment>> => {
+  const response = await api.get('/integrations/wazzup/departments');
   return response.data;
 };
 
