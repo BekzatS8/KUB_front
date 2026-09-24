@@ -59,6 +59,7 @@ export interface WazzupChannel {
   username?: string;
   phone?: string;
   status: string;
+  status_reason?: string;
   provider: string;
   branch_id?: number | null;
   branch_name?: string;
@@ -100,6 +101,7 @@ export interface WazzupDialogMessage {
   text: string;
   direction: 'incoming' | 'outgoing' | string;
   status: string;
+  status_reason?: string;
   transport: string;
   external_message_id?: string;
   external_channel_id?: string;
