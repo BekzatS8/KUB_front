@@ -183,7 +183,12 @@ export const getMessengerDepartments = async (): Promise<WazzupListResponse<Mess
 // отключили в Wazzup, а в CRM он остался и продолжал попадать в списки.
 // Переписка не затрагивается — уходит только запись справочника с привязкой
 // к филиалу.
-export const deleteWazzupChannel = async (channelId: number): Promise<{ status: string }> => {
+// provider_deleted=true — канал удалён и в самом Wazzup; false — убрана
+// только строка в CRM (драйвер v3 удалять у провайдера не умеет), и канал
+// вернётся при следующей синхронизации.
+export const deleteWazzupChannel = async (
+  channelId: number,
+): Promise<{ status: string; provider_deleted?: boolean }> => {
   const response = await api.delete(`/integrations/wazzup/channels/${channelId}`);
   return response.data;
 };
