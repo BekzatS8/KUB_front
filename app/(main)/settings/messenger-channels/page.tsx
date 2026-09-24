@@ -97,8 +97,8 @@ export default function MessengerChannelsPage() {
   const [departments, setDepartments] = useState<MessengerDepartment[]>([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<number | null>(null)
-  // Удаление «мусорного» канала: строка остаётся в CRM после отключения канала
-  // в Wazzup, потому что синхронизация только добавляет и обновляет записи.
+  // Удаление канала: на партнёрском драйвере канал отключается в самом Wazzup,
+  // на v3 — убирается только строка в CRM (у провайдера нет метода удаления).
   const [channelToDelete, setChannelToDelete] = useState<WazzupChannel | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -161,9 +161,16 @@ export default function MessengerChannelsPage() {
     if (!channelToDelete) return
     setDeleting(true)
     try {
-      await deleteWazzupChannel(channelToDelete.id)
+      const res = await deleteWazzupChannel(channelToDelete.id)
       setChannels((prev) => prev.filter((c) => c.id !== channelToDelete.id))
-      toast.success("Канал удалён из списка")
+      // provider_deleted различает реальное удаление канала у провайдера и
+      // простую уборку строки: во втором случае канал вернётся при обновлении,
+      // и об этом честнее сказать сразу.
+      if (res?.provider_deleted) {
+        toast.success("Канал удалён из Wazzup")
+      } else {
+        toast.success("Канал убран из списка. В Wazzup он остался — отключите его там, иначе вернётся при обновлении")
+      }
       setChannelToDelete(null)
     } catch (err: any) {
       toast.error(err?.response?.data?.message || err?.message || "Не удалось удалить канал")
@@ -409,7 +416,7 @@ export default function MessengerChannelsPage() {
             <AlertDialogTitle>Удалить канал из списка?</AlertDialogTitle>
             <AlertDialogDescription>
               {channelToDelete
-                ? `«${channelToDelete.name || channelToDelete.phone || channelToDelete.channel_id}» будет убран из списка каналов и из выбора в «Написать первым», привязка к филиалу снимется. Переписка и история сообщений останутся на месте. Если канал ещё подключён в Wazzup, он вернётся при следующем обновлении — уже без филиала.`
+                ? `«${channelToDelete.name || channelToDelete.phone || channelToDelete.channel_id}» будет отключён в Wazzup и убран из списка каналов и из выбора в «Написать первым», привязка к филиалу снимется. Переписка и история сообщений останутся на месте. Действие необратимо: чтобы вернуть канал, его придётся подключать заново — со сканированием QR-кода.`
                 : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
