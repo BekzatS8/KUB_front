@@ -35,6 +35,48 @@ const TRANSPORT_LABELS: Record<string, string> = {
   instagram: "Instagram",
 }
 
+// Причины, по которым канал не работает. Приходят от провайдера вместе со
+// статусом. Без расшифровки канал с неотсканированным QR выглядит в списке
+// обычным, и непонятно, почему по нему не идут сообщения.
+const STATUS_REASON_LABELS: Record<string, string> = {
+  qridle: "Отсканируйте QR-код",
+  qr: "Отсканируйте QR-код",
+  unauthorized: "Требуется повторная авторизация",
+  openelsewhere: "Номер подключён в другом аккаунте Wazzup",
+  foreignphone: "QR отсканирован с другого номера",
+  not_enough_money: "Канал не оплачен",
+  wait_for_password: "Нужен пароль двухфакторной аутентификации",
+  blocked: "Канал заблокирован Meta",
+  rejected: "Канал отклонён",
+}
+
+type ChannelHealth = { label: string; hint: string; className: string }
+
+// channelHealth переводит status/status_reason в человекопонятный бейдж.
+function channelHealth(status: string, reason?: string): ChannelHealth {
+  const s = (status || "").toLowerCase().trim()
+  const hint = STATUS_REASON_LABELS[(reason || "").toLowerCase().trim()] || ""
+
+  if (["active", "connected", "enabled", "ok", "online", "working"].includes(s)) {
+    return { label: "Работает", hint: "", className: "bg-emerald-50 text-emerald-700 ring-emerald-200" }
+  }
+  if (s === "init") {
+    return {
+      label: "Подключается",
+      hint: hint || "Канал запускается",
+      className: "bg-amber-50 text-amber-700 ring-amber-200",
+    }
+  }
+  if (!s || s === "unknown") {
+    return { label: "Статус неизвестен", hint: "", className: "bg-slate-100 text-slate-600 ring-slate-200" }
+  }
+  return {
+    label: "Не работает",
+    hint: hint || "Канал отключён в Wazzup",
+    className: "bg-red-50 text-red-700 ring-red-200",
+  }
+}
+
 // Типы каналов для встроенного подключения через iframe. Значения transport —
 // строго допустимые провайдером для /v2/iframe-links/channels (подтверждено
 // поддержкой 09.09.2026): whatsapp, wapi, tgapi, maxbot, max, vk, cian.
@@ -215,12 +257,29 @@ export default function MessengerChannelsPage() {
                   className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
-                    <div className="truncate font-medium text-slate-900">
-                      {ch.name || ch.phone || ch.channel_id}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate font-medium text-slate-900">
+                        {ch.name || ch.phone || ch.channel_id}
+                      </span>
+                      {(() => {
+                        const health = channelHealth(ch.status, ch.status_reason)
+                        return (
+                          <span
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${health.className}`}
+                            title={health.hint || undefined}
+                          >
+                            {health.label}
+                          </span>
+                        )
+                      })()}
                     </div>
                     <div className="text-xs text-slate-500">
                       {TRANSPORT_LABELS[ch.transport] || ch.transport}
                       {ch.phone ? ` · ${ch.phone}` : ""}
+                      {(() => {
+                        const hint = channelHealth(ch.status, ch.status_reason).hint
+                        return hint ? <span className="text-amber-700"> · {hint}</span> : null
+                      })()}
                     </div>
                   </div>
                   <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
