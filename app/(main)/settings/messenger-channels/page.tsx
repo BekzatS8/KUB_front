@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { getCurrentUser, getRoleCode } from "@/lib/auth"
+import { WAZZUP_CHILD_VISIBLE } from "@/lib/features"
 import {
   getWazzupAccounts,
   getWazzupChannels,
@@ -192,13 +193,18 @@ export default function MessengerChannelsPage() {
 
   // Номера группируются по аккаунтам. Если сервер не вернул список аккаунтов
   // (старый бэкенд), всё показывается одной группой без заголовка.
+  // Скрытый дочерний аккаунт (lib/features.ts) не показывается вместе с его
+  // номерами.
+  const visibleAccounts = WAZZUP_CHILD_VISIBLE
+    ? accounts
+    : accounts.filter((a) => a.account !== "child")
   const groups: { info?: WazzupAccountInfo; items: WazzupChannel[] }[] = accounts.length
-    ? accounts.map((info) => ({
+    ? visibleAccounts.map((info) => ({
         info,
         items: channels.filter((ch) => channelAccount(ch) === info.account),
       }))
     : [{ items: channels }]
-  const canAddAnywhere = accounts.some((a) => a.can_add_channels && a.connected)
+  const canAddAnywhere = visibleAccounts.some((a) => a.can_add_channels && a.connected)
   const deletingFromPartner =
     channelToDelete !== null &&
     Boolean(accounts.find((a) => a.account === channelAccount(channelToDelete))?.partner)
@@ -307,7 +313,11 @@ export default function MessengerChannelsPage() {
                     <div className="flex flex-col gap-2 border-b border-slate-200 pb-2 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex flex-wrap items-center gap-2">
                         <h2 className="font-semibold text-slate-900">
-                          {info.account === "child" ? "Дочерний аккаунт" : "Основной аккаунт"}
+                          {!WAZZUP_CHILD_VISIBLE
+                            ? "Wazzup"
+                            : info.account === "child"
+                              ? "Дочерний аккаунт"
+                              : "Основной аккаунт"}
                         </h2>
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
@@ -512,7 +522,7 @@ export default function MessengerChannelsPage() {
             <AlertDialogTitle>Удалить канал из списка?</AlertDialogTitle>
             <AlertDialogDescription>
               {channelToDelete && !deletingFromPartner
-                ? `«${channelToDelete.name || channelToDelete.phone || channelToDelete.channel_id}» будет убран из списка каналов CRM, привязка к филиалу снимется. В основном аккаунте Wazzup номер останется: неработающий больше не появится, а работающий вернётся при обновлении — такой отключите в кабинете Wazzup. Переписка и история сообщений останутся на месте.`
+                ? `«${channelToDelete.name || channelToDelete.phone || channelToDelete.channel_id}» будет убран из списка каналов CRM, привязка к филиалу снимется. В Wazzup номер останется: неработающий больше не появится, а работающий вернётся при обновлении — такой отключите в кабинете Wazzup. Переписка и история сообщений останутся на месте.`
                 : channelToDelete
                 ? `«${channelToDelete.name || channelToDelete.phone || channelToDelete.channel_id}» будет отключён в Wazzup и убран из списка каналов и из выбора в «Написать первым», привязка к филиалу снимется. Переписка и история сообщений останутся на месте. Действие необратимо: чтобы вернуть канал, его придётся подключать заново — со сканированием QR-кода.`
                 : ""}

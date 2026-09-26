@@ -38,6 +38,7 @@ import { getMyNewTaskCount } from "@/src/api/tasks.api";
 import type { Auth_Login_Response } from "@/src/models/Auth.model";
 import type { PermissionsMe } from "@/src/models/permissions.model";
 import { getRoleName } from "@/src/models/roles.enum";
+import { WAZZUP_CHILD_VISIBLE } from "@/lib/features";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -146,14 +147,24 @@ const MENU: NavEntry[] = [
     permission: "chat.view",
   },
   // Два аккаунта Wazzup работают одновременно, у каждого свои номера.
-  {
-    type: "item", title: "Мессенджер · основной", href: "/whatsapp", icon: MessageCircle,
-    permission: "messenger.view",
-  },
-  {
-    type: "item", title: "Мессенджер · дочерний", href: "/whatsapp-child", icon: MessageCircle,
-    permission: "messenger.view",
-  },
+  // Дочерний пока скрыт (lib/features.ts) — тогда пункт один, без подписи.
+  ...(WAZZUP_CHILD_VISIBLE
+    ? ([
+        {
+          type: "item", title: "Мессенджер · основной", href: "/whatsapp", icon: MessageCircle,
+          permission: "messenger.view",
+        },
+        {
+          type: "item", title: "Мессенджер · дочерний", href: "/whatsapp-child", icon: MessageCircle,
+          permission: "messenger.view",
+        },
+      ] as NavEntry[])
+    : ([
+        {
+          type: "item", title: "Мессенджер", href: "/whatsapp", icon: MessageCircle,
+          permission: "messenger.view",
+        },
+      ] as NavEntry[])),
   {
     type: "item", title: "Телефония", href: "/telephony", icon: Phone,
     permission: "telephony.view",

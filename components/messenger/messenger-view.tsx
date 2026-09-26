@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { getCurrentUser, getRoleCode } from "@/lib/auth";
+import { WAZZUP_CHILD_VISIBLE } from "@/lib/features";
 import {
   getWazzupIframe,
   setupWazzup,
@@ -173,7 +174,8 @@ export function MessengerView({ account }: { account: WazzupAccount }) {
       // Переписка с номера другого аккаунта (переход из карточки клиента или
       // лида) — открываем её на странице того аккаунта, чтобы меню и кнопка
       // «Написать» соответствовали номеру.
-      if (response.account && response.account !== account) {
+      // Пока дочерний аккаунт скрыт, никуда не переходим — показываем как есть.
+      if (WAZZUP_CHILD_VISIBLE && response.account && response.account !== account) {
         router.replace(MESSENGER_PATHS[response.account] + (searchQuery ? `?${searchQuery}` : ""));
         return;
       }
@@ -266,7 +268,7 @@ export function MessengerView({ account }: { account: WazzupAccount }) {
           key={iframeUrl}
           src={iframeUrl}
           className="h-full w-full border-0"
-          title={`Мессенджер · ${ACCOUNT_TITLES[account]}`}
+          title={WAZZUP_CHILD_VISIBLE ? `Мессенджер · ${ACCOUNT_TITLES[account]}` : "Мессенджер"}
           allow="microphone *; clipboard-write *"
           onError={refreshWidget}
         />
@@ -280,7 +282,7 @@ export function MessengerView({ account }: { account: WazzupAccount }) {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Мессенджер</h1>
           <p className="text-sm text-slate-600">
-            Wazzup, {ACCOUNT_TITLES[account]} · WhatsApp, Telegram и Instagram
+            {WAZZUP_CHILD_VISIBLE && `Wazzup, ${ACCOUNT_TITLES[account]} · `}WhatsApp, Telegram и Instagram
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -306,7 +308,9 @@ export function MessengerView({ account }: { account: WazzupAccount }) {
       <Dialog open={isSetupModalOpen} onOpenChange={setIsSetupModalOpen}>
         <DialogContent className="w-[calc(100vw-1rem)] max-w-lg">
           <DialogHeader>
-            <DialogTitle>Настройка интеграции · {ACCOUNT_TITLES[account]}</DialogTitle>
+            <DialogTitle>
+              Настройка интеграции{WAZZUP_CHILD_VISIBLE && ` · ${ACCOUNT_TITLES[account]}`}
+            </DialogTitle>
             <DialogDescription>
               Подключение аккаунта Wazzup к CRM: входящие, лиды и чаты. Номера этого аккаунта — в разделе «Настройки → Каналы мессенджера».
             </DialogDescription>
