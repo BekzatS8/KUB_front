@@ -102,8 +102,10 @@ const WEBHOOKS_BASE_URL = "https://api.kubcrm.kz"
 const channelAccount = (ch: WazzupChannel): WazzupAccount => ch.account || "main"
 
 export default function MessengerChannelsPage() {
-  // Подключает аккаунт к CRM только админ (на сервере — то же правило).
-  const isAdmin = getRoleCode(getCurrentUser()) === "system_admin"
+  // Подключают аккаунт к CRM админ и руководство — те же, кто привязывает
+  // номера к филиалам.
+  const roleCode = getRoleCode(getCurrentUser())
+  const isAdmin = roleCode === "system_admin" || roleCode === "management"
   const [accounts, setAccounts] = useState<WazzupAccountInfo[]>([])
   const [connectingAccount, setConnectingAccount] = useState<WazzupAccount | null>(null)
   const [channels, setChannels] = useState<WazzupChannel[]>([])
