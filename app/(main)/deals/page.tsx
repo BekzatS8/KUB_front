@@ -1519,7 +1519,8 @@ export default function DealsPage() {
         </div>
       )}
 
-      {/* Stats */}
+      {/* Сводка по сделкам — только админу и руководству. */}
+      {(isAdmin || isManagement) && (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <Card>
           <CardContent className="p-4">
@@ -1574,6 +1575,7 @@ export default function DealsPage() {
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* Панель фильтров канбана: поиск лида + чьи карточки показывать. */}
       {viewMode === "kanban" && canViewFunnels && funnels.length > 0 && (
