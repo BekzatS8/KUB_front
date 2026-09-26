@@ -39,7 +39,7 @@ import type {
 const boardCache = new Map<string, FunnelBoard>();
 
 function boardCacheKey(funnelId: number, params: FunnelBoardParams): string {
-  return [funnelId, params.owner || "", params.ownerId || "", (params.q || "").trim().toLowerCase()].join("|");
+  return [funnelId, params.owner || "", params.ownerId || "", params.branchId || "", (params.q || "").trim().toLowerCase()].join("|");
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -349,6 +349,7 @@ interface KanbanBoardProps extends DealActions {
   // конкретный менеджер и поиск лида.
   owner?: "mine" | "all";
   ownerId?: number | null;
+  branchId?: number | null;
   query?: string;
 }
 
@@ -359,10 +360,11 @@ export function KanbanBoard({
   refreshKey,
   owner,
   ownerId,
+  branchId,
   query,
   ...actions
 }: KanbanBoardProps) {
-  const boardParams: FunnelBoardParams = { owner, ownerId, q: query };
+  const boardParams: FunnelBoardParams = { owner, ownerId, branchId, q: query };
   const cacheKey = boardCacheKey(funnelId, boardParams);
   // Держим актуальные параметры в ref: фоновые обновления (WebSocket, поллинг,
   // возврат фокуса) стартуют из колбэков, созданных на старом рендере.

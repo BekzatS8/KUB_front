@@ -86,6 +86,7 @@ import * as FeedAPI from "@/src/api/feed.api";
 import * as FunnelsAPI from "@/src/api/funnels.api";
 import { getMyPermissions } from "@/src/api/permissions.api";
 import { KanbanBoard } from "@/components/deals/kanban-board";
+import { BoardOwnerFilter, BRANCH_FILTER_PREFIX } from "@/components/deals/board-owner-filter";
 import type { Funnel } from "@/src/models/funnels.model";
 import type { FunnelBoardDeal } from "@/src/models/funnel-stages.model";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -217,7 +218,10 @@ export default function DealsPage() {
   // Check if user has elevated role (leadership, control, system_admin)
   const isElevatedRole = () => {
     const roleCode = getRoleCode(user);
-    return roleCode === 'leadership' || roleCode === 'control' || roleCode === 'system_admin';
+    // getRoleCode отдаёт нормализованные коды (leadership → management,
+    // control → quality_control); старые оставлены на всякий случай.
+    return roleCode === 'management' || roleCode === 'quality_control' || roleCode === 'system_admin'
+      || roleCode === 'leadership' || roleCode === 'control';
   };
   const [clients, setClients] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -713,7 +717,9 @@ export default function DealsPage() {
         } : null;
         try {
           const { listUsers } = await import("@/src/api/users.api");
-          const res = await listUsers();
+          // Без limit сервер отдаёт только первых 10 — остальных сотрудников
+          // не было ни в фильтре доски, ни в выборе ответственного.
+          const res = await listUsers(1, 1000);
           const usersData = extractList(res);
           if (Array.isArray(usersData) && usersData.length > 0) {
             setUsers(usersData);
@@ -962,11 +968,15 @@ export default function DealsPage() {
     return () => clearTimeout(t);
   }, [boardSearchInput]);
 
-  // Режим владельца и конкретный менеджер разъезжаются по разным параметрам API.
+  // Режим владельца, филиал и конкретный менеджер разъезжаются по разным
+  // параметрам API. «Весь филиал» — это «все лиды» в пределах одного филиала.
+  const boardBranchId = boardOwnerFilter?.startsWith(BRANCH_FILTER_PREFIX)
+    ? Number(boardOwnerFilter.slice(BRANCH_FILTER_PREFIX.length)) || null
+    : null;
   const boardOwnerScope: "mine" | "all" | undefined =
-    boardOwnerFilter === "mine" ? "mine" : boardOwnerFilter === "all" ? "all" : undefined;
+    boardOwnerFilter === "mine" ? "mine" : boardOwnerFilter === "all" || boardBranchId ? "all" : undefined;
   const boardOwnerId =
-    !boardOwnerFilter || boardOwnerFilter === "mine" || boardOwnerFilter === "all"
+    !boardOwnerFilter || boardOwnerFilter === "mine" || boardOwnerFilter === "all" || boardBranchId
       ? null
       : Number(boardOwnerFilter) || null;
 
@@ -1579,23 +1589,21 @@ export default function DealsPage() {
                   className="pl-10"
                 />
               </div>
-              <select
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm sm:w-72"
+              <BoardOwnerFilter
                 value={boardOwnerFilter ?? (seesAllCardsByDefault ? "all" : "mine")}
-                onChange={(e) => setBoardOwnerFilter(e.target.value)}
-              >
-                <option value="mine">Мои и новые заявки</option>
-                <option value="all">
-                  {seesAllCardsByDefault ? "Все лиды (все филиалы)" : "Все лиды филиала"}
-                </option>
-                {users
+                onChange={setBoardOwnerFilter}
+                allLabel={seesAllCardsByDefault ? "Все лиды (все филиалы)" : "Все лиды филиала"}
+                // Группировка по филиалам — тем, кто видит несколько филиалов.
+                branches={seesAllCardsByDefault ? availableBranches : []}
+                employees={users
                   .filter((u: any) => String(u.id) !== String(user?.id))
-                  .map((u: any) => (
-                    <option key={u.id} value={String(u.id)}>
-                      {getUserDisplayName(u)}
-                    </option>
-                  ))}
-              </select>
+                  .map((u: any) => ({
+                    id: Number(u.id),
+                    name: getUserDisplayName(u),
+                    branchId: u.branch?.id ?? u.branch_id ?? null,
+                    branchName: u.branch?.name,
+                  }))}
+              />
             </div>
             <p className="mt-2 text-xs text-gray-500">
               {seesAllCardsByDefault
@@ -1631,6 +1639,7 @@ export default function DealsPage() {
                   refreshKey={kanbanRefreshKey}
                   owner={boardOwnerScope}
                   ownerId={boardOwnerId}
+                  branchId={boardBranchId}
                   query={boardSearch}
                   canWrite={canWrite}
                   isSales={isSales}
