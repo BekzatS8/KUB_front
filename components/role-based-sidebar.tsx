@@ -145,8 +145,13 @@ const MENU: NavEntry[] = [
     type: "item", title: "Чат", href: "/chat", icon: MessageSquare,
     permission: "chat.view",
   },
+  // Два аккаунта Wazzup работают одновременно, у каждого свои номера.
   {
-    type: "item", title: "Мессенджер", href: "/whatsapp", icon: MessageCircle,
+    type: "item", title: "Мессенджер · основной", href: "/whatsapp", icon: MessageCircle,
+    permission: "messenger.view",
+  },
+  {
+    type: "item", title: "Мессенджер · дочерний", href: "/whatsapp-child", icon: MessageCircle,
     permission: "messenger.view",
   },
   {

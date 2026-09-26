@@ -1,15 +1,22 @@
 import { api } from './index';
 
+// Аккаунты Wazzup, работающие одновременно: main — основной, child — дочерний
+// (White Label). У каждого свои номера; в меню — свой пункт «Мессенджер».
+export type WazzupAccount = 'main' | 'child';
+
 export interface WazzupSetupRequest {
   webhooks_base_url: string;
   api_key?: string; // Optional - backend uses default if not provided
   enabled: boolean;
+  // Какой аккаунт подключить; пусто — основной (или единственный настроенный).
+  account?: WazzupAccount;
 }
 
 export interface WazzupSetupResponse {
   webhook_url: string;
   webhook_token: string;
   crm_key: string;
+  account?: WazzupAccount;
 }
 
 export interface WazzupIframeRequest {
@@ -18,6 +25,9 @@ export interface WazzupIframeRequest {
   // Открыть iframe сразу на этой переписке (deep-link). Для WhatsApp — номер
   // телефона (цифры), для Telegram/Instagram — username.
   chat_id?: string;
+  // Чей мессенджер открыть. Для переписки (chat_id) сервер сам выберет аккаунт
+  // номера этой переписки и вернёт его в ответе.
+  account?: WazzupAccount;
 }
 
 export interface WazzupIframeResponse {
@@ -27,6 +37,19 @@ export interface WazzupIframeResponse {
   transport?: string;
   channel_id?: string;
   message?: string;
+  account?: WazzupAccount;
+}
+
+export interface WazzupAccountInfo {
+  account: WazzupAccount;
+  title: string;
+  partner: boolean;
+  // connected — подключение создано (кнопка «Подключить» уже нажималась).
+  connected: boolean;
+  enabled: boolean;
+  webhook_url?: string;
+  // Можно добавлять номера прямо из CRM (встроенная форма White Label).
+  can_add_channels: boolean;
 }
 
 export interface CRMUser {
@@ -65,6 +88,8 @@ export interface WazzupChannel {
   branch_name?: string;
   department_id?: number | null;
   department_name?: string;
+  // Аккаунт Wazzup, которому принадлежит номер.
+  account?: WazzupAccount;
   updated_at: string;
 }
 
@@ -129,6 +154,11 @@ export const getWazzupIframe = async (
 
 export const getWazzupStatus = async (): Promise<WazzupStatus> => {
   const response = await api.get('/integrations/wazzup/status');
+  return response.data;
+};
+
+export const getWazzupAccounts = async (): Promise<{ items: WazzupAccountInfo[] }> => {
+  const response = await api.get('/integrations/wazzup/accounts');
   return response.data;
 };
 

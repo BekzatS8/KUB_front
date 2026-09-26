@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Plus, RefreshCw, Trash2 } from "lucide-react"
+import { Link2, Plus, RefreshCw, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,8 +17,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { getCurrentUser, getRoleCode } from "@/lib/auth"
 import {
+  getWazzupAccounts,
   getWazzupChannels,
+  setupWazzup,
   setWazzupChannelBranch,
   getWazzupChannelConnectLink,
   deleteWazzupChannel,
@@ -26,6 +29,8 @@ import {
   getMessengerDepartments,
   type WazzupChannel,
   type MessengerDepartment,
+  type WazzupAccount,
+  type WazzupAccountInfo,
 } from "@/src/api/integrations_wazzup.api"
 import { listBranches, type Branch } from "@/src/api/branches.api"
 
@@ -91,7 +96,16 @@ const CHANNEL_TYPES: { transport: string; label: string }[] = [
   { transport: "cian", label: "Циан" },
 ]
 
+// Адрес, на который Wazzup шлёт входящие; тот же, что в настройках мессенджера.
+const WEBHOOKS_BASE_URL = "https://api.kubcrm.kz"
+
+const channelAccount = (ch: WazzupChannel): WazzupAccount => ch.account || "main"
+
 export default function MessengerChannelsPage() {
+  // Подключает аккаунт к CRM только админ (на сервере — то же правило).
+  const isAdmin = getRoleCode(getCurrentUser()) === "system_admin"
+  const [accounts, setAccounts] = useState<WazzupAccountInfo[]>([])
+  const [connectingAccount, setConnectingAccount] = useState<WazzupAccount | null>(null)
   const [channels, setChannels] = useState<WazzupChannel[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
   const [departments, setDepartments] = useState<MessengerDepartment[]>([])
@@ -111,12 +125,14 @@ export default function MessengerChannelsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [chRes, brRes, depRes] = await Promise.all([
+      const [chRes, brRes, depRes, accRes] = await Promise.all([
         getWazzupChannels(),
         listBranches(),
         getMessengerDepartments().catch(() => ({ value: [], count: 0 })),
+        getWazzupAccounts().catch(() => ({ items: [] as WazzupAccountInfo[] })),
       ])
       setChannels(chRes?.value || [])
+      setAccounts(accRes?.items || [])
       setBranches(Array.isArray(brRes) ? brRes : brRes?.data || [])
       setDepartments(depRes?.value || [])
     } catch {
@@ -156,6 +172,34 @@ export default function MessengerChannelsPage() {
       setConnectLoading(false)
     }
   }
+
+  // Подключить аккаунт к CRM: регистрирует у Wazzup адрес входящих. Для уже
+  // подключённого — переподключение с тем же адресом (ничего не теряется).
+  const handleConnect = async (account: WazzupAccount) => {
+    setConnectingAccount(account)
+    try {
+      await setupWazzup({ webhooks_base_url: WEBHOOKS_BASE_URL, enabled: true, account })
+      toast.success("Аккаунт подключён. Входящие с его номеров будут приходить в CRM.")
+      await load()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || "Не удалось подключить аккаунт")
+    } finally {
+      setConnectingAccount(null)
+    }
+  }
+
+  // Номера группируются по аккаунтам. Если сервер не вернул список аккаунтов
+  // (старый бэкенд), всё показывается одной группой без заголовка.
+  const groups: { info?: WazzupAccountInfo; items: WazzupChannel[] }[] = accounts.length
+    ? accounts.map((info) => ({
+        info,
+        items: channels.filter((ch) => channelAccount(ch) === info.account),
+      }))
+    : [{ items: channels }]
+  const canAddAnywhere = accounts.some((a) => a.can_add_channels && a.connected)
+  const deletingFromPartner =
+    channelToDelete !== null &&
+    Boolean(accounts.find((a) => a.account === channelAccount(channelToDelete))?.partner)
 
   const handleDelete = async () => {
     if (!channelToDelete) return
@@ -223,10 +267,12 @@ export default function MessengerChannelsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={openAdd}>
-            <Plus className="mr-2 h-4 w-4" />
-            Добавить канал
-          </Button>
+          {(canAddAnywhere || accounts.length === 0) && (
+            <Button onClick={openAdd}>
+              <Plus className="mr-2 h-4 w-4" />
+              Добавить канал
+            </Button>
+          )}
           <Button variant="outline" onClick={load} disabled={loading}>
             <RefreshCw className={loading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
             Обновить
@@ -251,84 +297,132 @@ export default function MessengerChannelsPage() {
         <CardContent>
           {loading ? (
             <p className="text-sm text-slate-500">Загрузка каналов...</p>
-          ) : channels.length === 0 ? (
-            <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-              Каналы не найдены. Нажмите «Добавить канал», чтобы подключить
-              WhatsApp / Telegram / Instagram, затем «Обновить».
-            </p>
           ) : (
-            <div className="space-y-3">
-              {channels.map((ch) => (
-                <div
-                  key={ch.id}
-                  className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate font-medium text-slate-900">
-                        {ch.name || ch.phone || ch.channel_id}
-                      </span>
-                      {(() => {
-                        const health = channelHealth(ch.status, ch.status_reason)
-                        return (
-                          <span
-                            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${health.className}`}
-                            title={health.hint || undefined}
+            <div className="space-y-6">
+              {groups.map(({ info, items }) => (
+                <section key={info?.account || "all"} className="space-y-3">
+                  {info && (
+                    <div className="flex flex-col gap-2 border-b border-slate-200 pb-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-semibold text-slate-900">
+                          {info.account === "child" ? "Дочерний аккаунт" : "Основной аккаунт"}
+                        </h2>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
+                            info.connected && info.enabled
+                              ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                              : "bg-amber-50 text-amber-700 ring-amber-200"
+                          }`}
+                        >
+                          {info.connected && info.enabled ? "Подключён к CRM" : "Не подключён"}
+                        </span>
+                        <span className="text-xs text-slate-500">Номеров: {items.length}</span>
+                      </div>
+                      {isAdmin && (
+                        <Button
+                          variant={info.connected ? "ghost" : "default"}
+                          size="sm"
+                          onClick={() => handleConnect(info.account)}
+                          disabled={connectingAccount !== null}
+                          title="Зарегистрировать у Wazzup адрес для входящих сообщений"
+                        >
+                          {connectingAccount === info.account ? (
+                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Link2 className="mr-2 h-4 w-4" />
+                          )}
+                          {info.connected ? "Переподключить" : "Подключить"}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {info && !info.connected ? (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                      Аккаунт не подключён к CRM: входящие с его номеров не приходят,
+                      а его мессенджер не открывается.
+                      {isAdmin ? " Нажмите «Подключить»." : " Обратитесь к администратору."}
+                    </p>
+                  ) : items.length === 0 ? (
+                    <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                      {!info || info.can_add_channels
+                        ? "Номеров нет. Нажмите «Добавить канал», чтобы подключить WhatsApp / Telegram, затем «Обновить»."
+                        : "Номеров нет. Номера этого аккаунта подключаются в кабинете Wazzup, затем нажмите «Обновить»."}
+                    </p>
+                  ) : (
+                    items.map((ch) => (
+                      <div
+                        key={ch.id}
+                        className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="truncate font-medium text-slate-900">
+                              {ch.name || ch.phone || ch.channel_id}
+                            </span>
+                            {(() => {
+                              const health = channelHealth(ch.status, ch.status_reason)
+                              return (
+                                <span
+                                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${health.className}`}
+                                  title={health.hint || undefined}
+                                >
+                                  {health.label}
+                                </span>
+                              )
+                            })()}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {TRANSPORT_LABELS[ch.transport] || ch.transport}
+                            {ch.phone ? ` · ${ch.phone}` : ""}
+                            {(() => {
+                              const hint = channelHealth(ch.status, ch.status_reason).hint
+                              return hint ? <span className="text-amber-700"> · {hint}</span> : null
+                            })()}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+                          <select
+                            className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm sm:w-48"
+                            value={ch.branch_id ? String(ch.branch_id) : ""}
+                            disabled={savingId === ch.id}
+                            onChange={(e) => handleChange(ch.id, e.target.value)}
                           >
-                            {health.label}
-                          </span>
-                        )
-                      })()}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {TRANSPORT_LABELS[ch.transport] || ch.transport}
-                      {ch.phone ? ` · ${ch.phone}` : ""}
-                      {(() => {
-                        const hint = channelHealth(ch.status, ch.status_reason).hint
-                        return hint ? <span className="text-amber-700"> · {hint}</span> : null
-                      })()}
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-                    <select
-                      className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm sm:w-48"
-                      value={ch.branch_id ? String(ch.branch_id) : ""}
-                      disabled={savingId === ch.id}
-                      onChange={(e) => handleChange(ch.id, e.target.value)}
-                    >
-                      <option value="">— без филиала —</option>
-                      {branches.map((b) => (
-                        <option key={b.id} value={String(b.id)}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm sm:w-56"
-                      value={ch.department_id ? String(ch.department_id) : ""}
-                      disabled={savingId === ch.id}
-                      onChange={(e) => handleDepartmentChange(ch.id, e.target.value)}
-                      title="Отдел-получатель входящих с этого канала"
-                    >
-                      <option value="">— общий (без отдела) —</option>
-                      {departments.map((d) => (
-                        <option key={d.id} value={String(d.id)}>
-                          {d.name}
-                          {d.is_private ? " (закрытый)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 shrink-0 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                      title="Удалить канал из списка"
-                      onClick={() => setChannelToDelete(ch)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                            <option value="">— без филиала —</option>
+                            {branches.map((b) => (
+                              <option key={b.id} value={String(b.id)}>
+                                {b.name}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm sm:w-56"
+                            value={ch.department_id ? String(ch.department_id) : ""}
+                            disabled={savingId === ch.id}
+                            onChange={(e) => handleDepartmentChange(ch.id, e.target.value)}
+                            title="Отдел-получатель входящих с этого канала"
+                          >
+                            <option value="">— общий (без отдела) —</option>
+                            {departments.map((d) => (
+                              <option key={d.id} value={String(d.id)}>
+                                {d.name}
+                                {d.is_private ? " (закрытый)" : ""}
+                              </option>
+                            ))}
+                          </select>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 shrink-0 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                            title="Удалить канал из списка"
+                            onClick={() => setChannelToDelete(ch)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </section>
               ))}
             </div>
           )}
@@ -415,7 +509,9 @@ export default function MessengerChannelsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Удалить канал из списка?</AlertDialogTitle>
             <AlertDialogDescription>
-              {channelToDelete
+              {channelToDelete && !deletingFromPartner
+                ? `«${channelToDelete.name || channelToDelete.phone || channelToDelete.channel_id}» будет убран из списка каналов CRM, привязка к филиалу снимется. В основном аккаунте Wazzup номер останется — отключите его в кабинете Wazzup, иначе он вернётся при обновлении. Переписка и история сообщений останутся на месте.`
+                : channelToDelete
                 ? `«${channelToDelete.name || channelToDelete.phone || channelToDelete.channel_id}» будет отключён в Wazzup и убран из списка каналов и из выбора в «Написать первым», привязка к филиалу снимется. Переписка и история сообщений останутся на месте. Действие необратимо: чтобы вернуть канал, его придётся подключать заново — со сканированием QR-кода.`
                 : ""}
             </AlertDialogDescription>
