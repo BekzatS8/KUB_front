@@ -215,7 +215,7 @@ export default function MessengerChannelsPage() {
       if (res?.provider_deleted) {
         toast.success("Канал удалён из Wazzup")
       } else {
-        toast.success("Канал убран из списка. В Wazzup он остался — отключите его там, иначе вернётся при обновлении")
+        toast.success("Канал убран из списка. В Wazzup он остался — если он там работает, снова появится при обновлении")
       }
       setChannelToDelete(null)
     } catch (err: any) {
@@ -512,7 +512,7 @@ export default function MessengerChannelsPage() {
             <AlertDialogTitle>Удалить канал из списка?</AlertDialogTitle>
             <AlertDialogDescription>
               {channelToDelete && !deletingFromPartner
-                ? `«${channelToDelete.name || channelToDelete.phone || channelToDelete.channel_id}» будет убран из списка каналов CRM, привязка к филиалу снимется. В основном аккаунте Wazzup номер останется — отключите его в кабинете Wazzup, иначе он вернётся при обновлении. Переписка и история сообщений останутся на месте.`
+                ? `«${channelToDelete.name || channelToDelete.phone || channelToDelete.channel_id}» будет убран из списка каналов CRM, привязка к филиалу снимется. В основном аккаунте Wazzup номер останется: неработающий больше не появится, а работающий вернётся при обновлении — такой отключите в кабинете Wazzup. Переписка и история сообщений останутся на месте.`
                 : channelToDelete
                 ? `«${channelToDelete.name || channelToDelete.phone || channelToDelete.channel_id}» будет отключён в Wazzup и убран из списка каналов и из выбора в «Написать первым», привязка к филиалу снимется. Переписка и история сообщений останутся на месте. Действие необратимо: чтобы вернуть канал, его придётся подключать заново — со сканированием QR-кода.`
                 : ""}
