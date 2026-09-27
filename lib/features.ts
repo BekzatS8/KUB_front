@@ -4,4 +4,4 @@
 // фронте он скрыт: нет пункта меню «Мессенджер · дочерний», группы на
 // странице каналов и подписей «основной / дочерний». Чтобы показать —
 // поставить true.
-export const WAZZUP_CHILD_VISIBLE = false;
+export const WAZZUP_CHILD_VISIBLE = true;
