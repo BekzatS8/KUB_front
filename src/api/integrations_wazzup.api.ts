@@ -90,6 +90,8 @@ export interface WazzupChannel {
   department_name?: string;
   // Аккаунт Wazzup, которому принадлежит номер.
   account?: WazzupAccount;
+  // Доступ к чатам номера настроен вручную (иначе — автоматически по ролям CRM).
+  roles_configured?: boolean;
   updated_at: string;
 }
 
@@ -221,6 +223,46 @@ export const deleteWazzupChannel = async (
   channelId: number,
 ): Promise<{ status: string; provider_deleted?: boolean }> => {
   const response = await api.delete(`/integrations/wazzup/channels/${channelId}`);
+  return response.data;
+};
+
+// Доступ сотрудников к чатам номера — как окно «Выбор ролей» в кабинете
+// Wazzup. Только для аккаунта без своего кабинета (дочерний). role:
+// seller — «Менеджер», manager — «Руководитель», auditor — «Контроль
+// качества», пусто — нет доступа.
+export type WazzupChannelRole = '' | 'seller' | 'manager' | 'auditor';
+
+export interface WazzupChannelRoleItem {
+  user_id: number;
+  name: string;
+  crm_role_id: number;
+  branch_name?: string;
+  role: WazzupChannelRole;
+  allow_get_new_clients: boolean;
+}
+
+export interface WazzupChannelRoles {
+  channel_id: number;
+  // false — сейчас роли автоматические, items показывает какие.
+  configured: boolean;
+  items: WazzupChannelRoleItem[];
+}
+
+export const getWazzupChannelRoles = async (channelId: number): Promise<WazzupChannelRoles> => {
+  const response = await api.get(`/integrations/wazzup/channels/${channelId}/roles`);
+  return response.data;
+};
+
+export const setWazzupChannelRoles = async (
+  channelId: number,
+  items: { user_id: number; role: WazzupChannelRole; allow_get_new_clients: boolean }[],
+): Promise<WazzupChannelRoles> => {
+  const response = await api.put(`/integrations/wazzup/channels/${channelId}/roles`, { items });
+  return response.data;
+};
+
+export const resetWazzupChannelRoles = async (channelId: number): Promise<WazzupChannelRoles> => {
+  const response = await api.delete(`/integrations/wazzup/channels/${channelId}/roles`);
   return response.data;
 };
 

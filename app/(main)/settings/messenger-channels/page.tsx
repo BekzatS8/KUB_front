@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Link2, Plus, RefreshCw, Trash2 } from "lucide-react"
+import { Link2, Plus, RefreshCw, Trash2, Users } from "lucide-react"
+import { ChannelRolesDialog } from "@/components/messenger/channel-roles-dialog"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -117,6 +118,9 @@ export default function MessengerChannelsPage() {
   // Удаление канала: на партнёрском драйвере канал отключается в самом Wazzup,
   // на v3 — убирается только строка в CRM (у провайдера нет метода удаления).
   const [channelToDelete, setChannelToDelete] = useState<WazzupChannel | null>(null)
+  // «Доступ к чатам» номера — у аккаунта без своего кабинета (дочерний).
+  const [rolesChannel, setRolesChannel] = useState<WazzupChannel | null>(null)
+  const closeRoles = useCallback(() => setRolesChannel(null), [])
   const [deleting, setDeleting] = useState(false)
 
   // Добавление канала: встроенный iframe провайдера (White Label). Выбор типа
@@ -421,6 +425,18 @@ export default function MessengerChannelsPage() {
                               </option>
                             ))}
                           </select>
+                          {isAdmin && info?.partner && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-9 shrink-0"
+                              title="Кто из сотрудников видит чаты этого номера и получает новых клиентов"
+                              onClick={() => setRolesChannel(ch)}
+                            >
+                              <Users className="mr-2 h-4 w-4" />
+                              {ch.roles_configured ? "Доступ: вручную" : "Доступ"}
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -510,6 +526,15 @@ export default function MessengerChannelsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ChannelRolesDialog
+        channel={rolesChannel}
+        onClose={closeRoles}
+        onSaved={(configured) => {
+          const id = rolesChannel?.id
+          setChannels((prev) => prev.map((c) => (c.id === id ? { ...c, roles_configured: configured } : c)))
+        }}
+      />
 
       <AlertDialog
         open={channelToDelete !== null}
