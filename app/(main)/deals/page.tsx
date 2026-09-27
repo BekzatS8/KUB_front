@@ -2169,8 +2169,9 @@ export default function DealsPage() {
               <Input
                 id="amount"
                 type="number"
-                placeholder="Введите сумму..."
-                value={newDeal.amount}
+                placeholder="0"
+                // 0 не показываем: иначе цифры дописываются к нулю («05000»).
+                value={newDeal.amount || ""}
                 onChange={(e) =>
                   setNewDeal({ ...newDeal, amount: Number(e.target.value) })
                 }
@@ -2184,7 +2185,7 @@ export default function DealsPage() {
                 id="prepayment"
                 type="number"
                 placeholder="0"
-                value={(newDeal as any).prepayment ?? ""}
+                value={(newDeal as any).prepayment || ""}
                 onChange={(e) =>
                   setNewDeal({ ...newDeal, prepayment: Number(e.target.value) } as any)
                 }
@@ -2330,8 +2331,8 @@ export default function DealsPage() {
               <Input
                 id="edit_amount"
                 type="number"
-                placeholder="Введите сумму..."
-                value={editDeal.amount}
+                placeholder="0"
+                value={editDeal.amount || ""}
                 onChange={(e) =>
                   setEditDeal({ ...editDeal, amount: Number(e.target.value) })
                 }
@@ -2345,7 +2346,7 @@ export default function DealsPage() {
                 id="edit_prepayment"
                 type="number"
                 placeholder="0"
-                value={(editDeal as any).prepayment ?? ""}
+                value={(editDeal as any).prepayment || ""}
                 onChange={(e) =>
                   setEditDeal({ ...editDeal, prepayment: Number(e.target.value) } as any)
                 }
