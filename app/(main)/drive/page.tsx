@@ -7,16 +7,22 @@ import {
   ArrowUp,
   ChevronRight,
   ChevronsUpDown,
+  ClipboardPaste,
   CloudUpload,
+  Copy,
   Download,
   EllipsisVertical,
   Eye,
+  FolderInput,
   FolderOpen,
   FolderPlus,
   HardDrive,
+  Info,
   LoaderCircle,
   Pencil,
+  Scissors,
   Search,
+  Send,
   Share2,
   Trash2,
   Users,
@@ -25,6 +31,7 @@ import {
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import {
@@ -46,10 +53,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  copyDriveNodes,
   createDriveFolder,
   deleteDriveNode,
   driveErrorMessage,
   listDrive,
+  moveDriveNodes,
   renameDriveNode,
   uploadDriveFile,
   type DriveListing,
@@ -64,6 +73,9 @@ import {
 } from "@/components/drive/drive-utils"
 import { DrivePreviewDialog, downloadDriveFile } from "@/components/drive/drive-preview-dialog"
 import { DriveShareDialog } from "@/components/drive/drive-share-dialog"
+import { DriveMoveDialog } from "@/components/drive/drive-move-dialog"
+import { DrivePropertiesDialog } from "@/components/drive/drive-properties-dialog"
+import { DriveSendDialog } from "@/components/drive/drive-send-dialog"
 
 // ── Очередь загрузки ────────────────────────────────────────────────────────
 
@@ -84,6 +96,11 @@ interface UploadItem {
 const UPLOAD_CONCURRENCY = 3
 
 type NameDialogState = { mode: "create" } | { mode: "rename"; node: DriveNode } | null
+
+// Буфер «Вырезать / Копировать»: живёт, пока открыт раздел, и переживает
+// переход между папками — вставляется в ту папку, где нажали «Вставить».
+type DriveClipboard = { mode: "cut" | "copy"; nodes: DriveNode[] } | null
+type MoveDialogState = { nodes: DriveNode[]; mode: "move" | "copy" } | null
 
 // ── Сортировка списка ───────────────────────────────────────────────────────
 
@@ -167,10 +184,19 @@ export default function DrivePage() {
   const [nameValue, setNameValue] = useState("")
   const [nameSaving, setNameSaving] = useState(false)
 
-  const [toDelete, setToDelete] = useState<DriveNode | null>(null)
+  const [toDelete, setToDelete] = useState<DriveNode[] | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [shareNode, setShareNode] = useState<DriveNode | null>(null)
   const [previewNode, setPreviewNode] = useState<DriveNode | null>(null)
+
+  // Выделение нескольких элементов и операции над ними.
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [clipboard, setClipboard] = useState<DriveClipboard>(null)
+  const [pasting, setPasting] = useState(false)
+  const [moveDialog, setMoveDialog] = useState<MoveDialogState>(null)
+  const [sendNodes, setSendNodes] = useState<DriveNode[] | null>(null)
+  const [propsNode, setPropsNode] = useState<DriveNode | null>(null)
+  const closeProps = useCallback(() => setPropsNode(null), [])
 
   const [uploads, setUploads] = useState<UploadItem[]>([])
   const [dragOver, setDragOver] = useState(false)
@@ -201,6 +227,7 @@ export default function DrivePage() {
 
   useEffect(() => {
     setQuery("")
+    setSelected(new Set())
     load()
   }, [load])
 
@@ -220,6 +247,87 @@ export default function DrivePage() {
     if (node.kind === "folder") openFolder(node.id)
     else setPreviewNode(node)
   }
+
+  // ── Выделение, буфер, перемещение ────────────────────────────────────────
+
+  const selectedNodes = useMemo(() => items.filter((n) => selected.has(n.id)), [items, selected])
+  const allSelected = items.length > 0 && selectedNodes.length === items.length
+  const toggleSelect = (id: number) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(items.map((n) => n.id)))
+  const cutIds = useMemo(
+    () => new Set(clipboard?.mode === "cut" ? clipboard.nodes.map((n) => n.id) : []),
+    [clipboard],
+  )
+
+  const toClipboard = (mode: "cut" | "copy", nodes: DriveNode[]) => {
+    if (!canManage || nodes.length === 0) return
+    setClipboard({ mode, nodes })
+    setSelected(new Set())
+    toast.success(
+      `${mode === "cut" ? "Вырезано" : "Скопировано"}: ${nodes.length === 1 ? `«${nodes[0].name}»` : `${nodes.length} элем.`} — откройте папку и нажмите «Вставить»`,
+    )
+  }
+
+  // Переместить или скопировать в папку targetId (null — корень).
+  const transfer = async (mode: "move" | "copy", nodes: DriveNode[], targetId: number | null) => {
+    const ids = nodes.map((n) => n.id)
+    try {
+      if (mode === "move") {
+        const res = await moveDriveNodes(ids, targetId)
+        toast.success(res.moved ? `Перемещено: ${res.moved}` : "Элементы уже в этой папке")
+      } else {
+        const res = await copyDriveNodes(ids, targetId)
+        toast.success(`Скопировано: ${res.copied}`)
+      }
+      setSelected(new Set())
+      load(true)
+      return true
+    } catch (err) {
+      toast.error(driveErrorMessage(err, mode === "move" ? "Не удалось переместить" : "Не удалось скопировать"))
+      return false
+    }
+  }
+
+  const paste = async () => {
+    if (!clipboard || pasting) return
+    setPasting(true)
+    const ok = await transfer(clipboard.mode === "cut" ? "move" : "copy", clipboard.nodes, folderId)
+    // Вырезанное вставляется один раз, скопированное — сколько угодно.
+    if (ok && clipboard.mode === "cut") setClipboard(null)
+    setPasting(false)
+  }
+
+  // Горячие клавиши, как в проводнике (не мешают вводу в полях).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return
+      if (document.querySelector("[role=dialog]")) return
+      const mod = e.ctrlKey || e.metaKey
+      const key = e.key.toLowerCase()
+      if (e.key === "Escape" && selected.size > 0) {
+        setSelected(new Set())
+      } else if (mod && (key === "a" || key === "ф")) {
+        e.preventDefault()
+        setSelected(new Set(items.map((n) => n.id)))
+      } else if (mod && (key === "c" || key === "с") && selectedNodes.length > 0) {
+        toClipboard("copy", selectedNodes)
+      } else if (mod && (key === "x" || key === "ч") && selectedNodes.length > 0) {
+        toClipboard("cut", selectedNodes)
+      } else if (mod && (key === "v" || key === "м") && clipboard && canManage) {
+        e.preventDefault()
+        paste()
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  })
 
   // ── Загрузка ──────────────────────────────────────────────────────────────
 
@@ -308,21 +416,28 @@ export default function DrivePage() {
   }
 
   const confirmDelete = async () => {
-    if (!toDelete) return
+    if (!toDelete || toDelete.length === 0) return
     setDeleting(true)
+    let removed = 0
     try {
-      const res = await deleteDriveNode(toDelete.id)
+      for (const node of toDelete) {
+        await deleteDriveNode(node.id)
+        removed++
+      }
       toast.success(
-        toDelete.kind === "folder"
-          ? `Папка удалена${res.files_removed ? `, файлов: ${res.files_removed}` : ""}`
-          : "Файл удалён",
+        toDelete.length > 1
+          ? `Удалено: ${removed}`
+          : toDelete[0].kind === "folder"
+            ? "Папка удалена"
+            : "Файл удалён",
       )
       setToDelete(null)
-      load(true)
+      setSelected(new Set())
     } catch (err) {
-      toast.error(driveErrorMessage(err, "Не удалось удалить"))
+      toast.error(driveErrorMessage(err, removed ? `Удалено ${removed}, остальное не удалось` : "Не удалось удалить"))
     } finally {
       setDeleting(false)
+      load(true)
     }
   }
 
@@ -348,7 +463,23 @@ export default function DrivePage() {
           </p>
         </div>
         {canManage && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {clipboard && (
+              <div className="flex items-center overflow-hidden rounded-md border border-blue-200 bg-blue-50">
+                <Button variant="ghost" onClick={paste} disabled={pasting} className="rounded-none text-blue-700 hover:bg-blue-100">
+                  {pasting ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardPaste className="mr-2 h-4 w-4" />}
+                  Вставить ({clipboard.nodes.length})
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setClipboard(null)}
+                  className="h-10 border-l border-blue-200 px-2 text-blue-700 hover:bg-blue-100"
+                  title="Очистить буфер"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
             <Button variant="outline" onClick={() => openNameDialog({ mode: "create" })}>
               <FolderPlus className="mr-2 h-4 w-4" />
               Создать папку
@@ -426,6 +557,55 @@ export default function DrivePage() {
         </div>
       </div>
 
+      {selectedNodes.length > 0 && (
+        <div className="sticky top-2 z-20 flex flex-wrap items-center gap-1 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 shadow-sm">
+          <span className="mr-2 text-sm font-medium text-blue-900">Выбрано: {selectedNodes.length}</span>
+          {canManage && (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => toClipboard("cut", selectedNodes)}>
+                <Scissors className="mr-1.5 h-4 w-4" />
+                Вырезать
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => toClipboard("copy", selectedNodes)}>
+                <Copy className="mr-1.5 h-4 w-4" />
+                Копировать
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setMoveDialog({ nodes: selectedNodes, mode: "move" })}>
+                <FolderInput className="mr-1.5 h-4 w-4" />
+                Переместить…
+              </Button>
+            </>
+          )}
+          {selectedNodes.some((n) => n.kind === "file") && (
+            <Button size="sm" variant="ghost" onClick={() => setSendNodes(selectedNodes)}>
+              <Send className="mr-1.5 h-4 w-4" />
+              Отправить
+            </Button>
+          )}
+          {selectedNodes.length === 1 && (
+            <Button size="sm" variant="ghost" onClick={() => setPropsNode(selectedNodes[0])}>
+              <Info className="mr-1.5 h-4 w-4" />
+              Свойства
+            </Button>
+          )}
+          {canManage && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-red-600 hover:bg-red-50 hover:text-red-700"
+              onClick={() => setToDelete(selectedNodes)}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              Удалить
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setSelected(new Set())}>
+            <X className="mr-1.5 h-4 w-4" />
+            Снять выделение
+          </Button>
+        </div>
+      )}
+
       <div
         className={`relative min-h-[320px] rounded-xl border bg-white transition ${
           dragOver ? "border-2 border-dashed border-blue-500 bg-blue-50/40" : "border-slate-200"
@@ -460,7 +640,12 @@ export default function DrivePage() {
           />
         ) : (
           <ul className={dragOver ? "opacity-30" : ""}>
-            <li className="hidden grid-cols-[minmax(0,1fr)_80px_110px_150px_40px] gap-3 border-b border-slate-200 px-4 py-2 text-xs font-medium uppercase tracking-wide text-slate-500 md:grid">
+            <li className="hidden grid-cols-[20px_minmax(0,1fr)_80px_110px_150px_40px] items-center gap-3 border-b border-slate-200 px-4 py-2 text-xs font-medium uppercase tracking-wide text-slate-500 md:grid">
+              <Checkbox
+                checked={allSelected ? true : selectedNodes.length > 0 ? "indeterminate" : false}
+                onCheckedChange={toggleAll}
+                aria-label="Выбрать всё"
+              />
               {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => {
                 const active = sort.key === key
                 const Icon = !active ? ChevronsUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown
@@ -482,8 +667,15 @@ export default function DrivePage() {
             {items.map((node) => (
               <li
                 key={node.id}
-                className="group grid grid-cols-[minmax(0,1fr)_40px] items-center gap-3 border-b border-slate-100 px-4 py-2.5 last:border-0 hover:bg-slate-50 md:grid-cols-[minmax(0,1fr)_80px_110px_150px_40px]"
+                className={`group grid grid-cols-[20px_minmax(0,1fr)_40px] items-center gap-3 border-b border-slate-100 px-4 py-2.5 last:border-0 md:grid-cols-[20px_minmax(0,1fr)_80px_110px_150px_40px] ${
+                  selected.has(node.id) ? "bg-blue-50/70 hover:bg-blue-50" : "hover:bg-slate-50"
+                } ${cutIds.has(node.id) ? "opacity-50" : ""}`}
               >
+                <Checkbox
+                  checked={selected.has(node.id)}
+                  onCheckedChange={() => toggleSelect(node.id)}
+                  aria-label={`Выбрать «${node.name}»`}
+                />
                 <button
                   type="button"
                   onClick={() => openNode(node)}
@@ -526,7 +718,12 @@ export default function DrivePage() {
                   onDownload={() => downloadDriveFile(node)}
                   onShare={() => setShareNode(node)}
                   onRename={() => openNameDialog({ mode: "rename", node })}
-                  onDelete={() => setToDelete(node)}
+                  onDelete={() => setToDelete([node])}
+                  onCut={() => toClipboard("cut", [node])}
+                  onCopy={() => toClipboard("copy", [node])}
+                  onMove={() => setMoveDialog({ nodes: [node], mode: "move" })}
+                  onSend={() => setSendNodes([node])}
+                  onProperties={() => setPropsNode(node)}
                 />
               </li>
             ))}
@@ -570,11 +767,13 @@ export default function DrivePage() {
       <AlertDialog open={toDelete !== null} onOpenChange={(open) => !open && !deleting && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить «{toDelete?.name}»?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {toDelete && toDelete.length > 1 ? `Удалить ${toDelete.length} элем.?` : `Удалить «${toDelete?.[0]?.name}»?`}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {toDelete?.kind === "folder"
-                ? "Папка будет удалена вместе со всем содержимым, включая вложенные папки. Выданные доступы закроются."
-                : "Файл будет удалён из хранилища, выданные к нему доступы закроются."}{" "}
+              {toDelete?.some((n) => n.kind === "folder")
+                ? "Папки будут удалены вместе со всем содержимым, включая вложенные папки. Выданные доступы закроются."
+                : "Файлы будут удалены из хранилища, выданные к ним доступы закроются."}{" "}
               Восстановить удалённое нельзя.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -596,6 +795,17 @@ export default function DrivePage() {
       </AlertDialog>
 
       <DriveShareDialog node={shareNode} onClose={() => setShareNode(null)} onChanged={() => load(true)} />
+      <DriveMoveDialog
+        nodes={moveDialog?.nodes ?? null}
+        mode={moveDialog?.mode ?? "move"}
+        onClose={() => setMoveDialog(null)}
+        onConfirm={async (targetId) => {
+          if (!moveDialog) return
+          if (await transfer(moveDialog.mode, moveDialog.nodes, targetId)) setMoveDialog(null)
+        }}
+      />
+      <DriveSendDialog nodes={sendNodes} onClose={() => setSendNodes(null)} />
+      <DrivePropertiesDialog node={propsNode} onClose={closeProps} />
       <DrivePreviewDialog
         files={files}
         node={previewNode}
@@ -624,6 +834,11 @@ function NodeMenu({
   onShare,
   onRename,
   onDelete,
+  onCut,
+  onCopy,
+  onMove,
+  onSend,
+  onProperties,
 }: {
   node: DriveNode
   canManage: boolean
@@ -632,6 +847,11 @@ function NodeMenu({
   onShare: () => void
   onRename: () => void
   onDelete: () => void
+  onCut: () => void
+  onCopy: () => void
+  onMove: () => void
+  onSend: () => void
+  onProperties: () => void
 }) {
   const isFile = node.kind === "file"
   return (
@@ -652,8 +872,27 @@ function NodeMenu({
             Скачать
           </DropdownMenuItem>
         )}
+        {isFile && (
+          <DropdownMenuItem onClick={onSend}>
+            <Send className="mr-2 h-4 w-4" />
+            Отправить…
+          </DropdownMenuItem>
+        )}
         {canManage && (
           <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onCut}>
+              <Scissors className="mr-2 h-4 w-4" />
+              Вырезать
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onCopy}>
+              <Copy className="mr-2 h-4 w-4" />
+              Копировать
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onMove}>
+              <FolderInput className="mr-2 h-4 w-4" />
+              Переместить…
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onShare}>
               <Share2 className="mr-2 h-4 w-4" />
@@ -670,6 +909,11 @@ function NodeMenu({
             </DropdownMenuItem>
           </>
         )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onProperties}>
+          <Info className="mr-2 h-4 w-4" />
+          Свойства
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

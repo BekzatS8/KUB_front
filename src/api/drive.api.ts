@@ -148,6 +148,60 @@ export async function listDriveShareGroups(): Promise<{ branches: DriveShareGrou
   return { branches: res.data?.branches ?? [], departments: res.data?.departments ?? [] }
 }
 
+// ── Переместить, копировать, свойства, отправить ────────────────────────────
+
+/** targetId = null — корень хранилища. При совпадении имени элемент получает номер. */
+export async function moveDriveNodes(ids: number[], targetId: number | null): Promise<{ moved: number }> {
+  const res = await api.post('/api/v1/drive/move', { ids, target_id: targetId })
+  return res.data
+}
+
+/** Копия папки — со всем содержимым; доступы не копируются. */
+export async function copyDriveNodes(ids: number[], targetId: number | null): Promise<{ copied: number }> {
+  // Большие папки копируются долго: объекты переписываются в хранилище.
+  const res = await api.post('/api/v1/drive/copy', { ids, target_id: targetId }, { timeout: 600000 })
+  return res.data
+}
+
+export interface DriveProperties {
+  node: DriveNode
+  path: DriveBreadcrumb[]
+  /** Только у папки — содержимое всех уровней. */
+  total_bytes?: number
+  files?: number
+  folders?: number
+}
+
+export async function getDriveProperties(id: number): Promise<DriveProperties> {
+  const res = await api.get(`/api/v1/drive/nodes/${id}/properties`)
+  return res.data
+}
+
+export type DriveSendChannel = 'whatsapp' | 'telegram' | 'instagram' | 'email'
+
+export interface DriveSendRequest {
+  ids: number[]
+  channel: DriveSendChannel
+  /** Телефон / username или адрес почты. */
+  to: string
+  /** Номер Wazzup, с которого писать; пусто — подберётся. */
+  channel_id?: string
+  text?: string
+  subject?: string
+}
+
+/** Файлы клиенту через мессенджер CRM или на почту. */
+export async function sendDriveFiles(req: DriveSendRequest): Promise<{ sent: number }> {
+  const res = await api.post(
+    '/api/v1/drive/send',
+    // Мессенджер скачивает файл по ссылке на API из интернета — сервер
+    // использует этот адрес, если у него не задан свой (API_PUBLIC_URL).
+    { ...req, api_base_url: process.env.NEXT_PUBLIC_API_BASE_URL || '' },
+    { timeout: 120000 },
+  )
+  return res.data
+}
+
 export async function revokeDriveShare(shareId: number): Promise<void> {
   await api.delete(`/api/v1/drive/shares/${shareId}`)
 }
