@@ -92,6 +92,9 @@ export interface WazzupChannel {
   account?: WazzupAccount;
   // Доступ к чатам номера настроен вручную (иначе — автоматически по ролям CRM).
   roles_configured?: boolean;
+  // Ссылка на канал или, пока он не авторизован, ссылка авторизации
+  // (Instagram — вход через Facebook).
+  url?: string;
   updated_at: string;
 }
 
@@ -263,6 +266,22 @@ export const setWazzupChannelRoles = async (
 
 export const resetWazzupChannelRoles = async (channelId: number): Promise<WazzupChannelRoles> => {
   const response = await api.delete(`/integrations/wazzup/channels/${channelId}/roles`);
+  return response.data;
+};
+
+// Подключение Instagram к VISARIO: CRM создаёт канал через API Wazzup,
+// в ответе — ссылка входа через Facebook (auth_url). Если Wazzup её не
+// вернул — его ответ целиком в provider_response.
+export interface WazzupInstagramConnect {
+  account: WazzupAccount;
+  channel_id?: string;
+  state?: string;
+  auth_url?: string;
+  provider_response?: string;
+}
+
+export const connectWazzupInstagram = async (): Promise<WazzupInstagramConnect> => {
+  const response = await api.post('/integrations/wazzup/channels/instagram', {});
   return response.data;
 };
 

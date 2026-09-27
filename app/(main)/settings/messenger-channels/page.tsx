@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Link2, Plus, RefreshCw, Trash2, Users } from "lucide-react"
+import { ExternalLink, Instagram, Link2, Plus, RefreshCw, Trash2, Users } from "lucide-react"
 import { ChannelRolesDialog } from "@/components/messenger/channel-roles-dialog"
+import { InstagramConnectDialog } from "@/components/messenger/instagram-connect-dialog"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -121,6 +122,8 @@ export default function MessengerChannelsPage() {
   // «Доступ к чатам» номера — у аккаунта без своего кабинета (дочерний).
   const [rolesChannel, setRolesChannel] = useState<WazzupChannel | null>(null)
   const closeRoles = useCallback(() => setRolesChannel(null), [])
+  // Instagram для VISARIO — через API Wazzup и вход через Facebook.
+  const [instagramOpen, setInstagramOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   // Добавление канала: встроенный iframe провайдера (White Label). Выбор типа
@@ -334,6 +337,7 @@ export default function MessengerChannelsPage() {
                         </span>
                         <span className="text-xs text-slate-500">Номеров: {items.length}</span>
                       </div>
+                      <div className="flex flex-wrap gap-2">
                       {isAdmin && (
                         <Button
                           variant={info.connected ? "ghost" : "default"}
@@ -350,6 +354,18 @@ export default function MessengerChannelsPage() {
                           {info.connected ? "Переподключить" : "Подключить"}
                         </Button>
                       )}
+                      {isAdmin && info.partner && info.connected && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setInstagramOpen(true)}
+                          title="Встроенная форма Wazzup Instagram не поддерживает — подключение через вход в Facebook"
+                        >
+                          <Instagram className="mr-2 h-4 w-4 text-pink-600" />
+                          Подключить Instagram
+                        </Button>
+                      )}
+                      </div>
                     </div>
                   )}
                   {info && !info.connected ? (
@@ -425,6 +441,21 @@ export default function MessengerChannelsPage() {
                               </option>
                             ))}
                           </select>
+                          {isAdmin &&
+                            info?.partner &&
+                            ch.url &&
+                            !["active", "connected", "enabled", "ok", "online", "working"].includes(
+                              (ch.status || "").toLowerCase(),
+                            ) && (
+                              // Незавершённая авторизация (например, Instagram): ссылка
+                              // входа живёт в ответе провайдера.
+                              <Button asChild variant="outline" size="sm" className="h-9 shrink-0">
+                                <a href={ch.url} target="_blank" rel="noopener noreferrer">
+                                  <ExternalLink className="mr-2 h-4 w-4" />
+                                  Авторизовать
+                                </a>
+                              </Button>
+                            )}
                           {isAdmin && info?.partner && (
                             <Button
                               variant="outline"
@@ -504,10 +535,9 @@ export default function MessengerChannelsPage() {
                     аккаунтом CRM, канал не появится в списке и не будет
                     присылать входящие — см. docs/integrations/wazzup.md. */}
                 <p className="max-w-md text-center text-xs text-slate-500">
-                  Instagram здесь не подключается — его добавляют в кабинете Wazzup,
-                  после чего он появится в списке по кнопке «Обновить». Если после
-                  подключения канал не появился в списке, он ушёл в другой аккаунт
-                  Wazzup — обратитесь к администратору сервера.
+                  Instagram здесь не подключается — для него есть отдельная кнопка
+                  «Подключить Instagram» у группы VISARIO. Если после подключения
+                  канал не появился в списке, нажмите «Обновить».
                 </p>
                 <div className="grid w-full max-w-md grid-cols-2 gap-2">
                   {CHANNEL_TYPES.map((t) => (
@@ -526,6 +556,14 @@ export default function MessengerChannelsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <InstagramConnectDialog
+        open={instagramOpen}
+        onClose={() => {
+          setInstagramOpen(false)
+          load() // подтянуть созданный канал
+        }}
+      />
 
       <ChannelRolesDialog
         channel={rolesChannel}
