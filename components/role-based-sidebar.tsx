@@ -151,11 +151,11 @@ const MENU: NavEntry[] = [
   ...(WAZZUP_CHILD_VISIBLE
     ? ([
         {
-          type: "item", title: "Мессенджер · основной", href: "/whatsapp", icon: MessageCircle,
+          type: "item", title: "Мессенджер КУБ", href: "/whatsapp", icon: MessageCircle,
           permission: "messenger.view",
         },
         {
-          type: "item", title: "Мессенджер · дочерний", href: "/whatsapp-child", icon: MessageCircle,
+          type: "item", title: "Мессенджер VISARIO", href: "/whatsapp-child", icon: MessageCircle,
           permission: "messenger.view",
         },
       ] as NavEntry[])

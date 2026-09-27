@@ -316,8 +316,8 @@ export default function MessengerChannelsPage() {
                           {!WAZZUP_CHILD_VISIBLE
                             ? "Wazzup"
                             : info.account === "child"
-                              ? "Дочерний аккаунт"
-                              : "Основной аккаунт"}
+                              ? "VISARIO · дочерний аккаунт"
+                              : "КУБ · основной аккаунт"}
                         </h2>
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${

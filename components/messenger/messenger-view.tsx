@@ -36,8 +36,8 @@ export const MESSENGER_PATHS: Record<WazzupAccount, string> = {
 };
 
 const ACCOUNT_TITLES: Record<WazzupAccount, string> = {
-  main: "основной аккаунт",
-  child: "дочерний аккаунт",
+  main: "КУБ",
+  child: "VISARIO",
 };
 
 type WidgetState = "loading" | "ready" | "error";
@@ -268,7 +268,7 @@ export function MessengerView({ account }: { account: WazzupAccount }) {
           key={iframeUrl}
           src={iframeUrl}
           className="h-full w-full border-0"
-          title={WAZZUP_CHILD_VISIBLE ? `Мессенджер · ${ACCOUNT_TITLES[account]}` : "Мессенджер"}
+          title={WAZZUP_CHILD_VISIBLE ? `Мессенджер ${ACCOUNT_TITLES[account]}` : "Мессенджер"}
           allow="microphone *; clipboard-write *"
           onError={refreshWidget}
         />
@@ -280,9 +280,11 @@ export function MessengerView({ account }: { account: WazzupAccount }) {
     <div className="min-h-[calc(100dvh-1rem)] space-y-4 bg-slate-50 p-4 sm:p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Мессенджер</h1>
+          <h1 className="text-2xl font-bold text-slate-900">
+            Мессенджер{WAZZUP_CHILD_VISIBLE && ` ${ACCOUNT_TITLES[account]}`}
+          </h1>
           <p className="text-sm text-slate-600">
-            {WAZZUP_CHILD_VISIBLE && `Wazzup, ${ACCOUNT_TITLES[account]} · `}WhatsApp, Telegram и Instagram
+            WhatsApp, Telegram и Instagram
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
