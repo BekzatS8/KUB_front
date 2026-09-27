@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { getCurrentUser, getRoleCode } from "@/lib/auth";
+import { useRoleCode } from "@/lib/use-role-code";
 import { WAZZUP_CHILD_VISIBLE } from "@/lib/features";
 import {
   getWazzupIframe,
@@ -73,7 +73,7 @@ export function MessengerView({ account }: { account: WazzupAccount }) {
   const router = useRouter();
   // Настройку интеграции меняет только админ — обычные роли (в т.ч. юрист,
   // которому открыли мессенджер) кнопку настроек не видят (обратная связь 20.07.2026).
-  const isAdmin = getRoleCode(getCurrentUser()) === "system_admin";
+  const isAdmin = useRoleCode() === "system_admin";
   const [iframeUrl, setIframeUrl] = useState("");
   const [widgetState, setWidgetState] = useState<WidgetState>("loading");
   const [widgetError, setWidgetError] = useState("");

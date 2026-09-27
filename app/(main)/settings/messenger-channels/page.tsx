@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { getCurrentUser, getRoleCode } from "@/lib/auth"
+import { useRoleCode } from "@/lib/use-role-code"
 import { WAZZUP_CHILD_VISIBLE } from "@/lib/features"
 import {
   getWazzupAccounts,
@@ -106,7 +106,7 @@ const channelAccount = (ch: WazzupChannel): WazzupAccount => ch.account || "main
 export default function MessengerChannelsPage() {
   // Подключают аккаунт к CRM админ и руководство — те же, кто привязывает
   // номера к филиалам.
-  const roleCode = getRoleCode(getCurrentUser())
+  const roleCode = useRoleCode()
   const isAdmin = roleCode === "system_admin" || roleCode === "management"
   const [accounts, setAccounts] = useState<WazzupAccountInfo[]>([])
   const [connectingAccount, setConnectingAccount] = useState<WazzupAccount | null>(null)
