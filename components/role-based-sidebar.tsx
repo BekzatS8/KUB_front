@@ -14,7 +14,7 @@ import {
   ClipboardList,
   FileText,
   GitBranch,
-  // HardDrive, — вернуть вместе с пунктом «Хранилище» в меню
+  HardDrive,
   LogOut,
   MessageCircle,
   MessageSquare,
@@ -110,14 +110,11 @@ const MENU: NavEntry[] = [
     type: "item", title: "Документы", href: "/documents", icon: FileText,
     permission: "documents.view",
   },
-  // «Хранилище» временно скрыто из меню. Раздел работает и открывается по
-  // прямой ссылке /drive — чтобы вернуть пункт, раскомментируйте его и
-  // импорт HardDrive выше.
-  // {
-  //   // Без permission — виден всем: администратор управляет хранилищем, а
-  //   // остальные видят в нём только то, к чему им открыли доступ.
-  //   type: "item", title: "Хранилище", href: "/drive", icon: HardDrive,
-  // },
+  {
+    // Без permission — виден всем: администратор управляет хранилищем, а
+    // остальные видят в нём только то, к чему им открыли доступ.
+    type: "item", title: "Хранилище", href: "/drive", icon: HardDrive,
+  },
   {
     type: "item", title: "Задачи", href: "/tasks", icon: Calendar,
     permission: "tasks.view",
