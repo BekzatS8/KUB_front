@@ -37,9 +37,18 @@ export interface DriveListing {
   total_files?: number
 }
 
+/** Кому выдан доступ: сотруднику, филиалу, отделу или всем. */
+export type DriveShareTarget = 'user' | 'branch' | 'department' | 'all'
+
 export interface DriveShare {
   id: number
   node_id: number
+  target: DriveShareTarget
+  /** ФИО сотрудника или название группы. */
+  label: string
+  branch_id?: number
+  department_id?: number
+  /** 0 у доступа группе. */
   user_id: number
   user_name: string
   user_email?: string
@@ -102,10 +111,41 @@ export async function listDriveShares(id: number): Promise<DriveShare[]> {
   return res.data?.items ?? []
 }
 
+/** Кому открыть доступ. Группа (филиал, отдел, все) проверяется в момент
+ *  доступа — новые сотрудники группы получают его сами. */
+export interface DriveShareTargets {
+  userIds?: number[]
+  branchIds?: number[]
+  departmentIds?: number[]
+  all?: boolean
+}
+
 /** expiresAt = null — бессрочно. */
-export async function shareDriveNode(id: number, userIds: number[], expiresAt: string | null): Promise<DriveShare[]> {
-  const res = await api.post(`/api/v1/drive/nodes/${id}/shares`, { user_ids: userIds, expires_at: expiresAt })
+export async function shareDriveNode(
+  id: number,
+  to: DriveShareTargets,
+  expiresAt: string | null,
+): Promise<DriveShare[]> {
+  const res = await api.post(`/api/v1/drive/nodes/${id}/shares`, {
+    user_ids: to.userIds ?? [],
+    branch_ids: to.branchIds ?? [],
+    department_ids: to.departmentIds ?? [],
+    all: !!to.all,
+    expires_at: expiresAt,
+  })
   return res.data?.items ?? []
+}
+
+export interface DriveShareGroup {
+  id: number
+  name: string
+  /** Активных сотрудников в группе. */
+  members: number
+}
+
+export async function listDriveShareGroups(): Promise<{ branches: DriveShareGroup[]; departments: DriveShareGroup[] }> {
+  const res = await api.get('/api/v1/drive/groups')
+  return { branches: res.data?.branches ?? [], departments: res.data?.departments ?? [] }
 }
 
 export async function revokeDriveShare(shareId: number): Promise<void> {
