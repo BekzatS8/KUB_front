@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronRight,
+  ChevronsUpDown,
   CloudUpload,
   Download,
   EllipsisVertical,
@@ -52,7 +55,13 @@ import {
   type DriveListing,
   type DriveNode,
 } from "@/src/api/drive.api"
-import { DriveNodeIcon, formatAccessUntil, formatBytes, formatDateTime } from "@/components/drive/drive-utils"
+import {
+  DriveNodeIcon,
+  driveTypeLabel,
+  formatAccessUntil,
+  formatBytes,
+  formatDateTime,
+} from "@/components/drive/drive-utils"
 import { DrivePreviewDialog, downloadDriveFile } from "@/components/drive/drive-preview-dialog"
 import { DriveShareDialog } from "@/components/drive/drive-share-dialog"
 
@@ -76,6 +85,56 @@ const UPLOAD_CONCURRENCY = 3
 
 type NameDialogState = { mode: "create" } | { mode: "rename"; node: DriveNode } | null
 
+// ── Сортировка списка ───────────────────────────────────────────────────────
+
+type SortKey = "name" | "type" | "size" | "updated"
+type SortState = { key: SortKey; dir: "asc" | "desc" }
+
+const SORT_LABELS: Record<SortKey, string> = {
+  name: "Имя",
+  type: "Тип",
+  size: "Размер",
+  updated: "Изменён",
+}
+const DEFAULT_SORT: SortState = { key: "name", dir: "asc" }
+// Выбор сортировки запоминается в браузере — удобство, не данные.
+const SORT_STORAGE_KEY = "drive_sort"
+
+function readSavedSort(): SortState {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SORT_STORAGE_KEY) || "null")
+    if (saved && saved.key in SORT_LABELS && (saved.dir === "asc" || saved.dir === "desc")) return saved
+  } catch {}
+  return DEFAULT_SORT
+}
+
+const byName = (a: DriveNode, b: DriveNode) =>
+  a.name.localeCompare(b.name, "ru", { numeric: true, sensitivity: "base" })
+
+// Папки всегда над файлами, как в проводнике; направление меняет порядок
+// внутри групп. У папок нет размера — по размеру они идут по имени.
+function sortNodes(nodes: DriveNode[], sort: SortState): DriveNode[] {
+  const sign = sort.dir === "asc" ? 1 : -1
+  const compare = (a: DriveNode, b: DriveNode): number => {
+    switch (sort.key) {
+      case "type":
+        return driveTypeLabel(a).localeCompare(driveTypeLabel(b), "ru") || byName(a, b)
+      case "size":
+        return (a.kind === "file" && b.kind === "file" ? a.size_bytes - b.size_bytes : 0) || byName(a, b)
+      case "updated":
+        return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime() || byName(a, b)
+      default:
+        return byName(a, b)
+    }
+  }
+  return [...nodes].sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1
+    // Размера у папок нет — между собой они всегда по алфавиту.
+    if (sort.key === "size" && a.kind === "folder") return byName(a, b)
+    return sign * compare(a, b)
+  })
+}
+
 export default function DrivePage() {
   const router = useRouter()
   const pathname = usePathname()
@@ -86,6 +145,23 @@ export default function DrivePage() {
   const [listing, setListing] = useState<DriveListing | null>(null)
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState("")
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT)
+  useEffect(() => setSort(readSavedSort()), [])
+
+  // Повторный клик по той же колонке меняет направление. Размер и дата
+  // по первому клику — от больших и свежих.
+  const changeSort = (key: SortKey) => {
+    setSort((prev) => {
+      const next: SortState =
+        prev.key === key
+          ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+          : { key, dir: key === "size" || key === "updated" ? "desc" : "asc" }
+      try {
+        localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify(next))
+      } catch {}
+      return next
+    })
+  }
 
   const [nameDialog, setNameDialog] = useState<NameDialogState>(null)
   const [nameValue, setNameValue] = useState("")
@@ -135,8 +211,8 @@ export default function DrivePage() {
   const items = useMemo(() => {
     const all = listing?.items ?? []
     const q = query.trim().toLowerCase()
-    return q ? all.filter((n) => n.name.toLowerCase().includes(q)) : all
-  }, [listing, query])
+    return sortNodes(q ? all.filter((n) => n.name.toLowerCase().includes(q)) : all, sort)
+  }, [listing, query, sort])
 
   const files = useMemo(() => items.filter((n) => n.kind === "file"), [items])
 
@@ -321,9 +397,32 @@ export default function DrivePage() {
             )
           })}
         </nav>
-        <div className="relative w-full sm:w-64">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск в папке" className="pl-9" />
+        <div className="flex w-full gap-2 sm:w-auto">
+          {/* На телефоне заголовков колонок нет — сортировка списком. */}
+          <select
+            className="h-10 rounded-md border border-slate-300 bg-white px-2 text-sm md:hidden"
+            value={`${sort.key}:${sort.dir}`}
+            onChange={(e) => {
+              const [key, dir] = e.target.value.split(":") as [SortKey, SortState["dir"]]
+              setSort({ key, dir })
+              try {
+                localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify({ key, dir }))
+              } catch {}
+            }}
+            aria-label="Сортировка"
+          >
+            <option value="name:asc">Имя А→Я</option>
+            <option value="name:desc">Имя Я→А</option>
+            <option value="type:asc">Тип</option>
+            <option value="size:desc">Сначала большие</option>
+            <option value="size:asc">Сначала маленькие</option>
+            <option value="updated:desc">Сначала новые</option>
+            <option value="updated:asc">Сначала старые</option>
+          </select>
+          <div className="relative min-w-0 flex-1 sm:w-64 sm:flex-none">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск в папке" className="pl-9" />
+          </div>
         </div>
       </div>
 
@@ -361,16 +460,29 @@ export default function DrivePage() {
           />
         ) : (
           <ul className={dragOver ? "opacity-30" : ""}>
-            <li className="hidden grid-cols-[minmax(0,1fr)_110px_150px_40px] gap-3 border-b border-slate-200 px-4 py-2 text-xs font-medium uppercase tracking-wide text-slate-500 md:grid">
-              <span>Имя</span>
-              <span>Размер</span>
-              <span>Изменён</span>
+            <li className="hidden grid-cols-[minmax(0,1fr)_80px_110px_150px_40px] gap-3 border-b border-slate-200 px-4 py-2 text-xs font-medium uppercase tracking-wide text-slate-500 md:grid">
+              {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => {
+                const active = sort.key === key
+                const Icon = !active ? ChevronsUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => changeSort(key)}
+                    className={`flex items-center gap-1 text-left uppercase tracking-wide hover:text-slate-900 ${active ? "text-slate-900" : ""}`}
+                    title={`Сортировать: ${SORT_LABELS[key].toLowerCase()}`}
+                  >
+                    {SORT_LABELS[key]}
+                    <Icon className={`h-3.5 w-3.5 ${active ? "" : "opacity-40"}`} />
+                  </button>
+                )
+              })}
               <span />
             </li>
             {items.map((node) => (
               <li
                 key={node.id}
-                className="group grid grid-cols-[minmax(0,1fr)_40px] items-center gap-3 border-b border-slate-100 px-4 py-2.5 last:border-0 hover:bg-slate-50 md:grid-cols-[minmax(0,1fr)_110px_150px_40px]"
+                className="group grid grid-cols-[minmax(0,1fr)_40px] items-center gap-3 border-b border-slate-100 px-4 py-2.5 last:border-0 hover:bg-slate-50 md:grid-cols-[minmax(0,1fr)_80px_110px_150px_40px]"
               >
                 <button
                   type="button"
@@ -402,6 +514,7 @@ export default function DrivePage() {
                     </span>
                   </span>
                 </button>
+                <span className="hidden truncate text-sm text-slate-600 md:block">{driveTypeLabel(node)}</span>
                 <span className="hidden text-sm text-slate-600 md:block">
                   {node.kind === "file" ? formatBytes(node.size_bytes) : "—"}
                 </span>

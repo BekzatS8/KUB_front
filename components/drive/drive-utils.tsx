@@ -31,6 +31,14 @@ export function DriveNodeIcon({ node, className }: { node: DriveNode; className?
   return <File className={cn(base, "text-slate-400")} />
 }
 
+/** Тип элемента для колонки «Тип» и сортировки: «Папка», расширение файла
+ *  (PDF, DOCX…) или «Файл», если расширения нет. */
+export function driveTypeLabel(node: DriveNode): string {
+  if (node.kind === "folder") return "Папка"
+  const m = /\.([^./\\]{1,10})$/.exec(node.name)
+  return m ? m[1].toUpperCase() : "Файл"
+}
+
 export function formatBytes(bytes: number | undefined): string {
   if (!bytes || bytes <= 0) return "0 Б"
   const units = ["Б", "КБ", "МБ", "ГБ", "ТБ"]
