@@ -101,8 +101,49 @@ export async function renameDriveNode(id: number, name: string): Promise<DriveNo
   return res.data
 }
 
-export async function deleteDriveNode(id: number): Promise<{ files_removed: number }> {
-  const res = await api.delete(`/api/v1/drive/nodes/${id}`, { timeout: 120000 })
+/** Переносит в корзину — восстановить можно оттуда. */
+export async function deleteDriveNode(id: number): Promise<{ trashed: number }> {
+  const res = await api.delete(`/api/v1/drive/nodes/${id}`)
+  return res.data
+}
+
+// ── Корзина ─────────────────────────────────────────────────────────────────
+
+export interface DriveTrashItem {
+  id: number
+  kind: 'folder' | 'file'
+  name: string
+  mime_type: string
+  parent_id: number | null
+  /** Папка, откуда удалили; пусто — корень. */
+  parent_name?: string
+  /** Исходную папку тоже удалили — восстановится в корень. */
+  parent_trashed?: boolean
+  /** Всё, что удалено вместе с записью. */
+  size_bytes: number
+  files: number
+  deleted_at: string
+  deleted_by_name?: string
+}
+
+export async function listDriveTrash(): Promise<{ items: DriveTrashItem[]; total_bytes: number }> {
+  const res = await api.get('/api/v1/drive/trash')
+  return { items: res.data?.items ?? [], total_bytes: res.data?.total_bytes ?? 0 }
+}
+
+export async function restoreDriveNodes(ids: number[]): Promise<{ restored: number }> {
+  const res = await api.post('/api/v1/drive/trash/restore', { ids })
+  return res.data
+}
+
+/** Удалить навсегда — записи и файлы в хранилище, без возможности вернуть. */
+export async function purgeDriveNodes(ids: number[]): Promise<{ files_removed: number }> {
+  const res = await api.post('/api/v1/drive/trash/purge', { ids }, { timeout: 300000 })
+  return res.data
+}
+
+export async function emptyDriveTrash(): Promise<{ files_removed: number }> {
+  const res = await api.delete('/api/v1/drive/trash', { timeout: 600000 })
   return res.data
 }
 

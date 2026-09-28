@@ -76,6 +76,7 @@ import { DriveShareDialog } from "@/components/drive/drive-share-dialog"
 import { DriveMoveDialog } from "@/components/drive/drive-move-dialog"
 import { DrivePropertiesDialog } from "@/components/drive/drive-properties-dialog"
 import { DriveSendDialog } from "@/components/drive/drive-send-dialog"
+import { DriveTrashView } from "@/components/drive/drive-trash-view"
 
 // ── Очередь загрузки ────────────────────────────────────────────────────────
 
@@ -158,6 +159,8 @@ export default function DrivePage() {
   const searchParams = useSearchParams()
   const folderParam = searchParams.get("folder")
   const folderId = folderParam && /^\d+$/.test(folderParam) ? Number(folderParam) : null
+  // ?view=trash — корзина (только администратор).
+  const trashView = searchParams.get("view") === "trash"
 
   const [listing, setListing] = useState<DriveListing | null>(null)
   const [loading, setLoading] = useState(true)
@@ -306,6 +309,7 @@ export default function DrivePage() {
   // Горячие клавиши, как в проводнике (не мешают вводу в полях).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (trashView) return
       const el = e.target as HTMLElement | null
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return
       if (document.querySelector("[role=dialog]")) return
@@ -425,11 +429,7 @@ export default function DrivePage() {
         removed++
       }
       toast.success(
-        toDelete.length > 1
-          ? `Удалено: ${removed}`
-          : toDelete[0].kind === "folder"
-            ? "Папка удалена"
-            : "Файл удалён",
+        toDelete.length > 1 ? `Перемещено в корзину: ${removed}` : `«${toDelete[0].name}» перемещено в корзину`,
       )
       setToDelete(null)
       setSelected(new Set())
@@ -442,6 +442,11 @@ export default function DrivePage() {
   }
 
   // ── Разметка ─────────────────────────────────────────────────────────────
+
+  // Пока права не загружены — сразу корзина, без мелькания хранилища.
+  if (trashView && (canManage || listing === null)) {
+    return <DriveTrashView onBack={() => router.push(pathname)} />
+  }
 
   const rootLabel = listing?.shared_view ? "Доступные мне" : "Хранилище"
   const activeUploads = uploads.filter((u) => u.status !== "cancelled")
@@ -480,6 +485,10 @@ export default function DrivePage() {
                 </button>
               </div>
             )}
+            <Button variant="outline" onClick={() => router.push(`${pathname}?view=trash`)} title="Удалённые файлы и папки">
+              <Trash2 className="mr-2 h-4 w-4" />
+              Корзина
+            </Button>
             <Button variant="outline" onClick={() => openNameDialog({ mode: "create" })}>
               <FolderPlus className="mr-2 h-4 w-4" />
               Создать папку
@@ -768,13 +777,16 @@ export default function DrivePage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {toDelete && toDelete.length > 1 ? `Удалить ${toDelete.length} элем.?` : `Удалить «${toDelete?.[0]?.name}»?`}
+              {toDelete && toDelete.length > 1
+                ? `Переместить в корзину ${toDelete.length} элем.?`
+                : `Переместить «${toDelete?.[0]?.name}» в корзину?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {toDelete?.some((n) => n.kind === "folder")
-                ? "Папки будут удалены вместе со всем содержимым, включая вложенные папки. Выданные доступы закроются."
-                : "Файлы будут удалены из хранилища, выданные к ним доступы закроются."}{" "}
-              Восстановить удалённое нельзя.
+                ? "Папки попадут в корзину вместе со всем содержимым."
+                : "Файлы попадут в корзину."}{" "}
+              Пока они там, их никто не видит и доступы не действуют. Восстановить или удалить
+              навсегда можно в разделе «Корзина».
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -788,7 +800,7 @@ export default function DrivePage() {
               className="bg-red-600 hover:bg-red-700"
             >
               {deleting && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
-              Удалить
+              В корзину
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
