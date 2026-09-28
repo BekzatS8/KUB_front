@@ -31,6 +31,8 @@ export interface DriveListing {
   items: DriveNode[]
   breadcrumbs: DriveBreadcrumb[]
   can_manage: boolean
+  /** Можно менять содержимое этой папки (администратор или доступ «редактирование»). */
+  can_edit?: boolean
   /** Пользователь видит не всё хранилище, а только открытое ему. */
   shared_view: boolean
   total_bytes?: number
@@ -40,10 +42,14 @@ export interface DriveListing {
 /** Кому выдан доступ: сотруднику, филиалу, отделу или всем. */
 export type DriveShareTarget = 'user' | 'branch' | 'department' | 'all'
 
+/** view — смотреть и скачивать; edit — ещё и работать внутри папки. */
+export type DriveShareAccess = 'view' | 'edit'
+
 export interface DriveShare {
   id: number
   node_id: number
   target: DriveShareTarget
+  access?: DriveShareAccess
   /** ФИО сотрудника или название группы. */
   label: string
   branch_id?: number
@@ -107,6 +113,12 @@ export async function deleteDriveNode(id: number): Promise<{ trashed: number }> 
   return res.data
 }
 
+/** В корзину несколько элементов сразу — одно событие в Ленте. */
+export async function deleteDriveNodes(ids: number[]): Promise<{ trashed: number }> {
+  const res = await api.post('/api/v1/drive/delete', { ids })
+  return res.data
+}
+
 // ── Корзина ─────────────────────────────────────────────────────────────────
 
 export interface DriveTrashItem {
@@ -159,6 +171,7 @@ export interface DriveShareTargets {
   branchIds?: number[]
   departmentIds?: number[]
   all?: boolean
+  access?: DriveShareAccess
 }
 
 /** expiresAt = null — бессрочно. */
@@ -172,6 +185,7 @@ export async function shareDriveNode(
     branch_ids: to.branchIds ?? [],
     department_ids: to.departmentIds ?? [],
     all: !!to.all,
+    access: to.access ?? 'edit',
     expires_at: expiresAt,
   })
   return res.data?.items ?? []

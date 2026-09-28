@@ -55,7 +55,7 @@ import {
 import {
   copyDriveNodes,
   createDriveFolder,
-  deleteDriveNode,
+  deleteDriveNodes,
   driveErrorMessage,
   listDrive,
   moveDriveNodes,
@@ -208,6 +208,9 @@ export default function DrivePage() {
   folderIdRef.current = folderId
 
   const canManage = listing?.can_manage ?? false
+  // Менять содержимое открытой папки: администратор везде, сотрудник — внутри
+  // папки с доступом «редактирование».
+  const canEdit = listing?.can_edit ?? canManage
 
   const load = useCallback(
     async (silent = false) => {
@@ -269,7 +272,7 @@ export default function DrivePage() {
   )
 
   const toClipboard = (mode: "cut" | "copy", nodes: DriveNode[]) => {
-    if (!canManage || nodes.length === 0) return
+    if (nodes.length === 0 || (mode === "cut" && !canEdit)) return
     setClipboard({ mode, nodes })
     setSelected(new Set())
     toast.success(
@@ -322,9 +325,9 @@ export default function DrivePage() {
         setSelected(new Set(items.map((n) => n.id)))
       } else if (mod && (key === "c" || key === "с") && selectedNodes.length > 0) {
         toClipboard("copy", selectedNodes)
-      } else if (mod && (key === "x" || key === "ч") && selectedNodes.length > 0) {
+      } else if (mod && (key === "x" || key === "ч") && selectedNodes.length > 0 && canEdit) {
         toClipboard("cut", selectedNodes)
-      } else if (mod && (key === "v" || key === "м") && clipboard && canManage) {
+      } else if (mod && (key === "v" || key === "м") && clipboard && canEdit) {
         e.preventDefault()
         paste()
       }
@@ -386,7 +389,7 @@ export default function DrivePage() {
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
-    if (!canManage) return
+    if (!canEdit) return
     if (e.dataTransfer.files?.length) enqueue(e.dataTransfer.files)
   }
 
@@ -424,10 +427,7 @@ export default function DrivePage() {
     setDeleting(true)
     let removed = 0
     try {
-      for (const node of toDelete) {
-        await deleteDriveNode(node.id)
-        removed++
-      }
+      removed = (await deleteDriveNodes(toDelete.map((n) => n.id))).trashed
       toast.success(
         toDelete.length > 1 ? `Перемещено в корзину: ${removed}` : `«${toDelete[0].name}» перемещено в корзину`,
       )
@@ -467,9 +467,9 @@ export default function DrivePage() {
                 : "Файлы компании"}
           </p>
         </div>
-        {canManage && (
+        {(canEdit || canManage) && (
           <div className="flex flex-wrap gap-2">
-            {clipboard && (
+            {clipboard && canEdit && (
               <div className="flex items-center overflow-hidden rounded-md border border-blue-200 bg-blue-50">
                 <Button variant="ghost" onClick={paste} disabled={pasting} className="rounded-none text-blue-700 hover:bg-blue-100">
                   {pasting ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardPaste className="mr-2 h-4 w-4" />}
@@ -485,18 +485,24 @@ export default function DrivePage() {
                 </button>
               </div>
             )}
-            <Button variant="outline" onClick={() => router.push(`${pathname}?view=trash`)} title="Удалённые файлы и папки">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Корзина
-            </Button>
-            <Button variant="outline" onClick={() => openNameDialog({ mode: "create" })}>
-              <FolderPlus className="mr-2 h-4 w-4" />
-              Создать папку
-            </Button>
-            <Button onClick={() => fileInputRef.current?.click()}>
-              <CloudUpload className="mr-2 h-4 w-4" />
-              Загрузить
-            </Button>
+            {canManage && (
+              <Button variant="outline" onClick={() => router.push(`${pathname}?view=trash`)} title="Удалённые файлы и папки">
+                <Trash2 className="mr-2 h-4 w-4" />
+                Корзина
+              </Button>
+            )}
+            {canEdit && (
+              <>
+                <Button variant="outline" onClick={() => openNameDialog({ mode: "create" })}>
+                  <FolderPlus className="mr-2 h-4 w-4" />
+                  Создать папку
+                </Button>
+                <Button onClick={() => fileInputRef.current?.click()}>
+                  <CloudUpload className="mr-2 h-4 w-4" />
+                  Загрузить
+                </Button>
+              </>
+            )}
             <input
               ref={fileInputRef}
               type="file"
@@ -569,21 +575,21 @@ export default function DrivePage() {
       {selectedNodes.length > 0 && (
         <div className="sticky top-2 z-20 flex flex-wrap items-center gap-1 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 shadow-sm">
           <span className="mr-2 text-sm font-medium text-blue-900">Выбрано: {selectedNodes.length}</span>
-          {canManage && (
-            <>
-              <Button size="sm" variant="ghost" onClick={() => toClipboard("cut", selectedNodes)}>
-                <Scissors className="mr-1.5 h-4 w-4" />
-                Вырезать
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => toClipboard("copy", selectedNodes)}>
-                <Copy className="mr-1.5 h-4 w-4" />
-                Копировать
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setMoveDialog({ nodes: selectedNodes, mode: "move" })}>
-                <FolderInput className="mr-1.5 h-4 w-4" />
-                Переместить…
-              </Button>
-            </>
+          {canEdit && (
+            <Button size="sm" variant="ghost" onClick={() => toClipboard("cut", selectedNodes)}>
+              <Scissors className="mr-1.5 h-4 w-4" />
+              Вырезать
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={() => toClipboard("copy", selectedNodes)}>
+            <Copy className="mr-1.5 h-4 w-4" />
+            Копировать
+          </Button>
+          {canEdit && (
+            <Button size="sm" variant="ghost" onClick={() => setMoveDialog({ nodes: selectedNodes, mode: "move" })}>
+              <FolderInput className="mr-1.5 h-4 w-4" />
+              Переместить…
+            </Button>
           )}
           {selectedNodes.some((n) => n.kind === "file") && (
             <Button size="sm" variant="ghost" onClick={() => setSendNodes(selectedNodes)}>
@@ -597,7 +603,7 @@ export default function DrivePage() {
               Свойства
             </Button>
           )}
-          {canManage && (
+          {canEdit && (
             <Button
               size="sm"
               variant="ghost"
@@ -620,7 +626,7 @@ export default function DrivePage() {
           dragOver ? "border-2 border-dashed border-blue-500 bg-blue-50/40" : "border-slate-200"
         }`}
         onDragOver={(e) => {
-          if (!canManage) return
+          if (!canEdit) return
           e.preventDefault()
           setDragOver(true)
         }}
@@ -643,8 +649,8 @@ export default function DrivePage() {
         ) : items.length === 0 ? (
           <EmptyState
             searching={query.trim() !== ""}
-            sharedView={listing?.shared_view ?? false}
-            canManage={canManage}
+            sharedView={(listing?.shared_view ?? false) && folderId === null}
+            canManage={canEdit}
             onUpload={() => fileInputRef.current?.click()}
           />
         ) : (
@@ -723,6 +729,7 @@ export default function DrivePage() {
                 <NodeMenu
                   node={node}
                   canManage={canManage}
+                  canEdit={canEdit}
                   onOpen={() => openNode(node)}
                   onDownload={() => downloadDriveFile(node)}
                   onShare={() => setShareNode(node)}
@@ -785,8 +792,9 @@ export default function DrivePage() {
               {toDelete?.some((n) => n.kind === "folder")
                 ? "Папки попадут в корзину вместе со всем содержимым."
                 : "Файлы попадут в корзину."}{" "}
-              Пока они там, их никто не видит и доступы не действуют. Восстановить или удалить
-              навсегда можно в разделе «Корзина».
+              {canManage
+                ? "Пока они там, их никто не видит и доступы не действуют. Восстановить или удалить навсегда можно в разделе «Корзина»."
+                : "Администратор увидит удаление в Ленте и при необходимости восстановит."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -841,6 +849,7 @@ export default function DrivePage() {
 function NodeMenu({
   node,
   canManage,
+  canEdit,
   onOpen,
   onDownload,
   onShare,
@@ -854,6 +863,7 @@ function NodeMenu({
 }: {
   node: DriveNode
   canManage: boolean
+  canEdit: boolean
   onOpen: () => void
   onDownload: () => void
   onShare: () => void
@@ -890,26 +900,32 @@ function NodeMenu({
             Отправить…
           </DropdownMenuItem>
         )}
+        <DropdownMenuSeparator />
+        {canEdit && (
+          <DropdownMenuItem onClick={onCut}>
+            <Scissors className="mr-2 h-4 w-4" />
+            Вырезать
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem onClick={onCopy}>
+          <Copy className="mr-2 h-4 w-4" />
+          Копировать
+        </DropdownMenuItem>
+        {canEdit && (
+          <DropdownMenuItem onClick={onMove}>
+            <FolderInput className="mr-2 h-4 w-4" />
+            Переместить…
+          </DropdownMenuItem>
+        )}
+        {(canManage || canEdit) && <DropdownMenuSeparator />}
         {canManage && (
+          <DropdownMenuItem onClick={onShare}>
+            <Share2 className="mr-2 h-4 w-4" />
+            Поделиться
+          </DropdownMenuItem>
+        )}
+        {canEdit && (
           <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onCut}>
-              <Scissors className="mr-2 h-4 w-4" />
-              Вырезать
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onCopy}>
-              <Copy className="mr-2 h-4 w-4" />
-              Копировать
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onMove}>
-              <FolderInput className="mr-2 h-4 w-4" />
-              Переместить…
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onShare}>
-              <Share2 className="mr-2 h-4 w-4" />
-              Поделиться
-            </DropdownMenuItem>
             <DropdownMenuItem onClick={onRename}>
               <Pencil className="mr-2 h-4 w-4" />
               Переименовать

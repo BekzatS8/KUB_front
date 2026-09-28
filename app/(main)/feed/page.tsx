@@ -62,6 +62,7 @@ const EVENT_TYPE_LABELS: Record<FeedEventType, string> = {
   pending_delete_document: "Удаление документа",
   pending_send_document: "Отправка документа на подпись",
   pending_review_document: "Документ на проверку",
+  drive_delete: "Удаление в хранилище",
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -118,6 +119,11 @@ function formatPayloadPreview(type: FeedEventType, payload: Record<string, any>)
     case "pending_edit_document":
     case "pending_delete_document":
       return payload.title || (payload.doc_type ? `Тип: ${payload.doc_type}` : "Документ")
+    case "drive_delete": {
+      const names: string[] = (payload.items || []).map((i: any) => i.name).filter(Boolean)
+      const what = names.length > 3 ? `${names.slice(0, 3).join(", ")} и ещё ${names.length - 3}` : names.join(", ")
+      return `${what}${payload.folder ? ` — из «${payload.folder}»` : ""}. Одобрить — оставить в корзине, отклонить — восстановить`
+    }
     default:
       return ""
   }

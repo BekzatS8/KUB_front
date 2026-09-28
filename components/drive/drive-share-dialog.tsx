@@ -27,6 +27,7 @@ import {
   shareDriveNode,
   type DriveNode,
   type DriveShare,
+  type DriveShareAccess,
   type DriveShareGroup,
   type DriveShareTarget,
   type DriveUser,
@@ -105,6 +106,9 @@ export function DriveShareDialog({ node, onClose, onChanged }: Props) {
   const [all, setAll] = useState(false)
   const [term, setTerm] = useState<Term>("forever")
   const [date, setDate] = useState("")
+  // Уровень доступа: редактирование — работать внутри папки, просмотр — только
+  // смотреть и скачивать.
+  const [access, setAccess] = useState<DriveShareAccess>("edit")
   const [saving, setSaving] = useState(false)
   const [revokingId, setRevokingId] = useState<number | null>(null)
 
@@ -122,6 +126,7 @@ export function DriveShareDialog({ node, onClose, onChanged }: Props) {
     resetSelection()
     setTerm("forever")
     setDate("")
+    setAccess("edit")
     setLoading(true)
     Promise.all([
       listDriveUsers(),
@@ -182,6 +187,7 @@ export function DriveShareDialog({ node, onClose, onChanged }: Props) {
             branchIds: [...selBranches],
             departmentIds: [...selDepartments],
             all,
+            access,
           },
           expiry,
         ),
@@ -341,6 +347,32 @@ export function DriveShareDialog({ node, onClose, onChanged }: Props) {
                 {tab === "departments" && groupList(departments, "department", selDepartments, setSelDepartments)}
               </div>
 
+              {node?.kind === "folder" && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-700">Что можно делать</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {(
+                      [
+                        { value: "edit", title: "Редактировать", hint: "Создавать папки, загружать, копировать, переименовывать, перемещать. Удалённое уходит в корзину и в Ленту." },
+                        { value: "view", title: "Только просматривать", hint: "Открывать и скачивать, ничего не менять." },
+                      ] as { value: DriveShareAccess; title: string; hint: string }[]
+                    ).map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setAccess(opt.value)}
+                        className={`rounded-lg border px-3 py-2 text-left transition ${
+                          access === opt.value ? "border-blue-600 bg-blue-50" : "border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="text-sm font-medium text-slate-900">{opt.title}</div>
+                        <div className="text-xs text-slate-500">{opt.hint}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <p className="text-sm font-medium text-slate-700">Срок доступа</p>
                 <div className="flex flex-wrap gap-2">
@@ -403,6 +435,13 @@ export function DriveShareDialog({ node, onClose, onChanged }: Props) {
                             {s.target && s.target !== "user" && s.target !== "all" && (
                               <span className="ml-2 text-xs font-normal text-slate-500">{kind.label}</span>
                             )}
+                            <span
+                              className={`ml-2 rounded-full px-1.5 py-0.5 text-xs font-normal ${
+                                s.access === "view" ? "bg-slate-100 text-slate-600" : "bg-emerald-50 text-emerald-700"
+                              }`}
+                            >
+                              {s.access === "view" ? "просмотр" : "редактирование"}
+                            </span>
                           </div>
                           <div className="flex items-center gap-1 text-xs text-slate-500">
                             {s.expires_at ? <Clock className="h-3 w-3" /> : <InfinityIcon className="h-3 w-3" />}

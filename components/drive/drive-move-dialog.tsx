@@ -25,6 +25,8 @@ export function DriveMoveDialog({
   const [folderId, setFolderId] = useState<number | null>(null)
   const [folders, setFolders] = useState<DriveNode[]>([])
   const [crumbs, setCrumbs] = useState<DriveBreadcrumb[]>([])
+  // Класть можно только в папку, которую разрешено менять.
+  const [canEditTarget, setCanEditTarget] = useState(true)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -39,6 +41,7 @@ export function DriveMoveDialog({
       .then((l) => {
         setFolders(l.items.filter((n) => n.kind === "folder"))
         setCrumbs(l.breadcrumbs)
+        setCanEditTarget(l.can_edit ?? l.can_manage)
       })
       .catch((err) => toast.error(driveErrorMessage(err, "Не удалось загрузить папки")))
       .finally(() => setLoading(false))
@@ -124,12 +127,15 @@ export function DriveMoveDialog({
         {blocked && (
           <p className="text-sm text-red-600">Нельзя положить папку в неё саму или в её подпапку.</p>
         )}
+        {!blocked && !loading && !canEditTarget && (
+          <p className="text-sm text-amber-700">В эту папку класть нельзя — откройте папку, в которой вам разрешено работать.</p>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Отмена
           </Button>
-          <Button onClick={confirm} disabled={saving || loading || blocked}>
+          <Button onClick={confirm} disabled={saving || loading || blocked || !canEditTarget}>
             {saving && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
             {mode === "move" ? "Переместить сюда" : "Копировать сюда"}
           </Button>

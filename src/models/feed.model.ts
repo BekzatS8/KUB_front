@@ -13,6 +13,9 @@ export type FeedEventType =
   | 'pending_delete_document'
   | 'pending_send_document'
   | 'pending_review_document'
+  // Сотрудник удалил в хранилище (уже в корзине): одобрить — оставить,
+  // отклонить — восстановить.
+  | 'drive_delete'
 
 export type FeedEventStatus = 'pending' | 'approved' | 'rejected'
 
