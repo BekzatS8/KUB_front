@@ -143,7 +143,8 @@ export function MessengerView({ account }: { account: WazzupAccount }) {
       refreshWidget();
     } catch (err: any) {
       toast.error(
-        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
           "Не удалось отправить. Проверьте интеграцию и тип канала (для официального WABA нужен шаблон).",
       );
     } finally {
