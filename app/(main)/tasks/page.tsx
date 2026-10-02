@@ -154,6 +154,21 @@ const priorityColors: Record<TaskPriority, string> = {
   urgent: "bg-red-100 text-red-700",
 }
 
+// DateInput работает с локальным "YYYY-MM-DDTHH:mm", а бэк ждёт RFC3339.
+function toApiDateTime(value: string): string {
+  if (!value) return ""
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString()
+}
+
+function fromApiDateTime(value?: string | null): string {
+  if (!value) return ""
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ""
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 // ─── Combobox Component ──────────────────────────────────────────
 
 // useWheelScrollRef возвращает callback-ref для скроллируемого контейнера
@@ -731,8 +746,8 @@ export default function TasksPage() {
       priority: task.priority || "normal",
       entity_type: task.entity_type || "",
       entity_id: task.entity_id ? Number(task.entity_id) : undefined,
-      due_date: task.due_date || "",
-      reminder_at: task.reminder_at || "",
+      due_date: fromApiDateTime(task.due_date),
+      reminder_at: fromApiDateTime(task.reminder_at),
     })
     setIsFormOpen(true)
   }
@@ -753,8 +768,8 @@ export default function TasksPage() {
         priority: formData.priority,
         entity_type: formData.entity_type,
         entity_id: formData.entity_id || 0,
-        due_date: formData.due_date || "",
-        reminder_at: formData.reminder_at || "",
+        due_date: toApiDateTime(formData.due_date),
+        reminder_at: toApiDateTime(formData.reminder_at),
       }
       if (selectedTask) {
         await update_task(payload, { id: selectedTask.id })
