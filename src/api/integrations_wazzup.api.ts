@@ -269,19 +269,39 @@ export const resetWazzupChannelRoles = async (channelId: number): Promise<Wazzup
   return response.data;
 };
 
-// Подключение Instagram к VISARIO: CRM создаёт канал через API Wazzup,
-// в ответе — ссылка входа через Facebook (auth_url). Если Wazzup её не
-// вернул — его ответ целиком в provider_response.
+// Подключение Instagram к VISARIO. Wazzup создаёт канал только с данными из
+// Facebook, поэтому вход проводит CRM: login → Facebook → страница
+// instagram-callback → accounts (выбор аккаунта) → connect. Токен Facebook
+// остаётся на сервере, фронт знает только session.
+export interface WazzupInstagramAccount {
+  page_id: string;
+  page_name: string;
+  inst_id: string;
+  username: string;
+}
+
 export interface WazzupInstagramConnect {
   account: WazzupAccount;
   channel_id?: string;
   state?: string;
-  auth_url?: string;
-  provider_response?: string;
+  username?: string;
 }
 
-export const connectWazzupInstagram = async (): Promise<WazzupInstagramConnect> => {
-  const response = await api.post('/integrations/wazzup/channels/instagram', {});
+export const startWazzupInstagramLogin = async (): Promise<{ auth_url: string }> => {
+  const response = await api.post('/integrations/wazzup/instagram/login', {});
+  return response.data;
+};
+
+export const getWazzupInstagramAccounts = async (
+  code: string,
+  state: string,
+): Promise<{ session: string; accounts: WazzupInstagramAccount[] }> => {
+  const response = await api.post('/integrations/wazzup/instagram/accounts', { code, state });
+  return response.data;
+};
+
+export const connectWazzupInstagram = async (session: string, instId: string): Promise<WazzupInstagramConnect> => {
+  const response = await api.post('/integrations/wazzup/channels/instagram', { session, inst_id: instId });
   return response.data;
 };
 
