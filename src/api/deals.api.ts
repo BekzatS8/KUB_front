@@ -87,3 +87,10 @@ export async function restore_deal(payload?: void, params?: Record<string, any>)
   const res = await api.post(`/deals/${params?.id}/restore`)
   return res.data
 }
+
+// «Взять себе» — сделка без ответственного (например, уволенного сотрудника)
+// переходит текущему пользователю. 409 — её уже взял кто-то другой.
+export async function take_deal(dealId: number): Promise<any> {
+  const res = await api.post(`/deals/${dealId}/take`, {})
+  return res.data
+}

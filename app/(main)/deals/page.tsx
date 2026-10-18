@@ -88,6 +88,7 @@ import { getMyPermissions } from "@/src/api/permissions.api";
 import { KanbanBoard } from "@/components/deals/kanban-board";
 import { AssignLeadDialog } from "@/components/leads/assign-lead-dialog";
 import { take_lead } from "@/src/api/leads.api";
+import { take_deal } from "@/src/api/deals.api";
 import { BoardOwnerFilter, BRANCH_FILTER_PREFIX } from "@/components/deals/board-owner-filter";
 import type { Funnel } from "@/src/models/funnels.model";
 import type { FunnelBoardDeal } from "@/src/models/funnel-stages.model";
@@ -956,11 +957,12 @@ export default function DealsPage() {
   // Ответственный за лид на доске: «Взять себе» и «Назначить» (админ/руководство).
   const [assignLeadCard, setAssignLeadCard] = useState<FunnelBoardDeal | null>(null);
   const takeLeadFromBoard = async (deal: FunnelBoardDeal) => {
+    const isLead = deal.kind === "lead";
     try {
-      await take_lead(deal.id);
-      toast.success(`Лид #${deal.id} теперь ваш`);
+      await (isLead ? take_lead(deal.id) : take_deal(deal.id));
+      toast.success(isLead ? `Лид #${deal.id} теперь ваш` : `Сделка #${deal.id} теперь ваша`);
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || "Не удалось взять лид");
+      toast.error(err?.response?.data?.message || err?.message || "Не удалось взять в работу");
     } finally {
       setKanbanRefreshKey((k) => k + 1);
     }

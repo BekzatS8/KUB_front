@@ -82,8 +82,8 @@ interface DealActions {
   onEdit?: (deal: FunnelBoardDeal) => void;
   onArchive?: (deal: FunnelBoardDeal) => void;
   onDelete?: (deal: FunnelBoardDeal) => void;
-  // Ответственный за лид: «Взять себе» (ничей лид) и «Назначить» (админ и
-  // руководство передают лид другому сотруднику).
+  // Ответственный: «Взять себе» (ничья карточка — лид или сделка) и
+  // «Назначить» (админ и руководство передают лид другому сотруднику).
   onTakeLead?: (deal: FunnelBoardDeal) => void;
   onAssignLead?: (deal: FunnelBoardDeal) => void;
   canAssignLeads?: boolean;
@@ -131,9 +131,9 @@ function DealCard({
   const showDelete = !overlay && !isLead && isAdmin && onDelete;
   const showAssign = !overlay && isLead && canAssignLeads && onAssignLead;
   const hasActions = showEdit || showArchive || showDelete || showAssign;
-  // Ничей лид (без ответственного — например, уволенного сотрудника) любой
-  // сотрудник забирает себе одной кнопкой, не перетаскивая карточку.
-  const showTake = !overlay && isLead && !deal.owner_name && canWrite && onTakeLead;
+  // Ничья карточка (лид или сделка без ответственного — например, уволенного
+  // сотрудника) любой сотрудник забирает себе одной кнопкой.
+  const showTake = !overlay && !deal.owner_name && canWrite && onTakeLead;
 
   // Prevent drag/card-click from firing when interacting with action buttons.
   const stop = (e: PointerEvent | MouseEvent) => e.stopPropagation();
@@ -253,7 +253,7 @@ function DealCard({
           <span className="truncate">{deal.owner_name}</span>
         </div>
       ) : (
-        isLead && (
+        (isLead || showTake) && (
           <div className="mt-1.5 flex items-center justify-between gap-2">
             <span className="text-xs font-medium text-amber-600">Не разобран</span>
             {showTake && (
