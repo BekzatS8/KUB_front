@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Building2, User, RefreshCw, Pencil, Archive, Trash2, MessageCircle, Phone } from "lucide-react";
+import { Building2, User, RefreshCw, Pencil, Archive, Trash2, MessageCircle, Phone, UserPlus, Hand } from "lucide-react";
 import type { FunnelStage } from "@/src/models/funnel-stages.model";
 import * as FunnelStagesAPI from "@/src/api/funnel-stages.api";
 import type { FunnelBoardParams } from "@/src/api/funnel-stages.api";
@@ -82,6 +82,11 @@ interface DealActions {
   onEdit?: (deal: FunnelBoardDeal) => void;
   onArchive?: (deal: FunnelBoardDeal) => void;
   onDelete?: (deal: FunnelBoardDeal) => void;
+  // Ответственный за лид: «Взять себе» (ничей лид) и «Назначить» (админ и
+  // руководство передают лид другому сотруднику).
+  onTakeLead?: (deal: FunnelBoardDeal) => void;
+  onAssignLead?: (deal: FunnelBoardDeal) => void;
+  canAssignLeads?: boolean;
   canWrite?: boolean;
   isSales?: boolean;
   isAdmin?: boolean;
@@ -104,6 +109,9 @@ function DealCard({
   onEdit,
   onArchive,
   onDelete,
+  onTakeLead,
+  onAssignLead,
+  canAssignLeads,
   canWrite,
   isSales,
   isAdmin,
@@ -121,7 +129,11 @@ function DealCard({
   const showEdit = !overlay && !isLead && canWrite && onEdit;
   const showArchive = !overlay && !isLead && canWrite && !isSales && onArchive;
   const showDelete = !overlay && !isLead && isAdmin && onDelete;
-  const hasActions = showEdit || showArchive || showDelete;
+  const showAssign = !overlay && isLead && canAssignLeads && onAssignLead;
+  const hasActions = showEdit || showArchive || showDelete || showAssign;
+  // Ничей лид (без ответственного — например, уволенного сотрудника) любой
+  // сотрудник забирает себе одной кнопкой, не перетаскивая карточку.
+  const showTake = !overlay && isLead && !deal.owner_name && canWrite && onTakeLead;
 
   // Prevent drag/card-click from firing when interacting with action buttons.
   const stop = (e: PointerEvent | MouseEvent) => e.stopPropagation();
@@ -152,6 +164,16 @@ function DealCard({
           onPointerDown={stop}
           onClick={stop}
         >
+          {showAssign && (
+            <button
+              type="button"
+              title="Назначить ответственного"
+              className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+              onClick={() => onAssignLead!(deal)}
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+            </button>
+          )}
           {showEdit && (
             <button
               type="button"
@@ -232,8 +254,22 @@ function DealCard({
         </div>
       ) : (
         isLead && (
-          <div className="mt-1.5 text-xs font-medium text-amber-600">
-            Не разобран — перетащите, чтобы взять в работу
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-amber-600">Не разобран</span>
+            {showTake && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-600"
+                onPointerDown={stop}
+                onClick={(e) => {
+                  stop(e);
+                  onTakeLead!(deal);
+                }}
+              >
+                <Hand className="h-3 w-3" />
+                Взять себе
+              </button>
+            )}
           </div>
         )
       )}

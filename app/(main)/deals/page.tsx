@@ -86,6 +86,8 @@ import * as FeedAPI from "@/src/api/feed.api";
 import * as FunnelsAPI from "@/src/api/funnels.api";
 import { getMyPermissions } from "@/src/api/permissions.api";
 import { KanbanBoard } from "@/components/deals/kanban-board";
+import { AssignLeadDialog } from "@/components/leads/assign-lead-dialog";
+import { take_lead } from "@/src/api/leads.api";
 import { BoardOwnerFilter, BRANCH_FILTER_PREFIX } from "@/components/deals/board-owner-filter";
 import type { Funnel } from "@/src/models/funnels.model";
 import type { FunnelBoardDeal } from "@/src/models/funnel-stages.model";
@@ -951,6 +953,19 @@ export default function DealsPage() {
   const isSales = getRoleCode(user) === 'sales';
   const isManagement = getRoleCode(user) === 'management';
 
+  // Ответственный за лид на доске: «Взять себе» и «Назначить» (админ/руководство).
+  const [assignLeadCard, setAssignLeadCard] = useState<FunnelBoardDeal | null>(null);
+  const takeLeadFromBoard = async (deal: FunnelBoardDeal) => {
+    try {
+      await take_lead(deal.id);
+      toast.success(`Лид #${deal.id} теперь ваш`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || "Не удалось взять лид");
+    } finally {
+      setKanbanRefreshKey((k) => k + 1);
+    }
+  };
+
   // Роли, которые по умолчанию смотрят всё — те же, что и на бэкенде
   // (resolveBoardFilter → boardDefaultsToOwnCards).
   const seesAllCardsByDefault = isAdmin || isManagement || getRoleCode(user) === 'quality_control';
@@ -1647,6 +1662,9 @@ export default function DealsPage() {
                   isSales={isSales}
                   isAdmin={isAdmin}
                   onEdit={(deal: FunnelBoardDeal) => openEditDialog(deal)}
+                  onTakeLead={takeLeadFromBoard}
+                  onAssignLead={(deal: FunnelBoardDeal) => setAssignLeadCard(deal)}
+                  canAssignLeads={isAdmin || isManagement}
                   onArchive={(deal: FunnelBoardDeal) => {
                     setDealToArchive(deal);
                     setIsArchiveDialogOpen(true);
@@ -1667,6 +1685,15 @@ export default function DealsPage() {
           </Card>
         )
       )}
+
+      <AssignLeadDialog
+        leadId={assignLeadCard?.id ?? null}
+        leadTitle={assignLeadCard?.client_name || (assignLeadCard ? `Лид #${assignLeadCard.id}` : undefined)}
+        currentOwnerId={assignLeadCard?.owner_name ? assignLeadCard.owner_id : undefined}
+        open={!!assignLeadCard}
+        onClose={() => setAssignLeadCard(null)}
+        onAssigned={() => setKanbanRefreshKey((k) => k + 1)}
+      />
 
       {/* Filters */}
       {viewMode === "table" && (

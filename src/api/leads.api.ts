@@ -41,6 +41,28 @@ export async function assign_lead(payload: Models.Leads_Assign_lead_Request, par
   return res.data
 }
 
+// Кому можно передать лид (админ и руководство): работающие сотрудники,
+// которые видят этот лид (тот же филиал; руководство и админ — любые).
+export interface LeadAssignee {
+  id: number
+  name: string
+  role_id: number
+  branch_id?: number | null
+  is_elevated: boolean
+}
+
+export async function get_lead_assignees(leadId: number): Promise<LeadAssignee[]> {
+  const res = await api.get(`/leads/${leadId}/assignees`)
+  return res.data?.items || []
+}
+
+// «Взять себе» — лид без ответственного (или уволенного сотрудника) переходит
+// текущему пользователю. 409 — его уже взял кто-то другой.
+export async function take_lead(leadId: number): Promise<any> {
+  const res = await api.post(`/leads/${leadId}/take`, {})
+  return res.data
+}
+
 export async function update_lead_status(payload: Models.Leads_Update_lead_status_Request, params?: Record<string, any>): Promise<any> {
   const res = await api.post(`/leads/${params?.id}/status`, payload)
   return res.data

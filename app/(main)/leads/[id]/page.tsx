@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Phone, PhoneIncoming, PhoneOutgoing,
-  User, FileText, Activity, PlayCircle, RefreshCw, PhoneCall, MessageCircle,
+  User, FileText, Activity, PlayCircle, RefreshCw, PhoneCall, MessageCircle, UserPlus, Hand,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import { listFunnels } from "@/src/api/funnels.api";
 import { getLeadCalls, initiateCall } from "@/src/api/telephony.api";
 import type { TelephonyCall } from "@/src/models/telephony.model";
 import { getCurrentUser, getRoleCode } from "@/lib/auth";
+import { AssignLeadDialog } from "@/components/leads/assign-lead-dialog";
 
 // Full lead type as returned by backend
 interface Lead {
@@ -31,6 +32,10 @@ interface Lead {
   status: string;
   created_at?: string;
   owner_id: number;
+  // Имя ответственного и признак «ничей» (нет ответственного, он уволен или
+  // лид припаркован на админе) — такой лид может взять себе любой сотрудник.
+  owner_name?: string;
+  unassigned?: boolean;
   branch_id?: number;
   branch_name?: string;
   funnel_id?: number;
@@ -330,12 +335,89 @@ function OverviewSection({
             <span className="text-sm text-muted-foreground">Создан</span>
             <span className="text-sm font-medium">{formatDateTime(lead.created_at)}</span>
           </div>
+          <LeadOwnerRow lead={lead} onChanged={onChanged} />
         </div>
       </Card>
 
       {/* Перемещение лида в другую воронку (напр. вернуть ошибочно переданный
           лид) — обратная связь заказчика 26.07.2026. */}
       <LeadFunnelMove lead={lead} onMoved={onChanged} />
+    </div>
+  );
+}
+
+// LeadOwnerRow — ответственный за лид. «Взять себе» — любому, кто работает с
+// лидами, пока лид ничей; «Назначить» — админу и руководству (передать лид
+// другому сотруднику).
+function LeadOwnerRow({ lead, onChanged }: { lead: Lead; onChanged: () => void }) {
+  const { toast } = useToast();
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [taking, setTaking] = useState(false);
+  const me = getCurrentUser() as any;
+  const myId = Number(me?.id || 0);
+  const roleCode = getRoleCode(me) || "";
+  const canAssign = ["system_admin", "management"].includes(roleCode);
+  const worksWithLeads = ["system_admin", "management", "sales", "visa", "partner"].includes(roleCode);
+  const isMine = !!myId && lead.owner_id === myId;
+  const canTake = worksWithLeads && !isMine && !!lead.unassigned && !lead.is_archived;
+
+  const take = async () => {
+    setTaking(true);
+    try {
+      await leadsApi.take_lead(lead.id);
+      toast({ title: "Лид ваш", description: "Вы назначены ответственным" });
+      onChanged();
+    } catch (err: any) {
+      toast({
+        title: "Не удалось взять лид",
+        description: err?.response?.data?.message ?? err?.message ?? "Ошибка",
+        variant: "destructive",
+      });
+      onChanged();
+    } finally {
+      setTaking(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 py-1 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-1 flex-col sm:grid sm:grid-cols-[140px_1fr] gap-1 sm:gap-2">
+        <span className="text-sm text-muted-foreground">Ответственный</span>
+        {lead.owner_id && lead.owner_name && !lead.unassigned ? (
+          <span className="text-sm font-medium">
+            {lead.owner_name}
+            {isMine && <span className="ml-1 text-xs text-muted-foreground">(вы)</span>}
+          </span>
+        ) : (
+          <span className="text-sm font-medium text-amber-600">
+            Не назначен
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        {canTake && (
+          <Button size="sm" className="h-7 gap-1" onClick={take} disabled={taking}>
+            <Hand className="w-3.5 h-3.5" />
+            {taking ? "Берём…" : "Взять себе"}
+          </Button>
+        )}
+        {canAssign && !lead.is_archived && (
+          <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => setAssignOpen(true)}>
+            <UserPlus className="w-3.5 h-3.5" />
+            {lead.unassigned ? "Назначить" : "Передать"}
+          </Button>
+        )}
+      </div>
+      {canAssign && (
+        <AssignLeadDialog
+          leadId={lead.id}
+          leadTitle={lead.title}
+          currentOwnerId={lead.unassigned ? undefined : lead.owner_id}
+          open={assignOpen}
+          onClose={() => setAssignOpen(false)}
+          onAssigned={onChanged}
+        />
+      )}
     </div>
   );
 }
