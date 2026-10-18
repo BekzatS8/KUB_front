@@ -87,6 +87,7 @@ import * as FunnelsAPI from "@/src/api/funnels.api";
 import { getMyPermissions } from "@/src/api/permissions.api";
 import { KanbanBoard } from "@/components/deals/kanban-board";
 import { AssignLeadDialog } from "@/components/leads/assign-lead-dialog";
+import { RejectedLeads } from "@/components/leads/rejected-leads";
 import { take_lead } from "@/src/api/leads.api";
 import { take_deal } from "@/src/api/deals.api";
 import { BoardOwnerFilter, BRANCH_FILTER_PREFIX } from "@/components/deals/board-owner-filter";
@@ -237,7 +238,8 @@ export default function DealsPage() {
   const leadSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Kanban view state
-  const [viewMode, setViewMode] = useState<"kanban" | "table">("table");
+  // rejected — список отказников (лиды на этапе отказа уходят с доски сюда).
+  const [viewMode, setViewMode] = useState<"kanban" | "table" | "rejected">("table");
   // Фильтры канбана (обратная связь заказчика 17.09.2026): по умолчанию менеджер
   // видит свои карточки и новые «ничьи» лиды; «Все лиды филиала» показывает всё,
   // что доступно по филиалу; отдельный выбор менеджера — «сортировка по
@@ -1484,16 +1486,13 @@ export default function DealsPage() {
           )}
           {/* Быстрые списки: Отказники — повторная обработка отказов;
               Архив — завершённые «Работа выполнена» (ТЗ п.1.5) */}
+          {/* Отказники — лиды, ушедшие на этап отказа: с доски они убираются,
+              здесь их берут себе и возвращают в работу. */}
           <Button
-            variant="outline"
+            variant={viewMode === "rejected" ? "default" : "outline"}
             size="sm"
             className="h-8"
-            onClick={() => {
-              setViewMode("table");
-              setArchiveFilter("active");
-              setStatusFilter("all");
-              setStatusGroupFilter("closed");
-            }}
+            onClick={() => setViewMode("rejected")}
           >
             Отказники
           </Button>
@@ -1696,6 +1695,8 @@ export default function DealsPage() {
         onClose={() => setAssignLeadCard(null)}
         onAssigned={() => setKanbanRefreshKey((k) => k + 1)}
       />
+
+      {viewMode === "rejected" && <RejectedLeads />}
 
       {/* Filters */}
       {viewMode === "table" && (

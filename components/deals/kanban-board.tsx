@@ -356,7 +356,9 @@ function Column({ column, onDealClick, canMove, stages, onMoveToStage, ...action
         )}
       >
         {column.deals.length === 0 ? (
-          <div className="py-6 text-center text-xs text-gray-400">Нет сделок</div>
+          <div className="py-6 text-center text-xs text-gray-400">
+            {stage?.is_rejection ? "Отказные лиды уходят в «Отказники»" : "Нет сделок"}
+          </div>
         ) : (
           column.deals.map((deal) => (
             <DealCard
