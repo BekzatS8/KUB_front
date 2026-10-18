@@ -287,6 +287,28 @@ export interface WazzupInstagramConnect {
   username?: string;
 }
 
+// Ключи приложения Meta (вход через Facebook) — вводит администратор в CRM,
+// один раз на всю CRM. Секрет сервер не возвращает: has_secret — задан ли он.
+export interface MetaAppSettings {
+  configured: boolean;
+  app_id: string;
+  has_secret: boolean;
+  // Адрес возврата — вписать в «Valid OAuth Redirect URIs» приложения.
+  redirect_url: string;
+  source?: 'crm' | 'server';
+}
+
+export const getMetaAppSettings = async (): Promise<MetaAppSettings> => {
+  const response = await api.get('/integrations/wazzup/instagram/settings');
+  return response.data;
+};
+
+// Пустой app_secret — оставить сохранённый. Сервер проверяет ключи в Facebook.
+export const saveMetaAppSettings = async (appId: string, appSecret: string): Promise<MetaAppSettings> => {
+  const response = await api.put('/integrations/wazzup/instagram/settings', { app_id: appId, app_secret: appSecret });
+  return response.data;
+};
+
 export const startWazzupInstagramLogin = async (): Promise<{ auth_url: string }> => {
   const response = await api.post('/integrations/wazzup/instagram/login', {});
   return response.data;
