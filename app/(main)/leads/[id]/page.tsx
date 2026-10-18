@@ -19,6 +19,7 @@ import { getLeadCalls, initiateCall } from "@/src/api/telephony.api";
 import type { TelephonyCall } from "@/src/models/telephony.model";
 import { getCurrentUser, getRoleCode } from "@/lib/auth";
 import { AssignLeadDialog } from "@/components/leads/assign-lead-dialog";
+import { useMe } from "@/lib/use-role-code";
 
 // Full lead type as returned by backend
 interface Lead {
@@ -353,9 +354,7 @@ function LeadOwnerRow({ lead, onChanged }: { lead: Lead; onChanged: () => void }
   const { toast } = useToast();
   const [assignOpen, setAssignOpen] = useState(false);
   const [taking, setTaking] = useState(false);
-  const me = getCurrentUser() as any;
-  const myId = Number(me?.id || 0);
-  const roleCode = getRoleCode(me) || "";
+  const { id: myId, roleCode } = useMe();
   const canAssign = ["system_admin", "management"].includes(roleCode);
   const worksWithLeads = ["system_admin", "management", "sales", "visa", "partner"].includes(roleCode);
   const isMine = !!myId && lead.owner_id === myId;

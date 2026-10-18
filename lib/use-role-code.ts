@@ -27,3 +27,27 @@ export function useRoleCode(): string | undefined {
 
   return roleCode
 }
+
+// id и роль текущего пользователя с сервера (/users/me). Копия в
+// localStorage бывает пустой или устаревшей — тогда кнопки, завязанные на
+// роль («Взять себе», «Назначить»), молча пропадали.
+export function useMe(): { id: number; roleCode: string } {
+  const [me, setMe] = useState(() => {
+    const local = getCurrentUser() as any
+    return { id: Number(local?.id || 0), roleCode: getRoleCode(local) || "" }
+  })
+
+  useEffect(() => {
+    let cancelled = false
+    getMe()
+      .then((u: any) => {
+        if (!cancelled && u) setMe({ id: Number(u.id || 0), roleCode: getRoleCode(u) || "" })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return me
+}
