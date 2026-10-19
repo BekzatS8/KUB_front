@@ -39,6 +39,7 @@ import type { Auth_Login_Response } from "@/src/models/Auth.model";
 import type { PermissionsMe } from "@/src/models/permissions.model";
 import { getRoleName } from "@/src/models/roles.enum";
 import { WAZZUP_CHILD_VISIBLE } from "@/lib/features";
+import { getLogoRoute } from "@/lib/auth";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -472,11 +473,14 @@ export function RoleBasedSidebar({
           <div className={cn("flex items-center gap-3", isCollapsed && "lg:hidden")}>
             {/* Логотип Ziperion Business Platform. Файл лежит в
                 KUB_front/public/ziperion-logo.png */}
-            <img
-              src="/ziperion-logo.png"
-              alt="Ziperion Business Platform"
-              className="h-9 w-auto max-w-[180px] object-contain"
-            />
+            {/* Логотип ведёт на «Лиды» (у кадров и юристов — их стартовая). */}
+            <Link href={getLogoRoute(roleCode)} title="Лиды" onClick={onMobileClose}>
+              <img
+                src="/ziperion-logo.png"
+                alt="Ziperion Business Platform"
+                className="h-9 w-auto max-w-[180px] object-contain"
+              />
+            </Link>
           </div>
           {/* Мобильный: кнопка закрытия drawer */}
           <button

@@ -162,6 +162,16 @@ export function getLandingRoute(user?: any): string {
   }
 }
 
+// Куда ведёт логотип: на «Лиды» (воронка лидов) — у всех, у кого они есть.
+// У кадров и юристов лидов нет — им их стартовая страница.
+export function getLogoRoute(roleCode?: string): string {
+  const role = normalizeRoleCode(roleCode)
+  if (role === 'hr' || role === 'legal') {
+    return getLandingRoute({ role })
+  }
+  return '/deals'
+}
+
 // Функция для проверки прав доступа
 export function hasPermission(userRole: string | undefined, requiredPermissions: string[]): boolean {
   userRole = normalizeRoleCode(userRole)

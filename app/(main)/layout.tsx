@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import { RoleBasedSidebar } from "@/components/role-based-sidebar";
 import { TaskNotifications } from "@/components/task-notifications";
 import { NotificationSounds } from "@/components/notification-sounds";
 import { FeedBell } from "@/components/feed-bell";
+import { getLogoRoute } from "@/lib/auth";
+import { useRoleCode } from "@/lib/use-role-code";
 
 export default function MainLayout({
   children,
@@ -15,6 +18,7 @@ export default function MainLayout({
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+  const roleCode = useRoleCode();
 
   // Закрываем мобильное меню при переходе на другую страницу.
   useEffect(() => {
@@ -44,11 +48,14 @@ export default function MainLayout({
           >
             <Menu className="h-5 w-5" />
           </button>
-          <img
-            src="/ziperion-logo.png"
-            alt="Ziperion Business Platform"
-            className="h-7 w-auto max-w-[150px] object-contain"
-          />
+          {/* Логотип ведёт на «Лиды» (у кадров и юристов — их стартовая). */}
+          <Link href={getLogoRoute(roleCode)} title="Лиды">
+            <img
+              src="/ziperion-logo.png"
+              alt="Ziperion Business Platform"
+              className="h-7 w-auto max-w-[150px] object-contain"
+            />
+          </Link>
         </header>
 
         <main className="custom-scrollbar relative flex-1 overflow-y-auto bg-gradient-to-br from-transparent to-white/50">
