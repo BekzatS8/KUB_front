@@ -83,12 +83,21 @@ export async function createDriveFolder(parentId: number | null, name: string): 
   return res.data
 }
 
+// Файлы больше этого размера уходят частями: nginx перед сайтом и API
+// пропускает запрос до ~50 МБ, прокси Next.js — до 10 МБ. Кусок по 8 МБ
+// проходит везде, поэтому размер файла ограничен только хранилищем
+// (у администратора хранилища — ничем).
+const DRIVE_CHUNK_THRESHOLD = 8 * 1024 * 1024
+
 export async function uploadDriveFile(
   parentId: number | null,
   file: File,
   onProgress?: (loaded: number, total: number) => void,
   signal?: AbortSignal,
 ): Promise<DriveNode> {
+  if (file.size > DRIVE_CHUNK_THRESHOLD) {
+    return uploadDriveFileChunked(parentId, file, onProgress, signal)
+  }
   const form = new FormData()
   if (parentId) form.append('parent_id', String(parentId))
   form.append('file', file, file.name)
@@ -100,6 +109,62 @@ export async function uploadDriveFile(
     onUploadProgress: (e) => onProgress?.(e.loaded, e.total ?? file.size),
   })
   return res.data
+}
+
+// Загрузка частями: начало → куски по порядку → завершение. Оборвавшийся
+// кусок повторяется до 3 раз; при отмене сервер удаляет недогруженное.
+async function uploadDriveFileChunked(
+  parentId: number | null,
+  file: File,
+  onProgress?: (loaded: number, total: number) => void,
+  signal?: AbortSignal,
+): Promise<DriveNode> {
+  const start = await api.post('/api/v1/drive/uploads', {
+    parent_id: parentId,
+    name: file.name,
+    size: file.size,
+    content_type: file.type || '',
+  }, { signal })
+  const uploadId: string = start.data.upload_id
+  const chunkSize: number = Number(start.data.chunk_size) || DRIVE_CHUNK_THRESHOLD
+
+  try {
+    let offset = 0
+    while (offset < file.size) {
+      const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size))
+      let attempt = 0
+      for (;;) {
+        try {
+          const res = await api.put(`/api/v1/drive/uploads/${uploadId}`, chunk, {
+            params: { offset },
+            headers: { 'Content-Type': 'application/octet-stream' },
+            timeout: 0,
+            signal,
+            onUploadProgress: (e) => onProgress?.(offset + (e.loaded || 0), file.size),
+          })
+          offset = Number(res.data?.received ?? offset + chunk.size)
+          break
+        } catch (err: any) {
+          if (signal?.aborted) throw err
+          // Сервер уже принял больше (ответ потерялся) — продолжаем с его позиции.
+          if (err?.response?.status === 409 && typeof err.response.data?.received === 'number') {
+            offset = err.response.data.received
+            break
+          }
+          const status = err?.response?.status
+          const retriable = !status || status >= 500
+          if (!retriable || ++attempt >= 3) throw err
+          await new Promise((r) => setTimeout(r, 1000 * attempt))
+        }
+      }
+      onProgress?.(offset, file.size)
+    }
+    const done = await api.post(`/api/v1/drive/uploads/${uploadId}/complete`, {}, { timeout: 0, signal })
+    return done.data
+  } catch (err) {
+    api.delete(`/api/v1/drive/uploads/${uploadId}`).catch(() => {})
+    throw err
+  }
 }
 
 export async function renameDriveNode(id: number, name: string): Promise<DriveNode> {
