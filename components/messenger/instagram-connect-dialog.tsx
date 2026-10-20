@@ -63,6 +63,13 @@ export function InstagramConnectDialog({
   }, [open])
 
   const showSetup = !!settings && (!settings.configured || editing)
+  const redirectHost = (() => {
+    try {
+      return settings?.redirect_url ? new URL(settings.redirect_url).host : ""
+    } catch {
+      return ""
+    }
+  })()
   const busy = saving || loggingIn
 
   const copyRedirect = async () => {
@@ -133,21 +140,25 @@ export function InstagramConnectDialog({
               <li>
                 Откройте{" "}
                 <a
-                  href="https://developers.facebook.com/apps"
+                  href="https://developers.facebook.com/apps/creation/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-blue-600 hover:underline"
                 >
-                  developers.facebook.com/apps
+                  developers.facebook.com/apps/creation
                   <ExternalLink className="h-3 w-3" />
                 </a>{" "}
-                → «Создать приложение», тип <b>«Компания»</b> (Business).
+                под аккаунтом Facebook с доступом к странице VISARIO. Сценарий —{" "}
+                <b>«Взаимодействие с клиентами в Messenger from Meta»</b>, компания — бизнес-портфолио{" "}
+                <b>VISARIO</b>.
               </li>
               <li>
-                Добавьте продукт <b>«Вход через Facebook для бизнеса»</b> (Facebook Login for Business).
+                «Сценарии использования» → «Настроить» → «Разрешения»: добавьте{" "}
+                <b>instagram_basic</b>, <b>instagram_manage_messages</b>, <b>pages_read_engagement</b>.
               </li>
               <li>
-                В его настройках, в поле <b>«Действительные URI перенаправления для OAuth»</b>, укажите:
+                «Вход через Facebook для компаний» → «Настройки», поле{" "}
+                <b>«Действительные URI перенаправления для OAuth»</b>:
                 <div className="mt-1.5 flex gap-2">
                   <Input readOnly value={settings.redirect_url} className="font-mono text-xs" />
                   <Button type="button" variant="outline" size="icon" onClick={copyRedirect} title="Скопировать">
@@ -156,8 +167,9 @@ export function InstagramConnectDialog({
                 </div>
               </li>
               <li>
-                В «Настройки приложения → Основное» скопируйте <b>ID приложения</b> и{" "}
-                <b>Секрет приложения</b> сюда:
+                «Настройки приложения → Основное»: в «Домены приложений» впишите{" "}
+                <b>{redirectHost || "kubcrm.kz"}</b>, затем скопируйте сюда <b>ID приложения</b> (число) и{" "}
+                <b>Секрет приложения</b> (кнопка «Показать»). Не логин и пароль от Facebook!
               </li>
             </ol>
 
