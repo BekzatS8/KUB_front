@@ -109,7 +109,11 @@ function InstagramCallback() {
               </p>
               <p className="text-xs">
                 Канал появится в группе VISARIO
-                {result.state && result.state !== "active" ? ` (сейчас статус «${result.state}» — Wazzup ещё запускает его)` : ""}.
+                {result.state === "disabled"
+                  ? ", но Wazzup вернул статус «disabled» — авторизация не прошла. Перешлите поддержке Wazzup данные запроса ниже"
+                  : result.state && result.state !== "active"
+                    ? ` (сейчас статус «${result.state}» — Wazzup ещё запускает его)`
+                    : ""}.
                 Назначьте ему филиал и доступ к чатам, как другим номерам.
               </p>
             </div>
