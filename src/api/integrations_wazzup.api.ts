@@ -290,6 +290,11 @@ export interface WazzupInstagramConnect {
   auth_url?: string;
   // Ответ Wazzup, если канал создан без ссылки и не активен.
   provider_response?: string;
+  // create — новый канал, reinit — переавторизация существующего.
+  action?: 'create' | 'reinit';
+  // Для поддержки Wazzup: время запроса по Москве и сам запрос (токен скрыт).
+  requested_at_msk?: string;
+  request?: string;
 }
 
 // Ключи приложения Meta (вход через Facebook) — вводит администратор в CRM,

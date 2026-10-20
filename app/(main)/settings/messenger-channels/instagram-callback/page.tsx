@@ -104,7 +104,8 @@ function InstagramCallback() {
             <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">
               <p className="flex items-center gap-2 font-medium">
                 <CheckCircle2 className="h-4 w-4" />
-                Instagram {result.username ? `@${result.username}` : ""} подключён
+                Instagram {result.username ? `@${result.username}` : ""}{" "}
+                {result.action === "reinit" ? "переавторизован" : "подключён"}
               </p>
               <p className="text-xs">
                 Канал появится в группе VISARIO
@@ -125,6 +126,20 @@ function InstagramCallback() {
                 {result.provider_response}
               </pre>
             </div>
+          )}
+
+          {result?.requested_at_msk && (
+            <details className="rounded-lg border border-slate-200 p-3 text-xs text-slate-600">
+              <summary className="cursor-pointer">
+                Для поддержки Wazzup: запрос {result.requested_at_msk}
+              </summary>
+              {result.channel_id && <p className="mt-2">Канал: {result.channel_id}</p>}
+              {result.request && (
+                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-100 p-2">
+                  {result.request}
+                </pre>
+              )}
+            </details>
           )}
 
           {!loading && !result && !error && accounts.length === 0 && (
