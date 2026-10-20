@@ -10,6 +10,14 @@ const nextConfig = {
     unoptimized: true,
   },
 
+  experimental: {
+    // В проекте есть middleware.ts — с ним Next.js буферизует тело каждого
+    // запроса и по умолчанию обрезает его до 10 МБ, в том числе на прокси
+    // /api-proxy. Из-за этого файлы больше 10 МБ не загружались в хранилище
+    // (500 «Internal Server Error»). Лимит на файл держит бэкенд (2 ГБ).
+    middlewareClientMaxBodySize: '2100mb',
+  },
+
   async redirects() {
     return [
       {
