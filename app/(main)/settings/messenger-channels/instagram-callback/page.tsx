@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { CheckCircle2, Instagram, RefreshCw } from "lucide-react"
+import { CheckCircle2, ExternalLink, Instagram, RefreshCw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -84,7 +84,23 @@ function InstagramCallback() {
             </div>
           )}
 
-          {result && (
+          {result?.auth_url && (
+            <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-blue-900">
+              <p className="font-medium">Остался последний шаг — подтвердить подключение в Wazzup</p>
+              <p className="text-xs">
+                Канал Instagram создан. Откройте ссылку, войдите в Facebook тем же аккаунтом и выберите
+                страницу VISARIO и Instagram. Потом вернитесь сюда и откройте каналы мессенджера.
+              </p>
+              <Button asChild className="w-full">
+                <a href={result.auth_url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Завершить подключение в Wazzup
+                </a>
+              </Button>
+            </div>
+          )}
+
+          {result && !result.auth_url && !result.provider_response && (
             <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">
               <p className="flex items-center gap-2 font-medium">
                 <CheckCircle2 className="h-4 w-4" />
@@ -95,6 +111,19 @@ function InstagramCallback() {
                 {result.state && result.state !== "active" ? ` (сейчас статус «${result.state}» — Wazzup ещё запускает его)` : ""}.
                 Назначьте ему филиал и доступ к чатам, как другим номерам.
               </p>
+            </div>
+          )}
+
+          {result && !result.auth_url && result.provider_response && (
+            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">
+              <p className="font-medium">
+                Wazzup создал канал{result.channel_id ? ` (${result.channel_id})` : ""}
+                {result.state ? `, статус «${result.state}»` : ""}, но не вернул ссылку для завершения.
+              </p>
+              <p className="text-xs">Перешлите разработчику ответ Wazzup:</p>
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-white/70 p-2 text-xs">
+                {result.provider_response}
+              </pre>
             </div>
           )}
 

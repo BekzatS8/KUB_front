@@ -285,6 +285,11 @@ export interface WazzupInstagramConnect {
   channel_id?: string;
   state?: string;
   username?: string;
+  // Wazzup просит завершить подключение у себя (вход в Facebook через его
+  // приложение) — открыть эту ссылку.
+  auth_url?: string;
+  // Ответ Wazzup, если канал создан без ссылки и не активен.
+  provider_response?: string;
 }
 
 // Ключи приложения Meta (вход через Facebook) — вводит администратор в CRM,
