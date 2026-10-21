@@ -559,6 +559,16 @@ export default function MessengerChannelsPage() {
 
       <InstagramConnectDialog
         open={instagramOpen}
+        reauthChannelId={
+          // Неработающий канал Instagram дочернего аккаунта — переавторизуем
+          // его, а не создаём ещё один.
+          channels.find(
+            (ch) =>
+              channelAccount(ch) === "child" &&
+              ["instagram", "instapi"].includes(String(ch.transport || "").toLowerCase()) &&
+              String(ch.status || "").toLowerCase() !== "active",
+          )?.channel_id
+        }
         onClose={() => {
           setInstagramOpen(false)
           load() // подтянуть созданный канал
