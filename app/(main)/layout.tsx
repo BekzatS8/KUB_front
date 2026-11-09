@@ -10,6 +10,8 @@ import { NotificationSounds } from "@/components/notification-sounds";
 import { FeedBell } from "@/components/feed-bell";
 import { getLogoRoute } from "@/lib/auth";
 import { useRoleCode } from "@/lib/use-role-code";
+import { canAccessPath } from "@/lib/route-access";
+import { ShieldX } from "lucide-react";
 
 export default function MainLayout({
   children,
@@ -59,7 +61,21 @@ export default function MainLayout({
         </header>
 
         <main className="custom-scrollbar relative flex-1 overflow-y-auto bg-gradient-to-br from-transparent to-white/50">
-          <div className="min-h-full p-3 sm:p-4 lg:p-6">{children}</div>
+          <div className="min-h-full p-3 sm:p-4 lg:p-6">
+            {canAccessPath(roleCode, pathname || "") ? (
+              children
+            ) : (
+              // Прямая ссылка на закрытый для роли раздел (ТЗ «доработки CRM КУБ», п.5)
+              <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
+                <ShieldX className="mb-3 h-12 w-12 text-slate-300" />
+                <h1 className="text-lg font-semibold text-slate-800">Нет доступа</h1>
+                <p className="mt-1 text-sm text-slate-500">Этот раздел недоступен для вашей роли.</p>
+                <Link href={getLogoRoute(roleCode)} className="mt-4 text-sm font-medium text-blue-600 hover:underline">
+                  На главную
+                </Link>
+              </div>
+            )}
+          </div>
         </main>
       </div>
 

@@ -114,6 +114,7 @@ export function normalizeRoleCode(roleCode?: string | null): string | undefined 
     partner: 'partner',
     hr: 'hr',
     legal: 'legal',
+    operator: 'operator',
   }
 
   return codeMapping[normalized] || normalized
@@ -130,6 +131,7 @@ export function getRoleKeyFromId(roleId?: number | string | null): string {
     70: 'partner',
     80: 'hr',
     90: 'legal',
+    95: 'operator', // оператор колл-центра (ТЗ «доработки CRM КУБ», п.5)
   }
   return roleMapping[Number(roleId || 0)] || 'user'
 }
@@ -156,6 +158,8 @@ export function getLandingRoute(user?: any): string {
       return '/users' // кадры работают с сотрудниками
     case 'legal':
       return '/documents' // у юриста нет доступа в Лиды
+    case 'operator':
+      return '/leads' // колл-центр работает со списком лидов, без воронок
     default:
       // sales / visa / partner / quality_control — все с доступом в Лиды
       return '/deals'
@@ -166,7 +170,7 @@ export function getLandingRoute(user?: any): string {
 // У кадров и юристов лидов нет — им их стартовая страница.
 export function getLogoRoute(roleCode?: string): string {
   const role = normalizeRoleCode(roleCode)
-  if (role === 'hr' || role === 'legal') {
+  if (role === 'hr' || role === 'legal' || role === 'operator') {
     return getLandingRoute({ role })
   }
   return '/deals'

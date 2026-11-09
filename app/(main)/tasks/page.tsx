@@ -109,8 +109,8 @@ import {
   unarchive_task,
   restore_task,
   purge_task,
+  list_task_assignees,
 } from "@/src/api/tasks.api"
-import { listUsers } from "@/src/api/users.api"
 import * as BranchesAPI from "@/src/api/branches.api"
 
 // ─── Types & Constants ───────────────────────────────────────────
@@ -171,6 +171,24 @@ function fromApiDateTime(value?: string | null): string {
 
 // ─── Combobox Component ──────────────────────────────────────────
 
+// Опция выбора; group — заголовок группы (у исполнителей — филиал).
+type ComboOption = { value: string; label: string; group?: string }
+
+// groupOptions раскладывает опции по группам, сохраняя порядок появления.
+function groupOptions(options: ComboOption[]): [string, ComboOption[]][] {
+  const order: string[] = []
+  const byGroup = new Map<string, ComboOption[]>()
+  for (const o of options) {
+    const g = o.group || ""
+    if (!byGroup.has(g)) {
+      byGroup.set(g, [])
+      order.push(g)
+    }
+    byGroup.get(g)!.push(o)
+  }
+  return order.map((g) => [g, byGroup.get(g)!])
+}
+
 // useWheelScrollRef возвращает callback-ref для скроллируемого контейнера
 // (например, CommandList) внутри поповера, который порталится наружу диалога.
 // Блокировка прокрутки диалога (react-remove-scroll) вешает wheel-обработчик на
@@ -208,7 +226,7 @@ function ComboboxSelect({
 }: {
   value: string | number
   onChange: (value: string) => void
-  options: { value: string; label: string }[]
+  options: ComboOption[]
   placeholder?: string
   searchPlaceholder?: string
   emptyText?: string
@@ -243,26 +261,29 @@ function ComboboxSelect({
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList ref={listRef}>
             <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup>
-              {options.map((option) => (
-                <CommandItem
-                  key={option.value}
-                  value={option.label}
-                  onSelect={() => {
-                    onChange(option.value)
-                    setOpen(false)
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value?.toString() === option.value ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  {option.label}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            {groupOptions(options).map(([group, items]) => (
+              <CommandGroup key={group || "_"} heading={group || undefined}>
+                {items.map((option) => (
+                  <CommandItem
+                    key={option.value}
+                    // value уникален: у тёзок одинаковые подписи, и cmdk путал их
+                    value={`${option.label} ${option.group || ""} #${option.value}`}
+                    onSelect={() => {
+                      onChange(option.value)
+                      setOpen(false)
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value?.toString() === option.value ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {option.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
           </CommandList>
         </Command>
       </PopoverContent>
@@ -283,7 +304,7 @@ function MultiComboboxSelect({
 }: {
   values: string[]
   onChange: (values: string[]) => void
-  options: { value: string; label: string }[]
+  options: ComboOption[]
   placeholder?: string
   searchPlaceholder?: string
   emptyText?: string
@@ -291,6 +312,11 @@ function MultiComboboxSelect({
 }) {
   const [open, setOpen] = useState(false)
   const listRef = useWheelScrollRef()
+  // Фильтр по филиалу внутри списка (ТЗ «доработки CRM КУБ», п.11 — «выбирать
+  // по филиалам»). Пустая строка — все филиалы.
+  const [groupFilter, setGroupFilter] = useState("")
+  const groups = Array.from(new Set(options.map((o) => o.group || "").filter(Boolean)))
+  const visible = groupFilter ? options.filter((o) => (o.group || "") === groupFilter) : options
 
   const toggle = (val: string) => {
     if (values.includes(val)) {
@@ -326,31 +352,57 @@ function MultiComboboxSelect({
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
+          {groups.length > 1 && (
+            <div className="flex flex-wrap gap-1 border-b px-2 py-1.5">
+              {["", ...groups].map((g) => (
+                <button
+                  key={g || "_all"}
+                  type="button"
+                  onClick={() => setGroupFilter(g)}
+                  className={cn(
+                    "rounded-md border px-2 py-0.5 text-xs",
+                    groupFilter === g ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted"
+                  )}
+                >
+                  {g || "Все филиалы"}
+                </button>
+              ))}
+            </div>
+          )}
           <CommandList ref={listRef}>
             <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup>
-              {options.map((option) => (
-                <CommandItem
-                  key={option.value}
-                  value={option.label}
-                  onSelect={() => toggle(option.value)}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      values.includes(option.value) ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  {option.label}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            {groupOptions(visible).map(([group, items]) => (
+              <CommandGroup key={group || "_"} heading={group || undefined}>
+                {items.map((option) => (
+                  <CommandItem
+                    key={option.value}
+                    value={`${option.label} ${option.group || ""} #${option.value}`}
+                    onSelect={() => toggle(option.value)}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        values.includes(option.value) ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {option.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
           </CommandList>
         </Command>
       </PopoverContent>
     </Popover>
   )
 }
+
+// Вкладки списка задач: активные, архив, корзина.
+const TASK_TABS: [ArchiveFilterValue, string][] = [
+  ["active", "Активные"],
+  ["archived", "Архив"],
+  ["deleted", "Корзина"],
+]
 
 // ─── Main Page ───────────────────────────────────────────────────
 
@@ -385,9 +437,12 @@ export default function TasksPage() {
   const [canWrite, setCanWrite] = useState(false)
 
   // Check if user has elevated role (leadership, control, system_admin)
+  // Руководство, ОКК и админ видят задачи нескольких филиалов — им нужен
+  // фильтр по филиалу. getRoleCode отдаёт «management»/«quality_control», а
+  // старая проверка ждала «leadership»/«control» — фильтр видел только админ.
   const isElevatedRole = () => {
     const roleCode = getRoleCode(user) || getRoleCode(currentUser);
-    return roleCode === 'leadership' || roleCode === 'control' || roleCode === 'system_admin';
+    return roleCode === 'management' || roleCode === 'quality_control' || roleCode === 'system_admin';
   };
 
   // Dialog states
@@ -674,6 +729,13 @@ export default function TasksPage() {
   };
 
   const isAdmin = getRoleCode(user) === 'system_admin' || getRoleCode(currentUser) === 'system_admin';
+  const myRole = getRoleCode(user) || getRoleCode(currentUser);
+  const myId = Number(user?.id || currentUser?.id || 0);
+  // В корзину и обратно — админ/руководство любую, остальные — поставленную
+  // ими самими (как services.CanTrashTask на бэке). Навсегда — только админ.
+  const canTrash = (task: any) =>
+    myRole !== 'quality_control' &&
+    (isAdmin || myRole === 'management' || (myId > 0 && Number(task?.creator_id) === myId));
 
   const stats = {
     total: tasks.length,
@@ -690,7 +752,7 @@ export default function TasksPage() {
   }
 
   const getUserLabel = (userId: string | number) => {
-    const user = users.find((u) => u.id.toString() === userId.toString())
+    const user = users.find((u) => String(u.id) === String(userId))
     return user ? formatUserName(user) : "Неизвестен"
   }
 
@@ -708,11 +770,20 @@ export default function TasksPage() {
     return ids.map((id) => getUserLabel(id)).join(", ")
   }
 
-  // Опции исполнителей для селектов
-  const assigneeOptions = users.map((u) => ({
-    value: u.id.toString(),
+  // Опции сотрудников, сгруппированные по филиалам (ТЗ п.11). Для фильтров —
+  // все сотрудники; для назначения исполнителя — только те, кого можно назначить.
+  const userOptions = users.map((u) => ({
+    value: String(u.id),
     label: formatUserName(u),
+    group: u.branch_name || "Без филиала",
   }))
+  const assigneeOptions = users
+    .filter((u) => u.assignable !== false)
+    .map((u) => ({
+      value: String(u.id),
+      label: formatUserName(u),
+      group: u.branch_name || "Без филиала",
+    }))
 
   const getEntityLabel = (entityId: string, entityType: string) => {
     if (entityType === "deal") {
@@ -904,37 +975,26 @@ export default function TasksPage() {
         
         console.log('About to load data with userData:', userData);
 
-        // Load users
+        // Сотрудники для задач — один справочник всех филиалов с бэка
+        // (/tasks/assignees). Раньше брались первые 10 из /users плюс текущий
+        // пользователь: отсюда «Админ» дважды и «только один филиал» (ТЗ п.11).
         try {
-          console.log('Loading users for user role:', userData?.role);
-          const res = await listUsers()
-          const usersData = Array.isArray(res) ? res : (res as any)?.data || []
-          console.log('Users API response:', res);
-          console.log('Processed usersData:', usersData);
-          
-          // Always include current user in performers list
-          let finalUsers = Array.isArray(usersData) ? usersData : [];
-          if (userData && !finalUsers.find(u => u.id === userData.id)) {
-            finalUsers = [userData, ...finalUsers];
-            console.log('Added current user to performers list:', userData);
+          const res = await list_task_assignees()
+          const seen = new Set<number>()
+          const directory: any[] = res.items
+            .filter((u) => {
+              if (seen.has(Number(u.id))) return false
+              seen.add(Number(u.id))
+              return true
+            })
+            .map((u) => ({ ...u, id: Number(u.id), full_name: u.name }))
+          if (userData && !seen.has(Number(userData.id))) {
+            directory.unshift({ ...userData, id: Number(userData.id), assignable: true })
           }
-          
-          setUsers(finalUsers)
+          setUsers(directory)
         } catch (err: any) {
-          // Handle 403 errors gracefully - always include current user
-          if (err?.response?.status === 403) {
-            console.log('403 error loading users for tasks, including current user only');
-            const fallbackUsers = userData ? [userData] : [];
-            console.log('Fallback users (current user only):', fallbackUsers);
-            setUsers(fallbackUsers);
-          } else {
-            console.error("Error loading users:", err)
-            // Still try to include current user
-            if (userData) {
-              setUsers([userData]);
-              console.log('Error loading users, but included current user:', userData);
-            }
-          }
+          console.error("Error loading task assignees:", err)
+          if (userData) setUsers([{ ...userData, id: Number(userData.id), assignable: true }])
         }
 
         // Load deals - use role-appropriate endpoint for sales users
@@ -982,12 +1042,12 @@ export default function TasksPage() {
     if (currentUser) {
       fetchTasks();
     }
-  }, [currentPage, statusFilter, statusGroupFilter, assigneeIdFilter, creatorIdFilter, entityIdFilter, entityTypeFilter, archiveFilter, sortBy, sortOrder, currentUser])
+  }, [currentPage, statusFilter, statusGroupFilter, assigneeIdFilter, creatorIdFilter, entityIdFilter, entityTypeFilter, archiveFilter, sortBy, sortOrder, branchFilter, currentUser])
 
   // Update URL when filters change
   useEffect(() => {
     updateURL();
-  }, [statusFilter, statusGroupFilter, assigneeIdFilter, creatorIdFilter, entityIdFilter, entityTypeFilter, archiveFilter, sortBy, sortOrder]);
+  }, [statusFilter, statusGroupFilter, assigneeIdFilter, creatorIdFilter, entityIdFilter, entityTypeFilter, archiveFilter, sortBy, sortOrder, branchFilter]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1134,7 +1194,7 @@ export default function TasksPage() {
                     <ArchiveFilter
                       value={archiveFilter}
                       onChange={setArchiveFilter}
-                      showTrash={isAdmin}
+                      showTrash
                     />
                   </div>
                   <div className="w-full sm:w-48 overflow-visible">
@@ -1176,7 +1236,7 @@ export default function TasksPage() {
                       placeholder="Исполнитель"
                       searchPlaceholder="Поиск пользователя..."
                       emptyText="Пользователь не найден"
-                      options={assigneeOptions}
+                      options={userOptions}
                     />
                   </div>
                   <div className="w-full sm:w-48 overflow-visible">
@@ -1186,7 +1246,7 @@ export default function TasksPage() {
                       placeholder="Создатель"
                       searchPlaceholder="Поиск пользователя..."
                       emptyText="Пользователь не найден"
-                      options={assigneeOptions}
+                      options={userOptions}
                     />
                   </div>
                   <div className="w-full sm:w-48 overflow-visible">
@@ -1237,8 +1297,41 @@ export default function TasksPage() {
 
       {/* Tasks Table */}
       <Card className="mx-6 mb-6">
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Список задач</CardTitle>
+          {/* Активные / Архив / Корзина — на виду (ТЗ «доработки CRM КУБ», п.11):
+              закрытые и просроченные задачи уходят в архив сами, удалённые —
+              в корзину. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-lg border p-0.5">
+              {TASK_TABS.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setArchiveFilter(value)}
+                  className={cn(
+                    "rounded-md px-3 py-1 text-sm",
+                    archiveFilter === value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {isElevatedRole() && availableBranches.length > 1 && (
+              <div className="w-48">
+                <CustomSelect
+                  value={branchFilter ? String(branchFilter) : ""}
+                  onChange={(val) => setBranchFilter(val ? Number(val) : undefined)}
+                  placeholder="Все филиалы"
+                  options={[
+                    { value: "", label: "Все филиалы" },
+                    ...availableBranches.map((b) => ({ value: String(b.id), label: b.name })),
+                  ]}
+                />
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {!tasks || tasks.length === 0 ? (
@@ -1286,6 +1379,9 @@ export default function TasksPage() {
                           <div className="break-words font-medium leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
                             {task.title}
                           </div>
+                          {task.branch_name && (
+                            <div className="mt-0.5 truncate text-xs text-muted-foreground">{task.branch_name}</div>
+                          )}
                         </TableCell>
                         <TableCell className="px-4 align-top text-gray-500">
                           <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
@@ -1377,13 +1473,16 @@ export default function TasksPage() {
                               )}
                               <DropdownMenuSeparator />
                               {archiveFilter === "deleted" ? (
-                                /* Корзина: восстановить или удалить окончательно (админ) */
-                                isAdmin && (
-                                  <>
+                                /* Корзина: восстановить (постановщик, руководство, админ),
+                                   удалить окончательно — только админ */
+                                <>
+                                  {canTrash(task) && (
                                     <DropdownMenuItem onClick={() => handleRestoreTask(task.id)}>
                                       <ArchiveRestore className="h-4 w-4 mr-2" />
                                       Восстановить
                                     </DropdownMenuItem>
+                                  )}
+                                  {isAdmin && (
                                     <DropdownMenuItem
                                       onClick={() => {
                                         setPurgeTaskId(task.id)
@@ -1394,8 +1493,8 @@ export default function TasksPage() {
                                       <Trash2 className="h-4 w-4 mr-2" />
                                       Удалить навсегда
                                     </DropdownMenuItem>
-                                  </>
-                                )
+                                  )}
+                                </>
                               ) : (
                                 <>
                                   {isArchived ? (
@@ -1415,7 +1514,7 @@ export default function TasksPage() {
                                       Архивировать
                                     </DropdownMenuItem>
                                   )}
-                                  {isAdmin && (
+                                  {canTrash(task) && (
                                     <DropdownMenuItem
                                       onClick={() => {
                                         setDeleteTaskId(task.id)
@@ -1424,7 +1523,7 @@ export default function TasksPage() {
                                       className="text-red-600"
                                     >
                                       <Trash2 className="h-4 w-4 mr-2" />
-                                      Удалить
+                                      В корзину
                                     </DropdownMenuItem>
                                   )}
                                 </>
@@ -1491,6 +1590,11 @@ export default function TasksPage() {
                 searchPlaceholder="Поиск сотрудника..."
                 options={assigneeOptions}
               />
+              {formData.assignee_ids.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Если исполнителя не выбрать, им станете вы.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

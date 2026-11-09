@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Phone, PhoneIncoming, PhoneOutgoing,
-  User, FileText, Activity, PlayCircle, RefreshCw, PhoneCall, MessageCircle, UserPlus, Hand,
+  User, FileText, Activity, PlayCircle, PhoneCall, MessageCircle, UserPlus, Hand,
+  ClipboardList, History, Undo2, Merge,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,13 +13,15 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
-import { CustomSelect } from "@/components/ui/custom-select";
 import * as leadsApi from "@/src/api/leads.api";
-import { listFunnels } from "@/src/api/funnels.api";
 import { getLeadCalls, initiateCall } from "@/src/api/telephony.api";
 import type { TelephonyCall } from "@/src/models/telephony.model";
-import { getCurrentUser, getRoleCode } from "@/lib/auth";
 import { AssignLeadDialog } from "@/components/leads/assign-lead-dialog";
+import { LeadBriefSection, BriefSummaryRows } from "@/components/leads/lead-brief-section";
+import { LeadHistorySection } from "@/components/leads/lead-history-section";
+import { ReturnLeadDialog } from "@/components/leads/return-lead-dialog";
+import { MergeLeadDialog } from "@/components/leads/merge-lead-dialog";
+import { LeadFunnelBlock } from "@/components/leads/lead-funnel-block";
 import { useMe } from "@/lib/use-role-code";
 
 // Full lead type as returned by backend
@@ -40,7 +43,21 @@ interface Lead {
   branch_id?: number;
   branch_name?: string;
   funnel_id?: number;
+  stage_id?: number;
+  funnel_name?: string;
+  stage_name?: string;
   is_archived?: boolean;
+  // Краткая информация и передача в продажи (ТЗ «доработки CRM КУБ», п.3.1)
+  brief_full_name?: string;
+  brief_country?: string;
+  brief_visa_type?: string;
+  brief_city?: string;
+  brief_age?: string;
+  brief_comment?: string;
+  handed_to_sales_at?: string;
+  handed_to_sales_by_name?: string;
+  // Только просмотр (оператору — после передачи в продажи)
+  read_only?: boolean;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -236,12 +253,16 @@ function OverviewSection({
   calling,
   canCall,
   onChanged,
+  showFunnel,
+  canMoveBetweenDepartments,
 }: {
   lead: Lead;
   onCall: () => void;
   calling: boolean;
   canCall: boolean;
   onChanged: () => void;
+  showFunnel: boolean;
+  canMoveBetweenDepartments: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -337,12 +358,17 @@ function OverviewSection({
             <span className="text-sm font-medium">{formatDateTime(lead.created_at)}</span>
           </div>
           <LeadOwnerRow lead={lead} onChanged={onChanged} />
+          {/* Заполненная «Краткая информация» (п.3.1) */}
+          <BriefSummaryRows lead={lead} />
         </div>
       </Card>
 
-      {/* Перемещение лида в другую воронку (напр. вернуть ошибочно переданный
-          лид) — обратная связь заказчика 26.07.2026. */}
-      <LeadFunnelMove lead={lead} onMoved={onChanged} />
+      {/* Блок «Воронка» (п.3.4): текущая воронка и этап, перевод между
+          этапами своей воронки; перенос в воронку другого отдела — только
+          руководство и админ. У оператора воронок нет. */}
+      {showFunnel && (
+        <LeadFunnelBlock lead={lead} canMoveBetweenDepartments={canMoveBetweenDepartments} onMoved={onChanged} />
+      )}
     </div>
   );
 }
@@ -353,12 +379,17 @@ function OverviewSection({
 function LeadOwnerRow({ lead, onChanged }: { lead: Lead; onChanged: () => void }) {
   const { toast } = useToast();
   const [assignOpen, setAssignOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
   const [taking, setTaking] = useState(false);
   const { id: myId, roleCode } = useMe();
   const canAssign = ["system_admin", "management"].includes(roleCode);
-  const worksWithLeads = ["system_admin", "management", "sales", "visa", "partner"].includes(roleCode);
+  const worksWithLeads = ["system_admin", "management", "sales", "visa", "partner", "operator"].includes(roleCode);
   const isMine = !!myId && lead.owner_id === myId;
-  const canTake = worksWithLeads && !isMine && !!lead.unassigned && !lead.is_archived;
+  const canTake = worksWithLeads && !isMine && !!lead.unassigned && !lead.is_archived && !lead.read_only;
+  // «Вернуть лид» (п.3.2): ответственный сам, руководство и админ — пока у
+  // лида есть ответственный. Причина обязательна.
+  const hasOwner = !!lead.owner_id && !lead.unassigned;
+  const canReturn = hasOwner && !lead.is_archived && !lead.read_only && (isMine || canAssign);
 
   const take = async () => {
     setTaking(true);
@@ -406,7 +437,27 @@ function LeadOwnerRow({ lead, onChanged }: { lead: Lead; onChanged: () => void }
             {lead.unassigned ? "Назначить" : "Передать"}
           </Button>
         )}
+        {canReturn && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1"
+            onClick={() => setReturnOpen(true)}
+            title="Снять ответственного и вернуть лид в общую очередь"
+          >
+            <Undo2 className="w-3.5 h-3.5" />
+            Вернуть лид
+          </Button>
+        )}
       </div>
+      {canReturn && (
+        <ReturnLeadDialog
+          leadId={lead.id}
+          open={returnOpen}
+          onClose={() => setReturnOpen(false)}
+          onReturned={onChanged}
+        />
+      )}
       {canAssign && (
         <AssignLeadDialog
           leadId={lead.id}
@@ -421,87 +472,24 @@ function LeadOwnerRow({ lead, onChanged }: { lead: Lead; onChanged: () => void }
   );
 }
 
-// LeadFunnelMove — выбор воронки и перенос лида в неё. Доступно ролям с правом
-// leads.move_between_funnels (админ/руководство).
-function LeadFunnelMove({ lead, onMoved }: { lead: Lead; onMoved: () => void }) {
-  const { toast } = useToast();
-  const [funnels, setFunnels] = useState<{ id: number; name: string }[]>([]);
-  const [target, setTarget] = useState<string>("");
-  const [moving, setMoving] = useState(false);
-  // Право leads.move_between_funnels на бэке — у админа и руководства.
-  const roleCode = getRoleCode(getCurrentUser()) || "";
-  const canMove = ["system_admin", "admin", "management", "leadership"].includes(roleCode);
-
-  useEffect(() => {
-    if (!canMove) return;
-    listFunnels()
-      .then((list) => setFunnels((list || []).map((f: any) => ({ id: f.id, name: f.name }))))
-      .catch(() => setFunnels([]));
-  }, [canMove]);
-
-  if (!canMove) return null;
-
-  const currentFunnel = funnels.find((f) => f.id === lead.funnel_id);
-  const options = funnels
-    .filter((f) => f.id !== lead.funnel_id)
-    .map((f) => ({ value: String(f.id), label: f.name }));
-
-  const handleMove = async () => {
-    const funnelId = Number(target);
-    if (!funnelId) return;
-    setMoving(true);
-    try {
-      await leadsApi.move_lead_to_funnel(lead.id, funnelId);
-      toast({ title: "Лид перемещён", description: "Лид перенесён в выбранную воронку" });
-      setTarget("");
-      onMoved();
-    } catch (err: any) {
-      toast({
-        title: "Не удалось переместить",
-        description: err?.response?.data?.message ?? err?.message ?? "Ошибка",
-        variant: "destructive",
-      });
-    } finally {
-      setMoving(false);
-    }
-  };
-
-  return (
-    <Card className="p-4">
-      <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-        <RefreshCw className="w-4 h-4 text-muted-foreground" /> Воронка
-      </h3>
-      <div className="space-y-2">
-        <div className="flex flex-col sm:grid sm:grid-cols-[140px_1fr] gap-1 sm:gap-2 py-1">
-          <span className="text-sm text-muted-foreground">Текущая</span>
-          <span className="text-sm font-medium">{currentFunnel?.name ?? "—"}</span>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="min-w-0 flex-1">
-            <CustomSelect
-              value={target}
-              onChange={setTarget}
-              options={options}
-              placeholder="Выберите воронку для переноса"
-            />
-          </div>
-          <Button onClick={handleMove} disabled={!target || moving} className="shrink-0">
-            {moving ? "Перемещение…" : "Переместить"}
-          </Button>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-type SectionKey = "overview" | "calls";
+type SectionKey = "overview" | "calls" | "brief" | "history";
 
+// «Краткая информация» — под «Обзор» и «Звонки» (ТЗ «доработки CRM КУБ», п.3.1).
 const NAV_ITEMS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: "overview", label: "Обзор", icon: <FileText className="w-4 h-4" /> },
   { key: "calls", label: "Звонки", icon: <Phone className="w-4 h-4" /> },
+  { key: "brief", label: "Краткая информация", icon: <ClipboardList className="w-4 h-4" /> },
+  { key: "history", label: "История", icon: <History className="w-4 h-4" /> },
 ];
+
+const SECTION_TITLES: Record<SectionKey, string> = {
+  overview: "Обзор",
+  calls: "Звонки",
+  brief: "Краткая информация",
+  history: "История изменений",
+};
 
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -512,9 +500,15 @@ export default function LeadDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<SectionKey>("overview");
   const [calling, setCalling] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [historyKey, setHistoryKey] = useState(0);
+  const { roleCode } = useMe();
+  const isOperator = roleCode === "operator";
+  const isElevated = roleCode === "system_admin" || roleCode === "management";
 
   const reloadLead = useCallback(() => {
     if (!id) return;
+    setHistoryKey((k) => k + 1);
     leadsApi
       .get_lead(undefined, { id })
       .then((data) => setLead(data))
@@ -583,11 +577,24 @@ export default function LeadDetailPage() {
         {lead.is_archived && (
           <Badge variant="outline" className="text-slate-500">Архив</Badge>
         )}
+        {/* «Объединить лиды» (п.3.3): лид Instagram с лидом WhatsApp/Telegram и наоборот */}
+        {!lead.is_archived && !lead.read_only && roleCode !== "quality_control" && (
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setMergeOpen(true)}>
+            <Merge className="h-4 w-4" />
+            Объединить лиды
+          </Button>
+        )}
       </div>
+      <MergeLeadDialog
+        lead={lead}
+        open={mergeOpen}
+        onClose={() => setMergeOpen(false)}
+        onMerged={reloadLead}
+      />
 
       <div className="flex gap-6">
         {/* Sidebar nav */}
-        <div className="w-44 shrink-0">
+        <div className="w-52 shrink-0">
           <Card className="p-3">
             <div className="flex items-center gap-2 mb-3 px-1">
               <User className="w-5 h-5 text-muted-foreground" />
@@ -609,7 +616,7 @@ export default function LeadDetailPage() {
                 <button
                   key={item.key}
                   onClick={() => setActiveSection(item.key)}
-                  className={`flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${
+                  className={`flex items-center gap-2 px-3 py-2 text-left text-sm rounded-md transition-colors ${
                     activeSection === item.key
                       ? "bg-primary/10 text-primary font-medium"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -625,9 +632,7 @@ export default function LeadDetailPage() {
 
         {/* Main content */}
         <div className="flex-1 min-w-0">
-          <h2 className="text-lg font-semibold mb-4">
-            {activeSection === "overview" ? "Обзор" : "Звонки"}
-          </h2>
+          <h2 className="text-lg font-semibold mb-4">{SECTION_TITLES[activeSection]}</h2>
 
           {activeSection === "overview" && (
             <OverviewSection
@@ -636,9 +641,15 @@ export default function LeadDetailPage() {
               calling={calling}
               canCall={!!lead.phone}
               onChanged={reloadLead}
+              showFunnel={!isOperator}
+              canMoveBetweenDepartments={isElevated}
             />
           )}
           {activeSection === "calls" && <CallsSection leadId={lead.id} />}
+          {activeSection === "brief" && (
+            <LeadBriefSection lead={lead} canHandToSales={isOperator || isElevated} onChanged={reloadLead} />
+          )}
+          {activeSection === "history" && <LeadHistorySection leadId={lead.id} reloadKey={historyKey} />}
         </div>
       </div>
     </div>

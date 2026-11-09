@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Building2, User, RefreshCw, Pencil, Archive, Trash2, MessageCircle, Phone, UserPlus, Hand } from "lucide-react";
+import { Building2, User, RefreshCw, Pencil, Archive, Trash2, MessageCircle, UserPlus, Hand } from "lucide-react";
 import type { FunnelStage } from "@/src/models/funnel-stages.model";
 import * as FunnelStagesAPI from "@/src/api/funnel-stages.api";
 import type { FunnelBoardParams } from "@/src/api/funnel-stages.api";
@@ -151,7 +151,7 @@ function DealCard({
       {...listeners}
       onClick={() => onClick?.(deal)}
       className={cn(
-        "group relative rounded-lg border bg-white p-3 shadow-sm select-none transition-all",
+        "group relative rounded-md border bg-white px-2.5 py-1.5 shadow-sm select-none transition-all",
         overlay
           ? "shadow-xl ring-2 ring-blue-500 ring-offset-1 rotate-1 cursor-move scale-105"
           : "cursor-move hover:shadow-md hover:ring-2 hover:ring-blue-300 hover:ring-offset-1",
@@ -206,60 +206,58 @@ function DealCard({
           )}
         </div>
       )}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-mono text-gray-400">#{deal.id}</span>
+      {/* Компактная карточка (ТЗ «доработки CRM КУБ», п.10 — «размер лидов
+          уменьшить»): имя и статус в одну строку, телефон/источник/номер —
+          второй строкой, ответственный — третьей. */}
+      <div className="flex items-center gap-1.5 pr-1">
         {isLead ? (
-          <Badge className="text-xs bg-amber-100 text-amber-800">
+          <MessageCircle className="h-3 w-3 shrink-0 text-amber-500" />
+        ) : (
+          <Building2 className="h-3 w-3 shrink-0 text-gray-400" />
+        )}
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-5 text-gray-900">
+          {deal.client_name || (isLead ? `Лид #${deal.id}` : `Клиент #${deal.client_id}`)}
+        </span>
+        {isLead ? (
+          <Badge className="h-4 shrink-0 px-1.5 text-[10px] font-medium bg-amber-100 text-amber-800">
             {LEAD_STATUS_LABELS[deal.status] || "Лид"}
           </Badge>
         ) : (
-          <Badge className={cn("text-xs", STATUS_CLASSNAMES[deal.status] || "bg-gray-100 text-gray-800")}>
+          <Badge className={cn("h-4 shrink-0 px-1.5 text-[10px] font-medium", STATUS_CLASSNAMES[deal.status] || "bg-gray-100 text-gray-800")}>
             {STATUS_LABELS[deal.status] || deal.status}
           </Badge>
         )}
       </div>
-      <div className="mt-2 flex items-center gap-1.5 text-sm font-medium text-gray-900">
+      <div className="mt-0.5 flex items-center gap-1.5 text-[11px] leading-4 text-gray-500">
         {isLead ? (
-          <MessageCircle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <>
+            {deal.phone && <span className="truncate">+{deal.phone}</span>}
+            {deal.source && (
+              <span className="shrink-0 text-gray-400">
+                {LEAD_SOURCE_LABELS[deal.source] || deal.source}
+              </span>
+            )}
+          </>
         ) : (
-          <Building2 className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          <span className="truncate font-semibold text-gray-800">
+            {formatAmount(deal.amount, deal.currency)}
+          </span>
         )}
-        <span className="truncate">
-          {deal.client_name || (isLead ? `Лид #${deal.id}` : `Клиент #${deal.client_id}`)}
-        </span>
+        <span className="ml-auto shrink-0 font-mono text-gray-400">#{deal.id}</span>
       </div>
-      {isLead ? (
-        <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-600">
-          {deal.phone && (
-            <span className="inline-flex items-center gap-1">
-              <Phone className="h-3 w-3 shrink-0 text-gray-400" />
-              +{deal.phone}
-            </span>
-          )}
-          {deal.source && (
-            <span className="text-gray-400">
-              {LEAD_SOURCE_LABELS[deal.source] || deal.source}
-            </span>
-          )}
-        </div>
-      ) : (
-        <div className="mt-1 text-sm font-semibold text-gray-800">
-          {formatAmount(deal.amount, deal.currency)}
-        </div>
-      )}
       {deal.owner_name ? (
-        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-gray-500">
+        <div className="mt-0.5 flex items-center gap-1 text-[11px] leading-4 text-gray-500">
           <User className="h-3 w-3 shrink-0" />
           <span className="truncate">{deal.owner_name}</span>
         </div>
       ) : (
         (isLead || showTake) && (
-          <div className="mt-1.5 flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-amber-600">Не разобран</span>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <span className="text-[11px] font-medium text-amber-600">Не разобран</span>
             {showTake && (
               <button
                 type="button"
-                className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-600"
+                className="inline-flex items-center gap-1 rounded bg-amber-500 px-1.5 py-0.5 text-[11px] font-medium leading-4 text-white hover:bg-amber-600"
                 onPointerDown={stop}
                 onClick={(e) => {
                   stop(e);
@@ -277,7 +275,7 @@ function DealCard({
         // Нативный <select> вместо radix-меню на каждой карточке: при сотнях
         // лидов сотни radix-компонентов роняли производительность (лаги драга,
         // промахи дропа). Нативный select почти бесплатен и работает на тач.
-        <div className="mt-2 border-t pt-2" onPointerDown={stop} onClick={stop}>
+        <div className="mt-1 border-t pt-1" onPointerDown={stop} onClick={stop}>
           <select
             aria-label="Переместить на этап"
             title="Переместить на этап"
@@ -286,7 +284,7 @@ function DealCard({
               const stageId = Number(e.target.value);
               if (stageId && onMoveToStage) onMoveToStage(deal, stageId);
             }}
-            className="w-full cursor-pointer rounded-md border bg-white px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            className="h-6 w-full cursor-pointer rounded border bg-white px-1.5 text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
           >
             <option value="" disabled>
               На этап…
@@ -322,7 +320,7 @@ function Column({ column, onDealClick, canMove, stages, onMoveToStage, ...action
   const color = stage?.color || "#94a3b8";
 
   return (
-    <div className="flex w-72 shrink-0 flex-col rounded-lg border bg-gray-50">
+    <div className="flex w-64 shrink-0 flex-col rounded-lg border bg-gray-50">
       <div
         className="sticky top-0 z-10 rounded-t-lg border-b bg-gray-50 px-3 py-2"
         style={{ borderTopColor: color, borderTopWidth: 3 }}
@@ -351,7 +349,7 @@ function Column({ column, onDealClick, canMove, stages, onMoveToStage, ...action
           // flex-1 растягивает зону сброса на всю высоту колонки (колонки
           // выровнены по высоте — items-stretch у доски), чтобы карточку можно
           // было бросить в любую колонку на любой высоте, не таща наверх.
-          "flex flex-1 flex-col gap-2 p-2 transition-colors min-h-[120px]",
+          "flex flex-1 flex-col gap-1.5 p-1.5 transition-colors min-h-[120px]",
           isOver && "bg-blue-50"
         )}
       >
@@ -681,7 +679,7 @@ export function KanbanBoard({
     return (
       <div className="flex gap-3 overflow-x-auto pb-2">
         {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-96 w-72 shrink-0 rounded-lg" />
+          <Skeleton key={i} className="h-96 w-64 shrink-0 rounded-lg" />
         ))}
       </div>
     );

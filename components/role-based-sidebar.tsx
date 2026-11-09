@@ -8,6 +8,8 @@ import {
   BarChart3,
   Building2,
   Calendar,
+  CalendarDays,
+  IdCard,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -40,6 +42,7 @@ import type { PermissionsMe } from "@/src/models/permissions.model";
 import { getRoleName } from "@/src/models/roles.enum";
 import { WAZZUP_CHILD_VISIBLE } from "@/lib/features";
 import { getLogoRoute } from "@/lib/auth";
+import { canAccessPath } from "@/lib/route-access";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -104,6 +107,19 @@ const MENU: NavEntry[] = [
     permission: "funnels.view",
   },
   {
+    // Оператор колл-центра работает со списком лидов без воронок отделов:
+    // новые нераспределённые и свои (ТЗ «доработки CRM КУБ», п.5).
+    type: "item", title: "Лиды", href: "/leads", icon: Target,
+    permission: "leads.view",
+    roles: ["operator"],
+  },
+  {
+    // Встречи с клиентами в виде календаря (ТЗ «доработки CRM КУБ», п.6).
+    // Заполняют обычно операторы и МОП.
+    type: "item", title: "Календарь", href: "/calendar", icon: CalendarDays,
+    roles: ["operator", "sales", "visa", "partner", "management", "admin", "quality_control"],
+  },
+  {
     type: "item", title: "Клиенты", href: "/clients", icon: Users,
     permission: "clients.view",
   },
@@ -120,9 +136,15 @@ const MENU: NavEntry[] = [
     type: "item", title: "Задачи", href: "/tasks", icon: Calendar,
     permission: "tasks.view",
   },
-  // HR-specific items (shown instead of generic Пользователи)
+  // Раздел «Сотрудники» — кадровые карточки, документы и подписание
+  // (ТЗ «доработки CRM КУБ», п.1–2): администратор, руководство, отдел кадров.
   {
-    type: "item", title: "Сотрудники", href: "/users", icon: UserCheck,
+    type: "item", title: "Сотрудники", href: "/employees", icon: IdCard,
+    roles: ["admin", "management", "hr"],
+  },
+  // Учётные записи CRM для отдела кадров (просмотр и блокировка).
+  {
+    type: "item", title: "Пользователи", href: "/users", icon: UserCheck,
     permission: "users.view",
     roles: ["hr"],
   },
@@ -234,6 +256,7 @@ function roleCodeFromUser(user: Auth_Login_Response["user"] | null): string {
     70: "partner",
     80: "hr",
     90: "legal",
+    95: "operator",
   };
   return byID[user?.role?.id || 0] || "";
 }
@@ -357,6 +380,9 @@ export function RoleBasedSidebar({
   function canSeeItem(item: NavItem): boolean {
     if (item.roles && !item.roles.includes(roleCode)) return false;
     if (item.permission && !permissionSet.has(item.permission)) return false;
+    // Оператору — только его разделы (лиды, мессенджер, звонки, календарь):
+    // пункты без права (например, «Хранилище») ему не показываем.
+    if (!canAccessPath(roleCode, parseHref(item.href).path)) return false;
     return true;
   }
 

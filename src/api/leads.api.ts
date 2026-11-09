@@ -100,3 +100,52 @@ export async function restore_lead(payload?: void, params?: Record<string, any>)
   const res = await api.post(`/leads/${params?.id}/restore`)
   return res.data
 }
+
+// ─── Карточка лида (ТЗ «доработки CRM КУБ», п.3) ───────────────────────────
+
+export interface LeadBrief {
+  brief_full_name: string
+  brief_country: string
+  brief_visa_type: string
+  brief_city: string
+  brief_age: string
+  brief_comment: string
+}
+
+export interface LeadHistoryEntry {
+  id: number
+  lead_id: number
+  user_id?: number
+  user_name?: string
+  action: string
+  field?: string
+  old_value?: string
+  new_value?: string
+  comment?: string
+  created_at: string
+}
+
+export async function update_lead_brief(leadId: number, brief: LeadBrief): Promise<any> {
+  const res = await api.put(`/leads/${leadId}/brief`, brief)
+  return res.data
+}
+
+export async function hand_lead_to_sales(leadId: number): Promise<any> {
+  const res = await api.post(`/leads/${leadId}/hand-to-sales`)
+  return res.data
+}
+
+export async function return_lead(leadId: number, reason: string): Promise<any> {
+  const res = await api.post(`/leads/${leadId}/return`, { reason })
+  return res.data
+}
+
+export async function merge_leads(targetLeadId: number, sourceLeadId: number): Promise<any> {
+  const res = await api.post(`/leads/${targetLeadId}/merge`, { lead_id: sourceLeadId })
+  return res.data
+}
+
+export async function get_lead_history(leadId: number): Promise<LeadHistoryEntry[]> {
+  const res = await api.get(`/leads/${leadId}/history`)
+  return Array.isArray(res.data?.items) ? res.data.items : []
+}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import * as Models from "@/src/models/users.model";
-import { Roles, getRoleName } from "@/src/models/roles.enum";
+import { Roles, getRoleName, getRoleShortName } from "@/src/models/roles.enum";
 import {
   Card,
   CardContent,
@@ -119,6 +119,10 @@ const getUserInitials = (user?: Partial<Models.User> | null) => {
   const parts = source.split(/\s+/).filter(Boolean);
   return (parts[0]?.[0] || "U") + (parts[1]?.[0] || "");
 };
+
+// Классы компактной таблицы (ТЗ п.7) — те же применяются в разделе «Сотрудники».
+const COMPACT_TH = "h-9 px-3 text-[13px] font-semibold"
+const COMPACT_TD = "px-3 py-2.5 align-middle"
 
 const getAvatarUrl = (user?: Partial<Models.User> | null) =>
   user?.avatar_url || user?.avatar?.url || "";
@@ -618,9 +622,9 @@ export default function UsersPage() {
 
   return (
     <>
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 m-3 sm:m-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 m-2 sm:m-3">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
+          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">
             Пользователи
           </h1>
           <p className="text-sm text-gray-600">
@@ -628,12 +632,12 @@ export default function UsersPage() {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <Button onClick={fetchUsersAndStats} variant="outline" disabled={isLoading}>
+          <Button onClick={fetchUsersAndStats} variant="outline" size="sm" className="h-8" disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
           {canCreate && (
-            <Button onClick={handleCreateClick}>
+            <Button onClick={handleCreateClick} size="sm" className="h-8">
               <Plus className="h-4 w-4 mr-2" />
               Добавить пользователя
             </Button>
@@ -642,12 +646,12 @@ export default function UsersPage() {
       </div>
 
       {/* Компактные кликабельные плитки по ролям (ТЗ п.7.3): клик — фильтр списка */}
-      <div className="flex flex-wrap gap-2 mb-4 px-2">
+      <div className="mb-2 flex items-center gap-1.5 overflow-x-auto px-2 pb-1 sm:px-3">
         <button
           type="button"
           onClick={() => setRoleFilter(null)}
           className={cn(
-            "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors",
+            "flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[13px] transition-colors",
             roleFilter === null ? "border-blue-600 bg-blue-50 text-blue-700" : "bg-white hover:bg-slate-50"
           )}
         >
@@ -659,6 +663,7 @@ export default function UsersPage() {
           { id: Roles.SYSTEM_ADMIN, label: "Администраторы" },
           { id: Roles.MANAGEMENT, label: "Руководство" },
           { id: Roles.SALES, label: "Менеджеры (МОП)" },
+          { id: Roles.OPERATOR, label: "Операторы" },
           { id: Roles.VISA, label: "Визовый отдел" },
           { id: Roles.PARTNER, label: "Партнёрский" },
           { id: Roles.HR, label: "Отдел кадров" },
@@ -671,7 +676,7 @@ export default function UsersPage() {
             onClick={() => setRoleFilter(roleFilter === r.id ? null : r.id)}
             title={`Показать: ${r.label}`}
             className={cn(
-              "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors",
+              "flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[13px] transition-colors",
               roleFilter === r.id ? "border-blue-600 bg-blue-50 text-blue-700" : "bg-white hover:bg-slate-50"
             )}
           >
@@ -683,7 +688,7 @@ export default function UsersPage() {
           <select
             value={branchViewFilter}
             onChange={(e) => setBranchViewFilter(e.target.value)}
-            className="ml-auto rounded-lg border bg-white px-3 py-1.5 text-sm"
+            className="ml-auto h-8 shrink-0 rounded-md border bg-white px-2 text-[13px]"
             title="Фильтр по филиалу"
           >
             <option value="">Все филиалы</option>
@@ -694,11 +699,11 @@ export default function UsersPage() {
         )}
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+      <Card className="mx-2 sm:mx-3">
+        <CardHeader className="p-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
             <div>
-              <CardTitle>Список пользователей</CardTitle>
+              <CardTitle className="text-base">Список пользователей</CardTitle>
               <CardDescription>
                 {users?.length ? `Найдено ${filteredUsers?.length || 0} из ${users.length} пользователей` : "Пользователи не найдены"}
               </CardDescription>
@@ -711,7 +716,7 @@ export default function UsersPage() {
                     type="button"
                     onClick={() => setStatusFilter(f)}
                     className={cn(
-                      "whitespace-nowrap shrink-0 px-3 py-1.5 text-sm font-medium transition-colors",
+                      "h-8 whitespace-nowrap shrink-0 px-3 text-[13px] font-medium transition-colors",
                       statusFilter === f
                         ? "bg-primary text-primary-foreground"
                         : "bg-background text-muted-foreground hover:bg-muted"
@@ -728,36 +733,39 @@ export default function UsersPage() {
                 ))}
               </div>
               <div className="relative w-64">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-2.5 top-2 h-4 w-4 text-gray-400" />
                 <Input
                   placeholder="Введите данные для поиска..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="h-8 pl-8 text-sm"
                 />
               </div>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-hidden rounded-md border">
-            <Table className="w-full min-w-[760px] table-fixed">
+        <CardContent className="px-3 pb-3 pt-0">
+          {/* Компактная таблица (ТЗ «доработки CRM КУБ», п.7): строка ~48 px,
+              текст 14 px, заголовки 13 px, аватар 28 px, роль и статус в одну
+              строку, действия — в один ряд иконками 16 px с подсказками. */}
+          <div className="overflow-x-auto rounded-md border">
+            <Table className="w-full min-w-[880px] table-fixed text-sm">
               <colgroup>
-                <col className="w-[24%]" />
-                <col className="w-[24%]" />
+                <col className="w-[25%]" />
+                <col className="w-[22%]" />
+                <col className="w-[13%]" />
+                <col className="w-[11%]" />
+                <col className="w-[13%]" />
                 <col className="w-[16%]" />
-                <col className="w-[16%]" />
-                <col className="w-[10%]" />
-                <col className="w-[10%]" />
               </colgroup>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="px-4">ФИО</TableHead>
-                  <TableHead className="px-4">Email</TableHead>
-                  <TableHead className="px-4">Телефон</TableHead>
-                  <TableHead className="px-4">Роль</TableHead>
-                  <TableHead className="px-4">Статус</TableHead>
-                  <TableHead className="px-4 text-right">Действия</TableHead>
+                  <TableHead className={COMPACT_TH}>ФИО</TableHead>
+                  <TableHead className={COMPACT_TH}>Email</TableHead>
+                  <TableHead className={COMPACT_TH}>Телефон</TableHead>
+                  <TableHead className={COMPACT_TH}>Роль</TableHead>
+                  <TableHead className={COMPACT_TH}>Статус</TableHead>
+                  <TableHead className={`${COMPACT_TH} text-right`}>Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -776,48 +784,47 @@ export default function UsersPage() {
                 ) : (
                   filteredUsers.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="px-4 align-top">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-9 w-9">
+                      <TableCell className={COMPACT_TD}>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Avatar className="h-7 w-7 shrink-0">
                             <AuthenticatedAvatarImage
                               src={getAvatarUrl(user)}
                               alt={getUserFullName(user)}
                               className="h-full w-full object-cover"
                             />
-                            <AvatarFallback>{getUserInitials(user)}</AvatarFallback>
+                            <AvatarFallback className="text-[11px]">{getUserInitials(user)}</AvatarFallback>
                           </Avatar>
-                          <div className="break-words font-medium leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                          <span className="truncate font-medium" title={getUserFullName(user)}>
                             {getUserFullName(user)}
-                          </div>
+                          </span>
                         </div>
                       </TableCell>
-                      <TableCell className="px-4 align-top">
-                        <div className="break-all leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
-                          {user.email}
-                        </div>
+                      <TableCell className={COMPACT_TD}>
+                        <span className="block truncate" title={user.email}>{user.email}</span>
                       </TableCell>
-                      <TableCell className="px-4 align-top break-words">{user.phone || "-"}</TableCell>
-                      <TableCell className="px-4 align-top">
-                        <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
-                          {getRoleLabel(user.role?.id)}
-                        </div>
+                      <TableCell className={`${COMPACT_TD} whitespace-nowrap`}>{user.phone || "-"}</TableCell>
+                      <TableCell className={COMPACT_TD}>
+                        <span className="block truncate whitespace-nowrap" title={getRoleLabel(user.role?.id)}>
+                          {user.role?.id ? getRoleShortName(user.role.id) : "-"}
+                        </span>
                       </TableCell>
-                      <TableCell className="px-4 align-top">
-                        <div className="flex flex-col items-start gap-1">
-                          <Badge variant={user.is_verified ? "default" : "outline"}>
-                            {user.is_verified ? "Подтвержден" : "Не подтвержден"}
+                      <TableCell className={COMPACT_TD}>
+                        {!user.is_active ? (
+                          <Badge variant="destructive" className="whitespace-nowrap px-1.5 py-0 text-xs font-medium">Заблокирован</Badge>
+                        ) : user.is_verified ? (
+                          <Badge className="whitespace-nowrap px-1.5 py-0 text-xs font-medium">Активен</Badge>
+                        ) : (
+                          <Badge variant="outline" className="whitespace-nowrap px-1.5 py-0 text-xs font-medium" title="Учётная запись не подтверждена">
+                            Не подтверждён
                           </Badge>
-                          {!user.is_active && (
-                            <Badge variant="destructive">Заблокирован</Badge>
-                          )}
-                        </div>
+                        )}
                       </TableCell>
-                      <TableCell className="px-4 align-top text-right">
-                        <div className="flex flex-wrap items-center justify-end gap-1">
+                      <TableCell className={`${COMPACT_TD} text-right`}>
+                        <div className="flex flex-nowrap items-center justify-end gap-0.5">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-7 w-7"
                             title="Просмотр"
                             onClick={() => handleViewClick(user)}
                           >
@@ -827,7 +834,7 @@ export default function UsersPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8"
+                              className="h-7 w-7"
                               title="Редактировать"
                               onClick={() => handleEditClick(user)}
                             >
@@ -838,7 +845,7 @@ export default function UsersPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-slate-500 hover:text-blue-600"
+                              className="h-7 w-7 text-slate-500 hover:text-blue-600"
                               title="Сменить пароль"
                               onClick={() => { setPasswordChangeUser(user); setNewPassword(""); }}
                             >
@@ -850,7 +857,7 @@ export default function UsersPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-amber-600 hover:text-amber-700"
+                                className="h-7 w-7 text-amber-600 hover:text-amber-700"
                                 title="Заблокировать"
                                 onClick={() => handleToggleBlock(user)}
                               >
@@ -860,7 +867,7 @@ export default function UsersPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-green-600 hover:text-green-700"
+                                className="h-7 w-7 text-green-600 hover:text-green-700"
                                 title="Разблокировать"
                                 onClick={() => handleToggleBlock(user)}
                               >
@@ -872,7 +879,7 @@ export default function UsersPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-red-600 hover:text-red-700"
+                              className="h-7 w-7 text-red-600 hover:text-red-700"
                               title="Удалить"
                               onClick={() => handleDeleteClick(user)}
                             >

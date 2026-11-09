@@ -89,3 +89,20 @@ export async function ack_task_notifications(payload: { task_ids: number[] }): P
   const res = await api.post(`/tasks/notifications/ack`, payload)
   return res.data
 }
+
+// Справочник сотрудников для задач (ТЗ «доработки CRM КУБ», п.11): все
+// работающие сотрудники всех филиалов, у каждого — можно ли его назначить.
+export interface TaskAssignee {
+  id: number
+  name: string
+  role_id: number
+  branch_id?: number
+  branch_name?: string
+  assignable: boolean
+}
+
+export async function list_task_assignees(): Promise<{ items: TaskAssignee[]; can_assign_others: boolean }> {
+  const res = await api.get(`/tasks/assignees`)
+  const data = res.data || {}
+  return { items: Array.isArray(data.items) ? data.items : [], can_assign_others: !!data.can_assign_others }
+}
