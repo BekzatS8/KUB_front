@@ -11,7 +11,9 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { ArchiveRestore, ArrowLeft, FileSpreadsheet, RefreshCw, User, Download, Pencil, Trash2, X } from "lucide-react";
+import { ArchiveRestore, ArrowLeft, FileSpreadsheet, RefreshCw, User, Download, Pencil, Trash2, X, Search, NotebookPen } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ReportNoteEditor } from "@/components/report-note-editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +22,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ReportTableEditor } from "@/components/report-table-editor";
+import { searchReportTables, type ReportSearchHit } from "@/src/api/reports-table.api";
 import { getCurrentUser, getRoleCode } from "@/lib/auth";
 import { getMe } from "@/src/api/auth.api";
 import {
@@ -62,6 +65,25 @@ export default function TeamReportsPage() {
   }, []);
 
   const [editing, setEditing] = useState(false);
+  // Поиск по названию и тексту отчётов сотрудников (ТЗ «доработки CRM КУБ», п.12)
+  const [search, setSearch] = useState("");
+  const [hits, setHits] = useState<ReportSearchHit[]>([]);
+  const [searching, setSearching] = useState(false);
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) {
+      setHits([]);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(() => {
+      searchReportTables(q)
+        .then(setHits)
+        .catch(() => setHits([]))
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [owners, setOwners] = useState<ManagerReportOwner[]>([]);
@@ -221,10 +243,12 @@ export default function TeamReportsPage() {
           </div>
           {report && !reportLoading && (
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleExport}>
-                <Download className="mr-1.5 h-4 w-4" />
-                Excel
-              </Button>
+              {(report.content as ReportTableContent)?.kind !== "note" && (
+                <Button variant="outline" size="sm" onClick={handleExport}>
+                  <Download className="mr-1.5 h-4 w-4" />
+                  Excel
+                </Button>
+              )}
               {isAdmin && (editing ? (
                 <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
                   <X className="mr-1.5 h-4 w-4" />
@@ -253,13 +277,23 @@ export default function TeamReportsPage() {
         {reportLoading || !report ? (
           <Skeleton className="h-64 w-full rounded-lg" />
         ) : (
-          <ReportTableEditor
-            key={`${report.id}-${editing}`}
-            content={report.content as ReportTableContent}
-            readOnly={!editing}
-            saving={saving}
-            onSave={editing ? handleSaveReport : undefined}
-          />
+          (report.content as ReportTableContent)?.kind === "note" ? (
+            <ReportNoteEditor
+              key={`${report.id}-${editing}`}
+              content={report.content as ReportTableContent}
+              readOnly={!editing}
+              saving={saving}
+              onSave={editing ? handleSaveReport : undefined}
+            />
+          ) : (
+            <ReportTableEditor
+              key={`${report.id}-${editing}`}
+              content={report.content as ReportTableContent}
+              readOnly={!editing}
+              saving={saving}
+              onSave={editing ? handleSaveReport : undefined}
+            />
+          )
         )}
 
         <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
@@ -359,6 +393,17 @@ export default function TeamReportsPage() {
               {showTrash ? "К сотрудникам" : "Корзина"}
             </Button>
           )}
+          {!showTrash && (
+            <div className="relative w-72">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+              <Input
+                className="pl-8"
+                placeholder="Поиск по названию и тексту отчётов"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          )}
           <Button variant="outline" onClick={showTrash ? loadTrash : load} disabled={showTrash ? trashLoading : loading}>
             <RefreshCw className={(showTrash ? trashLoading : loading) ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
           </Button>
@@ -397,6 +442,40 @@ export default function TeamReportsPage() {
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
+            ))}
+          </div>
+        )
+      ) : search.trim().length >= 2 ? (
+        searching && hits.length === 0 ? (
+          <Skeleton className="h-32 w-full rounded-lg" />
+        ) : hits.length === 0 ? (
+          <Card>
+            <CardContent className="py-10 text-center text-slate-500">Ничего не найдено</CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {hits.map((h) => (
+              <button
+                key={h.id}
+                type="button"
+                onClick={() => openReport(h.id)}
+                className="flex w-full items-start gap-3 rounded-lg border bg-white p-3 text-left hover:bg-slate-50"
+              >
+                {h.kind === "note" ? (
+                  <NotebookPen className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                ) : (
+                  <FileSpreadsheet className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-slate-900">{h.title}</span>
+                  <span className="block text-xs text-slate-500">
+                    {h.user_name}
+                    {h.updated_at && <> · {format(new Date(h.updated_at), "d MMM yyyy, HH:mm", { locale: ru })}</>}
+                    {h.title_match ? " · совпадение в названии" : ""}
+                  </span>
+                  {h.snippet && <span className="mt-1 block truncate text-xs text-slate-600">…{h.snippet}…</span>}
+                </span>
+              </button>
             ))}
           </div>
         )

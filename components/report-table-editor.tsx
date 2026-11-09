@@ -13,8 +13,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Save } from "lucide-react";
+import { Plus, Trash2, Save, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import type { ReportTableContent } from "@/src/api/reports-table.api";
+
+type TableData = { columns: string[]; rows: string[][]; widths: number[] };
 
 interface Props {
   content: ReportTableContent;
@@ -58,7 +61,7 @@ function canonicalizeColumns(srcColumns: string[]): { label: string; srcIndex: n
   return [...kept, ...comments];
 }
 
-function normalize(content: ReportTableContent | null | undefined): Required<ReportTableContent> {
+function normalize(content: ReportTableContent | null | undefined): TableData {
   const srcColumns =
     content?.columns?.length ? content.columns : ["Дата", "Имя", "Телефон", "Тип визы", "Комментарий"];
   const mapping = canonicalizeColumns(srcColumns);
@@ -112,8 +115,11 @@ function AutoCell({
 }
 
 export function ReportTableEditor({ content, readOnly, saving, onSave }: Props) {
-  const [data, setData] = useState<Required<ReportTableContent>>(() => normalize(content));
+  const [data, setData] = useState<TableData>(() => normalize(content));
   const [dirty, setDirty] = useState(false);
+  // Поиск по тексту внутри отчёта (ТЗ «доработки CRM КУБ», п.12): строки без
+  // совпадений скрываются, найденные ячейки подсвечиваются.
+  const [search, setSearch] = useState("");
   const initialised = useRef(false);
 
   useEffect(() => {
@@ -122,7 +128,7 @@ export function ReportTableEditor({ content, readOnly, saving, onSave }: Props) 
     initialised.current = true;
   }, [content]);
 
-  const update = (fn: (prev: Required<ReportTableContent>) => Required<ReportTableContent>) => {
+  const update = (fn: (prev: TableData) => TableData) => {
     setData((prev) => fn(prev));
     setDirty(true);
   };
@@ -192,8 +198,29 @@ export function ReportTableEditor({ content, readOnly, saving, onSave }: Props) 
   const tableWidth =
     data.widths.reduce((s, w) => s + w, 0) + (readOnly ? 0 : ACTIONS_COL_WIDTH);
 
+  const needle = search.trim().toLowerCase();
+  const visibleRows = data.rows
+    .map((row, ri) => ({ row, ri }))
+    .filter(({ row }) => !needle || row.some((cell) => cell.toLowerCase().includes(needle)));
+
   return (
     <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <div className="relative w-72">
+          <Search className="absolute left-2.5 top-2 h-4 w-4 text-slate-400" />
+          <Input
+            className="h-8 pl-8 text-sm"
+            placeholder="Поиск в отчёте"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {needle && (
+          <span className="text-xs text-slate-500">
+            {visibleRows.length ? `Строк найдено: ${visibleRows.length} из ${data.rows.length}` : "Ничего не найдено"}
+          </span>
+        )}
+      </div>
       <div className="max-h-[72vh] overflow-auto rounded-lg border bg-white">
         <table className="border-collapse text-sm" style={{ tableLayout: "fixed", width: tableWidth }}>
           <colgroup>
@@ -252,10 +279,13 @@ export function ReportTableEditor({ content, readOnly, saving, onSave }: Props) 
                 </td>
               </tr>
             )}
-            {data.rows.map((row, ri) => (
+            {visibleRows.map(({ row, ri }) => (
               <tr key={ri} className="hover:bg-slate-50/50">
                 {row.map((cell, ci) => (
-                  <td key={ci} className="border-b border-r p-0 align-top">
+                  <td
+                    key={ci}
+                    className={`border-b border-r p-0 align-top ${needle && cell.toLowerCase().includes(needle) ? "bg-yellow-100" : ""}`}
+                  >
                     <AutoCell
                       value={cell}
                       width={data.widths[ci]}

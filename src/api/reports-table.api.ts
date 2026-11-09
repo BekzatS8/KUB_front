@@ -10,6 +10,10 @@ export interface ReportTableContent {
   // Ширины столбцов в px (как в Excel — тянутся мышью). Необязательно: если нет
   // или длина не совпадает с columns — берутся значения по умолчанию.
   widths?: number[]
+  // Вид документа: таблица (по умолчанию) или блокнот с текстом (ТЗ
+  // «доработки CRM КУБ», п.12).
+  kind?: 'table' | 'note'
+  text?: string
 }
 
 export interface ManagerReport {
@@ -17,6 +21,7 @@ export interface ManagerReport {
   user_id: number
   user_name?: string
   title: string
+  kind?: 'table' | 'note'
   // в списках content не приходит — только в отчёте, открытом целиком
   content?: ReportTableContent
   created_at?: string
@@ -128,4 +133,22 @@ export async function purgeReportTable(id: number): Promise<void> {
 export async function exportReportTable(id: number): Promise<Blob> {
   const res = await api.get(`/reports/table/report/${id}/export`, { responseType: 'blob' })
   return res.data as Blob
+}
+
+
+// Поиск по названию отчётов сотрудников и тексту внутри (п.12).
+export interface ReportSearchHit {
+  id: number
+  user_id: number
+  user_name: string
+  title: string
+  kind: 'table' | 'note'
+  updated_at: string
+  title_match: boolean
+  snippet?: string
+}
+
+export async function searchReportTables(q: string): Promise<ReportSearchHit[]> {
+  const res = await api.get('/reports/table/search', { params: { q } })
+  return res.data?.items || []
 }

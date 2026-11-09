@@ -10,7 +10,8 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { ArchiveRestore, ChevronLeft, ChevronRight, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArchiveRestore, ChevronLeft, ChevronRight, FileSpreadsheet, Pencil, Plus, Trash2, NotebookPen
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ReportTableEditor } from "@/components/report-table-editor";
+import { ReportNoteEditor } from "@/components/report-note-editor";
 import {
   createMyReportTable,
   deleteMyReportTable,
@@ -58,7 +60,8 @@ export default function MyReportsPage() {
   const [saving, setSaving] = useState(false);
 
   // диалог создания/переименования: reportId === null → создаём новый
-  const [nameDialog, setNameDialog] = useState<{ reportId: number | null; value: string } | null>(null);
+  // kind — что создаём: таблицу-отчёт или блокнот (ТЗ «доработки CRM КУБ», п.12)
+  const [nameDialog, setNameDialog] = useState<{ reportId: number | null; value: string; kind?: "table" | "note" } | null>(null);
   const [nameSaving, setNameSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ManagerReport | null>(null);
   const [purgeTarget, setPurgeTarget] = useState<ManagerReport | null>(null);
@@ -114,7 +117,7 @@ export default function MyReportsPage() {
       const updatedAt = new Date().toISOString();
       setActive({ ...active, content, updated_at: updatedAt });
       setReports((prev) => prev.map((r) => (r.id === active.id ? { ...r, updated_at: updatedAt } : r)));
-      toast.success("Отчёт сохранён");
+      toast.success((active.content as ReportTableContent)?.kind === "note" ? "Блокнот сохранён" : "Отчёт сохранён");
     } catch (err: any) {
       toast.error(err?.message || "Не удалось сохранить отчёт");
     } finally {
@@ -132,10 +135,14 @@ export default function MyReportsPage() {
     setNameSaving(true);
     try {
       if (nameDialog.reportId === null) {
-        const created = await createMyReportTable(title);
-        setReports((prev) => [created, ...prev]);
+        const isNote = nameDialog.kind === "note";
+        const created = await createMyReportTable(
+          title,
+          isNote ? { kind: "note", text: "", columns: [], rows: [] } : undefined,
+        );
+        setReports((prev) => [{ ...created, kind: isNote ? "note" : "table" }, ...prev]);
         setActiveId(created.id);
-        toast.success("Отчёт создан");
+        toast.success(isNote ? "Блокнот создан" : "Отчёт создан");
       } else {
         const target = reports.find((r) => r.id === nameDialog.reportId);
         // переименование идёт тем же PUT — шлём текущее содержимое обратно
@@ -237,10 +244,16 @@ export default function MyReportsPage() {
             {showTrash ? "К отчётам" : "Корзина"}
           </Button>
           {!showTrash && (
-            <Button onClick={() => setNameDialog({ reportId: null, value: "" })}>
-              <Plus className="mr-1.5 h-4 w-4" />
-              Новый отчёт
-            </Button>
+            <>
+              <Button variant="outline" onClick={() => setNameDialog({ reportId: null, value: "", kind: "note" })}>
+                <NotebookPen className="mr-1.5 h-4 w-4" />
+                Создать блокнот
+              </Button>
+              <Button onClick={() => setNameDialog({ reportId: null, value: "", kind: "table" })}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                Новый отчёт
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -313,10 +326,11 @@ export default function MyReportsPage() {
                 <button
                   type="button"
                   onClick={() => setActiveId(r.id)}
-                  className="max-w-[220px] truncate text-left text-sm font-medium text-slate-900"
-                  title={r.title}
+                  className="flex max-w-[220px] items-center gap-1 truncate text-left text-sm font-medium text-slate-900"
+                  title={r.kind === "note" ? `Блокнот: ${r.title}` : r.title}
                 >
-                  {r.title}
+                  {r.kind === "note" && <NotebookPen className="h-3.5 w-3.5 shrink-0 text-amber-600" />}
+                  <span className="truncate">{r.title}</span>
                 </button>
                 <button
                   type="button"
@@ -360,12 +374,21 @@ export default function MyReportsPage() {
             {activeLoading || !active ? (
               <Skeleton className="h-64 w-full rounded-lg" />
             ) : (
-              <ReportTableEditor
-                key={active.id}
-                content={active.content as ReportTableContent}
-                saving={saving}
-                onSave={handleSave}
-              />
+              (active.content as ReportTableContent)?.kind === "note" ? (
+                <ReportNoteEditor
+                  key={active.id}
+                  content={active.content as ReportTableContent}
+                  saving={saving}
+                  onSave={handleSave}
+                />
+              ) : (
+                <ReportTableEditor
+                  key={active.id}
+                  content={active.content as ReportTableContent}
+                  saving={saving}
+                  onSave={handleSave}
+                />
+              )
             )}
           </div>
         </div>
@@ -375,7 +398,7 @@ export default function MyReportsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {nameDialog?.reportId === null ? "Новый отчёт" : "Переименовать отчёт"}
+              {nameDialog?.reportId === null ? (nameDialog?.kind === "note" ? "Новый блокнот" : "Новый отчёт") : "Переименовать"}
             </DialogTitle>
             <DialogDescription>
               Название видно вам и руководителю в списке отчётов.
