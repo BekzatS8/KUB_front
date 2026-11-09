@@ -5,7 +5,10 @@ import type * as Models from '../models/Auth.model'
 
 // Функция для преобразования данных пользователя с сервера в формат приложения
 function transformUserFromServer(serverUser: any): any {
-  const role = serverUser.role || { id: 0, code: '', legacy_name: '' }
+  // Ответ /auth/login отдаёт только role_id (без объекта role) — без этого у
+  // всех ролей сохранялась роль «user» и стартовая страница по роли не
+  // срабатывала (кадры и оператор попадали на «Лиды» с «Нет доступа»).
+  const role = serverUser.role || { id: Number(serverUser.role_id) || 0, code: '', legacy_name: '' }
   const normalizedRole = {
     ...role,
     code: normalizeRoleCode(role.code || getRoleFromId(role.id)),
@@ -53,6 +56,7 @@ function getRoleFromId(roleId: number): string {
     70: 'partner',
     80: 'hr',
     90: 'legal',
+    95: 'operator',
   }
   return roleMapping[roleId] || 'user'
 }
@@ -75,6 +79,7 @@ function normalizeRoleCode(roleCode: string): string {
     'partner': 'partner',
     'hr': 'hr',
     'legal': 'legal',
+    'operator': 'operator',
   }
   return codeMapping[roleCode] || roleCode
 }

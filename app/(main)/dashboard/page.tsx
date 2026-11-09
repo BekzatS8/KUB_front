@@ -43,9 +43,11 @@ export default function DashboardPage() {
       // на /users, а ВСЕ остальные — на /feed (которая у них скрыта из меню).
       if (user) {
         router.push(getLandingRoute(user));
-      } else if (tokenRoleId === 50) {
-        // user ещё не готов, но по токену это админ — на ленту.
-        router.push("/feed");
+      } else if (tokenRoleId) {
+        // Профиль ещё не сохранён — стартовая страница по роли из токена.
+        // Раньше так распознавался только админ, остальные (кадры, юрист,
+        // оператор колл-центра) попадали на «Лиды» и видели «Нет доступа».
+        router.push(getLandingRoute({ role_id: tokenRoleId }));
       } else {
         router.push("/deals");
       }

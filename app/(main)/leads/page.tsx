@@ -262,9 +262,11 @@ export default function LeadsPage() {
 
   const renderResponsibleUser = (lead: Lead) => {
     const responsibleId = getLeadResponsibleId(lead);
-    const responsible = getUserById(responsibleId);
+    // Список сотрудников доступен не всем ролям (оператору — нет); имя
+    // ответственного сервер отдаёт в самом лиде (owner_name).
+    const responsible = getUserById(responsibleId) || ((lead as any).owner_name ? { full_name: (lead as any).owner_name } : undefined);
 
-    if (!responsibleId) {
+    if (!responsibleId || (lead as any).unassigned) {
       return <span className="text-sm text-gray-400">Не назначен</span>;
     }
 

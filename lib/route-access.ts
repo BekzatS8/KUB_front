@@ -4,7 +4,8 @@
 
 // Оператор колл-центра (ТЗ «доработки CRM КУБ», п.5): только лиды, мессенджер,
 // звонки, календарь и свой профиль.
-const OPERATOR_PREFIXES = ["/leads", "/whatsapp", "/whatsapp-child", "/telephony", "/calendar", "/profile"]
+// "/dashboard" — страница-развилка после входа (сразу переадресует на «Лиды»).
+const OPERATOR_PREFIXES = ["/dashboard", "/leads", "/whatsapp", "/whatsapp-child", "/telephony", "/calendar", "/profile"]
 
 // Разделы, открытые только перечисленным ролям.
 const RESTRICTED: { prefix: string; roles: string[] }[] = [
