@@ -149,3 +149,14 @@ export async function get_lead_history(leadId: number): Promise<LeadHistoryEntry
   const res = await api.get(`/leads/${leadId}/history`)
   return Array.isArray(res.data?.items) ? res.data.items : []
 }
+
+// Лид переписки мессенджера — кнопка «Профиль» (ТЗ п.4). null — лида нет.
+export async function find_lead_by_chat(transport: string, chatId: string): Promise<number | null> {
+  try {
+    const res = await api.get(`/leads/by-chat`, { params: { transport, chat_id: chatId } })
+    return Number(res.data?.id) || null
+  } catch (err: any) {
+    if (err?.response?.status === 404 || err?.response?.status === 403) return null
+    throw err
+  }
+}

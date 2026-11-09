@@ -284,7 +284,7 @@ export default function UsersPage() {
       // Stats fetched independently — 403 on any stat does not break the user list
       const statRoles = [
         Roles.SYSTEM_ADMIN, Roles.MANAGEMENT, Roles.SALES, Roles.VISA,
-        Roles.PARTNER, Roles.HR, Roles.LEGAL, Roles.QUALITY_CONTROL,
+        Roles.PARTNER, Roles.HR, Roles.LEGAL, Roles.QUALITY_CONTROL, Roles.OPERATOR,
       ];
       const [totalResult, ...roleResults] = await Promise.allSettled([
         UserAPI.getUsersCount(),

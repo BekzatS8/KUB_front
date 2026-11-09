@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, RefreshCw, Send, Settings } from "lucide-react";
+import { AlertCircle, RefreshCw, Send, Settings, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +27,7 @@ import {
   type WazzupAccount,
   type WazzupChannel,
 } from "@/src/api/integrations_wazzup.api";
+import { find_lead_by_chat } from "@/src/api/leads.api";
 
 // Страница мессенджера каждого аккаунта Wazzup. Пути не вложены друг в друга:
 // подсветка пункта меню сравнивает начало пути.
@@ -198,6 +199,23 @@ export function MessengerView({ account }: { account: WazzupAccount }) {
     }
   }, [account, chatId, chatTransport, router, searchQuery]);
 
+  // «Профиль» (ТЗ «доработки CRM КУБ», п.4): чат открыт по ссылке — ищем лид
+  // контакта. undefined — ищем, null — лида нет (кнопка неактивна).
+  const [profileLeadId, setProfileLeadId] = useState<number | null | undefined>(undefined);
+  useEffect(() => {
+    if (!chatId) {
+      setProfileLeadId(undefined);
+      return;
+    }
+    let cancelled = false;
+    find_lead_by_chat(chatTransport || "whatsapp", chatId)
+      .then((id) => !cancelled && setProfileLeadId(id))
+      .catch(() => !cancelled && setProfileLeadId(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId, chatTransport]);
+
   const refreshWidget = useCallback(async () => {
     setIsManualRefresh(true);
     await loadWidget();
@@ -289,6 +307,20 @@ export function MessengerView({ account }: { account: WazzupAccount }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {chatId && (
+            // Кнопка — обёртка span, чтобы подсказка «Лид не найден» была видна и
+            // у неактивной кнопки.
+            <span title={profileLeadId ? "Открыть карточку лида" : profileLeadId === null ? "Лид не найден" : "Поиск лида…"}>
+              <Button
+                variant="outline"
+                disabled={!profileLeadId}
+                onClick={() => profileLeadId && router.push(`/leads/${profileLeadId}`)}
+              >
+                <UserRound className="mr-2 h-4 w-4" />
+                Профиль
+              </Button>
+            </span>
+          )}
           <Button onClick={() => setComposeOpen(true)}>
             <Send className="mr-2 h-4 w-4" />
             Написать

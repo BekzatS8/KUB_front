@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Phone, PhoneIncoming, PhoneOutgoing,
   User, FileText, Activity, PlayCircle, PhoneCall, MessageCircle, UserPlus, Hand,
-  ClipboardList, History, Undo2, Merge,
+  ClipboardList, History, Undo2, Merge, CalendarPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -576,6 +576,13 @@ export default function LeadDetailPage() {
         </div>
         {lead.is_archived && (
           <Badge variant="outline" className="text-slate-500">Архив</Badge>
+        )}
+        {/* Встреча с клиентом в календаре (п.6) */}
+        {!lead.is_archived && !lead.read_only && roleCode !== "quality_control" && (
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => router.push(`/calendar?lead_id=${lead.id}&new=1`)}>
+            <CalendarPlus className="h-4 w-4" />
+            Назначить встречу
+          </Button>
         )}
         {/* «Объединить лиды» (п.3.3): лид Instagram с лидом WhatsApp/Telegram и наоборот */}
         {!lead.is_archived && !lead.read_only && roleCode !== "quality_control" && (
