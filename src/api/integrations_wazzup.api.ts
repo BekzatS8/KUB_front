@@ -175,12 +175,16 @@ export const getWazzupChannels = async (): Promise<WazzupListResponse<WazzupChan
 // Ссылка на встроенный iframe добавления канала (White Label). transport
 // опционален: без него — общий экран выбора канала. Бросает при 404 (White Label
 // не настроен) — вызывающий откатывается на кабинет Wazzup.
+// channelId — переподключить существующий канал (QR для номера в статусе
+// «Отсканируйте QR-код», «Не авторизован»).
 export const getWazzupChannelConnectLink = async (
   transport?: string,
+  channelId?: string,
 ): Promise<{ link: string }> => {
-  const response = await api.get('/integrations/wazzup/channels/connect-link', {
-    params: transport ? { transport } : undefined,
-  });
+  const params: Record<string, string> = {};
+  if (transport) params.transport = transport;
+  if (channelId) params.channel_id = channelId;
+  const response = await api.get('/integrations/wazzup/channels/connect-link', { params });
   return response.data;
 };
 

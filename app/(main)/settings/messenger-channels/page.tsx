@@ -163,11 +163,11 @@ export default function MessengerChannelsPage() {
   }
 
   // Получить ссылку на iframe для конкретного транспорта (обязателен для Wazzup).
-  const fetchConnectLink = async (transport: string) => {
+  const fetchConnectLink = async (transport: string, channelId?: string) => {
     setConnectLink("")
     setConnectLoading(true)
     try {
-      const res = await getWazzupChannelConnectLink(transport)
+      const res = await getWazzupChannelConnectLink(transport, channelId)
       setConnectLink(res.link)
     } catch (err: any) {
       const status = err?.response?.status
@@ -454,6 +454,33 @@ export default function MessengerChannelsPage() {
                                   <ExternalLink className="mr-2 h-4 w-4" />
                                   Авторизовать
                                 </a>
+                              </Button>
+                            )}
+                          {isAdmin &&
+                            info?.partner &&
+                            !ch.url &&
+                            !["active", "connected", "enabled", "ok", "online", "working"].includes(
+                              (ch.status || "").toLowerCase(),
+                            ) && (
+                              // Номер не работает (QR не отсканирован, сброшена
+                              // авторизация) — окно Wazzup с QR именно этого номера.
+                              // Instagram переподключается кнопкой «Подключить Instagram».
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-9 shrink-0"
+                                onClick={() => {
+                                  const t = String(ch.transport || "").toLowerCase()
+                                  if (t === "instagram" || t === "instapi") {
+                                    setInstagramOpen(true)
+                                    return
+                                  }
+                                  setAddOpen(true)
+                                  fetchConnectLink(t === "telegram" ? "tgapi" : t, ch.channel_id)
+                                }}
+                              >
+                                <Link2 className="mr-2 h-4 w-4" />
+                                Подключить заново
                               </Button>
                             )}
                           {isAdmin && info?.partner && (
