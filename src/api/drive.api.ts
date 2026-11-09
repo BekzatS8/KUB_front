@@ -19,6 +19,8 @@ export interface DriveNode {
   /** Срок доступа, по которому пользователь видит узел. Нет поля — бессрочно. */
   share_expires_at?: string
   preview?: DrivePreviewKind
+  /** Узел защищён паролем (ТЗ «доработки CRM КУБ», п.8). */
+  protected?: boolean
 }
 
 export interface DriveBreadcrumb {
@@ -365,4 +367,81 @@ export function driveErrorMessage(err: any, fallback: string): string {
   const status = err?.response?.status
   if (status === 413) return 'Файл слишком большой'
   return err?.response?.data?.message || fallback
+}
+
+
+// ─── ТЗ «доработки CRM КУБ», п.8: пароли, папки, ZIP, архивы ──────────────
+
+// Токены разблокировки узлов под паролем живут 30 минут; храним на время
+// вкладки (sessionStorage) и прикладываем ко всем запросам хранилища.
+const UNLOCK_KEY = 'kub_drive_unlock'
+type UnlockEntry = { node: number; token: string; exp: number }
+
+function readUnlocks(): UnlockEntry[] {
+  try {
+    const list: UnlockEntry[] = JSON.parse(sessionStorage.getItem(UNLOCK_KEY) || '[]')
+    const now = Date.now()
+    return Array.isArray(list) ? list.filter((u) => u.exp > now) : []
+  } catch {
+    return []
+  }
+}
+
+function saveUnlock(entry: UnlockEntry) {
+  try {
+    const list = readUnlocks().filter((u) => u.node !== entry.node)
+    list.push(entry)
+    sessionStorage.setItem(UNLOCK_KEY, JSON.stringify(list.slice(-40)))
+  } catch {}
+}
+
+api.interceptors.request.use((config) => {
+  const url = String(config.url || '')
+  if (url.startsWith('/api/v1/drive')) {
+    const tokens = readUnlocks().map((u) => u.token)
+    if (tokens.length) {
+      config.headers = config.headers || {}
+      ;(config.headers as any)['X-Drive-Unlock'] = tokens.join(',')
+    }
+  }
+  return config
+})
+
+/** Узел под паролем, из-за которого запрос отклонён (HTTP 423), или null. */
+export function driveLockedInfo(err: any): { nodeId: number; name: string } | null {
+  if (err?.response?.status !== 423) return null
+  const d = err.response.data || {}
+  return { nodeId: Number(d.node_id), name: String(d.node_name || '') }
+}
+
+export async function unlockDriveNode(id: number, password: string): Promise<void> {
+  const res = await api.post(`/api/v1/drive/nodes/${id}/unlock`, { password })
+  saveUnlock({ node: id, token: res.data.token, exp: new Date(res.data.expires_at).getTime() })
+}
+
+/** Поставить или сменить пароль; пустой newPassword — снять. */
+export async function setDrivePassword(id: number, currentPassword: string, newPassword: string): Promise<void> {
+  await api.put(`/api/v1/drive/nodes/${id}/password`, { current_password: currentPassword, new_password: newPassword })
+}
+
+/** Папки по пути «a/b/c» внутри parent — для загрузки папки с файлами. */
+export async function ensureDriveFolderPath(parentId: number | null, path: string): Promise<DriveNode> {
+  const res = await api.post('/api/v1/drive/folders/path', { parent_id: parentId, path })
+  return res.data
+}
+
+/** Прямая ссылка на ZIP выбранных файлов и папок (со структурой папок). */
+export async function getDriveZipUrl(ids: number[]): Promise<string> {
+  const res = await api.post('/api/v1/drive/zip-link', { ids })
+  return driveApiUrl(res.data.url)
+}
+
+export async function archiveDriveNodes(ids: number[], name?: string): Promise<DriveNode> {
+  const res = await api.post('/api/v1/drive/archive', { ids, name: name || '' }, { timeout: 0 })
+  return res.data
+}
+
+export async function unarchiveDriveNode(id: number): Promise<DriveNode> {
+  const res = await api.post(`/api/v1/drive/nodes/${id}/unarchive`, {}, { timeout: 0 })
+  return res.data
 }

@@ -13,6 +13,11 @@ import {
   Download,
   EllipsisVertical,
   Eye,
+  FileArchive,
+  FolderUp,
+  KeyRound,
+  Lock,
+  PackageOpen,
   FolderInput,
   FolderOpen,
   FolderPlus,
@@ -53,11 +58,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  archiveDriveNodes,
   copyDriveNodes,
   createDriveFolder,
   deleteDriveNodes,
   driveErrorMessage,
+  driveLockedInfo,
+  ensureDriveFolderPath,
+  getDriveZipUrl,
   listDrive,
+  setDrivePassword,
+  unarchiveDriveNode,
+  unlockDriveNode,
   moveDriveNodes,
   renameDriveNode,
   uploadDriveFile,
@@ -86,6 +98,8 @@ interface UploadItem {
   id: string
   file: File
   parentId: number | null
+  /** Папка внутри parentId при загрузке папкой: «Проект/Документы». */
+  relDir?: string
   loaded: number
   status: UploadStatus
   error?: string
@@ -97,6 +111,42 @@ interface UploadItem {
 const UPLOAD_CONCURRENCY = 3
 
 type NameDialogState = { mode: "create" } | { mode: "rename"; node: DriveNode } | null
+
+// Файл с папкой внутри загружаемой папки (ТЗ «доработки CRM КУБ», п.8).
+type PickedFile = { file: File; relDir?: string }
+
+const dirOf = (relPath: string) => {
+  const parts = relPath.replace(/\\/g, "/").split("/").filter(Boolean)
+  return parts.slice(0, -1).join("/")
+}
+
+// Перетащенные папки: обходим содержимое через File System Entries API.
+async function collectDropped(dt: DataTransfer): Promise<PickedFile[]> {
+  const entries = Array.from(dt.items || [])
+    .map((it) => (it as any).webkitGetAsEntry?.())
+    .filter(Boolean)
+  if (entries.length === 0 || !entries.some((e: any) => e.isDirectory)) {
+    return Array.from(dt.files || []).map((file) => ({ file }))
+  }
+  const out: PickedFile[] = []
+  const walk = async (entry: any, dir: string): Promise<void> => {
+    if (entry.isFile) {
+      const file: File = await new Promise((res, rej) => entry.file(res, rej))
+      out.push({ file, relDir: dir || undefined })
+      return
+    }
+    if (!entry.isDirectory) return
+    const reader = entry.createReader()
+    const path = dir ? `${dir}/${entry.name}` : entry.name
+    for (;;) {
+      const batch: any[] = await new Promise((res, rej) => reader.readEntries(res, rej))
+      if (batch.length === 0) break
+      for (const child of batch) await walk(child, path)
+    }
+  }
+  for (const e of entries) await walk(e, "")
+  return out
+}
 
 // Буфер «Вырезать / Копировать»: живёт, пока открыт раздел, и переживает
 // переход между папками — вставляется в ту папку, где нажали «Вставить».
@@ -204,6 +254,18 @@ export default function DrivePage() {
   const [uploads, setUploads] = useState<UploadItem[]>([])
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const folderInputRef = useRef<HTMLInputElement>(null)
+  // Папки, созданные при загрузке папкой: «parent|путь» → id (без гонок).
+  const folderCache = useRef(new Map<string, Promise<number>>())
+  // Ввод пароля к защищённой папке/файлу и что повторить после разблокировки.
+  const [unlockState, setUnlockState] = useState<{ nodeId: number; name: string; retry: () => void } | null>(null)
+  const [unlockPassword, setUnlockPassword] = useState("")
+  const [unlocking, setUnlocking] = useState(false)
+  const [passwordNode, setPasswordNode] = useState<DriveNode | null>(null)
+  const [pwCurrent, setPwCurrent] = useState("")
+  const [pwNew, setPwNew] = useState("")
+  const [pwSaving, setPwSaving] = useState(false)
+  const [busyAction, setBusyAction] = useState(false)
   const folderIdRef = useRef(folderId)
   folderIdRef.current = folderId
 
@@ -218,6 +280,12 @@ export default function DrivePage() {
       try {
         setListing(await listDrive(folderId))
       } catch (err: any) {
+        const locked = driveLockedInfo(err)
+        if (locked) {
+          setUnlockPassword("")
+          setUnlockState({ ...locked, retry: () => load() })
+          return
+        }
         if (err?.response?.status === 404) {
           toast.error("Папка не найдена или доступ к ней закрыт")
           router.replace(pathname)
@@ -249,9 +317,106 @@ export default function DrivePage() {
 
   const files = useMemo(() => items.filter((n) => n.kind === "file"), [items])
 
+  // Действие с узлом под паролем: сначала спросить пароль, потом выполнить.
+  const askUnlock = (nodeId: number, name: string, retry: () => void) => {
+    setUnlockPassword("")
+    setUnlockState({ nodeId, name, retry })
+  }
+  // Ошибка «под паролем» (423) — окно пароля и повтор действия.
+  const handleLocked = (err: any, retry: () => void): boolean => {
+    const locked = driveLockedInfo(err)
+    if (!locked) return false
+    askUnlock(locked.nodeId, locked.name, retry)
+    return true
+  }
+
+  const submitUnlock = async () => {
+    if (!unlockState) return
+    setUnlocking(true)
+    try {
+      await unlockDriveNode(unlockState.nodeId, unlockPassword)
+      const retry = unlockState.retry
+      setUnlockState(null)
+      retry()
+    } catch (err) {
+      toast.error(driveErrorMessage(err, "Неверный пароль"))
+    } finally {
+      setUnlocking(false)
+    }
+  }
+
   const openNode = (node: DriveNode) => {
     if (node.kind === "folder") openFolder(node.id)
+    else if (node.protected) askUnlock(node.id, node.name, () => setPreviewNode(node))
     else setPreviewNode(node)
+  }
+
+  // «Скачать» выбранное: один файл — как есть, иначе ZIP со структурой папок.
+  const downloadSelection = async (nodes: DriveNode[]) => {
+    if (nodes.length === 1 && nodes[0].kind === "file" && !nodes[0].protected) {
+      downloadDriveFile(nodes[0])
+      return
+    }
+    try {
+      const url = await getDriveZipUrl(nodes.map((n) => n.id))
+      const a = document.createElement("a")
+      a.href = url
+      a.rel = "noopener"
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    } catch (err) {
+      if (!handleLocked(err, () => downloadSelection(nodes))) toast.error(driveErrorMessage(err, "Не удалось скачать"))
+    }
+  }
+
+  const archiveSelection = async (nodes: DriveNode[]) => {
+    setBusyAction(true)
+    try {
+      const node = await archiveDriveNodes(nodes.map((n) => n.id))
+      toast.success(`Создан архив «${node.name}»`)
+      setSelected(new Set())
+      load(true)
+    } catch (err) {
+      if (!handleLocked(err, () => archiveSelection(nodes))) toast.error(driveErrorMessage(err, "Не удалось создать архив"))
+    } finally {
+      setBusyAction(false)
+    }
+  }
+
+  const unarchive = async (node: DriveNode) => {
+    setBusyAction(true)
+    try {
+      const folder = await unarchiveDriveNode(node.id)
+      toast.success(`Распаковано в папку «${folder.name}»`)
+      setSelected(new Set())
+      load(true)
+    } catch (err) {
+      if (!handleLocked(err, () => unarchive(node))) toast.error(driveErrorMessage(err, "Не удалось распаковать"))
+    } finally {
+      setBusyAction(false)
+    }
+  }
+
+  const openPasswordDialog = (node: DriveNode) => {
+    setPwCurrent("")
+    setPwNew("")
+    setPasswordNode(node)
+  }
+
+  const savePassword = async (remove: boolean) => {
+    if (!passwordNode) return
+    setPwSaving(true)
+    try {
+      await setDrivePassword(passwordNode.id, pwCurrent, remove ? "" : pwNew)
+      toast.success(remove ? "Пароль снят" : passwordNode.protected ? "Пароль изменён" : "Пароль установлен")
+      setPasswordNode(null)
+      load(true)
+    } catch (err) {
+      toast.error(driveErrorMessage(err, "Не удалось изменить пароль"))
+    } finally {
+      setPwSaving(false)
+    }
   }
 
   // ── Выделение, буфер, перемещение ────────────────────────────────────────
@@ -338,19 +503,33 @@ export default function DrivePage() {
 
   // ── Загрузка ──────────────────────────────────────────────────────────────
 
-  const enqueue = (list: FileList | File[]) => {
-    const picked = Array.from(list)
+  const enqueue = (list: FileList | File[] | PickedFile[]) => {
+    const picked: PickedFile[] = Array.from(list as any).map((x: any) => (x instanceof File ? { file: x } : x))
     if (picked.length === 0) return
     setUploads((prev) => [
       ...prev.filter((u) => u.status !== "done" && u.status !== "cancelled"),
-      ...picked.map((file) => ({
+      ...picked.map(({ file, relDir }) => ({
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         file,
         parentId: folderIdRef.current,
+        relDir,
         loaded: 0,
         status: "queued" as UploadStatus,
       })),
     ])
+  }
+
+  // Папка назначения при загрузке папкой: создаётся один раз на путь.
+  const resolveParent = (item: UploadItem): Promise<number | null> => {
+    if (!item.relDir) return Promise.resolve(item.parentId)
+    const key = `${item.parentId ?? 0}|${item.relDir.toLowerCase()}`
+    let p = folderCache.current.get(key)
+    if (!p) {
+      p = ensureDriveFolderPath(item.parentId, item.relDir).then((n) => n.id)
+      p.catch(() => folderCache.current.delete(key))
+      folderCache.current.set(key, p)
+    }
+    return p
   }
 
   const patchUpload = (id: string, patch: Partial<UploadItem>) =>
@@ -367,7 +546,8 @@ export default function DrivePage() {
       .forEach((item) => {
         const controller = new AbortController()
         patchUpload(item.id, { status: "uploading", controller })
-        uploadDriveFile(item.parentId, item.file, (loaded) => patchUpload(item.id, { loaded }), controller.signal)
+        resolveParent(item)
+          .then((parentId) => uploadDriveFile(parentId, item.file, (loaded) => patchUpload(item.id, { loaded }), controller.signal))
           .then(() => {
             patchUpload(item.id, { status: "done", loaded: item.file.size, controller: undefined })
             if (item.parentId === folderIdRef.current) load(true)
@@ -390,7 +570,10 @@ export default function DrivePage() {
     e.preventDefault()
     setDragOver(false)
     if (!canEdit) return
-    if (e.dataTransfer.files?.length) enqueue(e.dataTransfer.files)
+    // Папки перетаскиваются вместе с содержимым (п.8).
+    collectDropped(e.dataTransfer)
+      .then((picked) => picked.length && enqueue(picked))
+      .catch(() => e.dataTransfer.files?.length && enqueue(e.dataTransfer.files))
   }
 
   // ── Папки, переименование, удаление ──────────────────────────────────────
@@ -497,12 +680,28 @@ export default function DrivePage() {
                   <FolderPlus className="mr-2 h-4 w-4" />
                   Создать папку
                 </Button>
+                <Button variant="outline" onClick={() => folderInputRef.current?.click()} title="Загрузить папку вместе с содержимым">
+                  <FolderUp className="mr-2 h-4 w-4" />
+                  Загрузить папку
+                </Button>
                 <Button onClick={() => fileInputRef.current?.click()}>
                   <CloudUpload className="mr-2 h-4 w-4" />
                   Загрузить
                 </Button>
               </>
             )}
+            <input
+              ref={folderInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              {...({ webkitdirectory: "", directory: "" } as any)}
+              onChange={(e) => {
+                const list = Array.from(e.target.files || [])
+                enqueue(list.map((file) => ({ file, relDir: dirOf((file as any).webkitRelativePath || "") || undefined })))
+                e.target.value = ""
+              }}
+            />
             <input
               ref={fileInputRef}
               type="file"
@@ -575,6 +774,30 @@ export default function DrivePage() {
       {selectedNodes.length > 0 && (
         <div className="sticky top-2 z-20 flex flex-wrap items-center gap-1 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 shadow-sm">
           <span className="mr-2 text-sm font-medium text-blue-900">Выбрано: {selectedNodes.length}</span>
+          {/* «Скачать» — сразу при выделении (п.8): файл как есть, папки и
+              несколько элементов — ZIP с сохранением структуры папок. */}
+          <Button size="sm" variant="ghost" onClick={() => downloadSelection(selectedNodes)}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Скачать
+          </Button>
+          {canEdit && (
+            <Button size="sm" variant="ghost" disabled={busyAction} onClick={() => archiveSelection(selectedNodes)}>
+              <FileArchive className="mr-1.5 h-4 w-4" />
+              Архивировать
+            </Button>
+          )}
+          {canEdit && selectedNodes.length === 1 && selectedNodes[0].kind === "file" && /\.zip$/i.test(selectedNodes[0].name) && (
+            <Button size="sm" variant="ghost" disabled={busyAction} onClick={() => unarchive(selectedNodes[0])}>
+              <PackageOpen className="mr-1.5 h-4 w-4" />
+              Разархивировать
+            </Button>
+          )}
+          {canEdit && selectedNodes.length === 1 && (
+            <Button size="sm" variant="ghost" onClick={() => openPasswordDialog(selectedNodes[0])}>
+              <KeyRound className="mr-1.5 h-4 w-4" />
+              {selectedNodes[0].protected ? "Пароль…" : "Поставить пароль"}
+            </Button>
+          )}
           {canEdit && (
             <Button size="sm" variant="ghost" onClick={() => toClipboard("cut", selectedNodes)}>
               <Scissors className="mr-1.5 h-4 w-4" />
@@ -698,8 +921,9 @@ export default function DrivePage() {
                 >
                   <DriveNodeIcon node={node} className="h-6 w-6" />
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-slate-900 group-hover:text-blue-700">
-                      {node.name}
+                    <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-slate-900 group-hover:text-blue-700">
+                      <span className="truncate">{node.name}</span>
+                      {node.protected && <Lock className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-label="Защищено паролем" />}
                     </span>
                     <span className="flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
                       {node.kind === "folder" && (
@@ -731,7 +955,7 @@ export default function DrivePage() {
                   canManage={canManage}
                   canEdit={canEdit}
                   onOpen={() => openNode(node)}
-                  onDownload={() => downloadDriveFile(node)}
+                  onDownload={() => (node.protected ? askUnlock(node.id, node.name, () => downloadDriveFile(node)) : downloadDriveFile(node))}
                   onShare={() => setShareNode(node)}
                   onRename={() => openNameDialog({ mode: "rename", node })}
                   onDelete={() => setToDelete([node])}
@@ -746,6 +970,60 @@ export default function DrivePage() {
           </ul>
         )}
       </div>
+
+      {/* Пароль к защищённой папке или файлу (п.8) */}
+      <Dialog open={unlockState !== null} onOpenChange={(open) => !open && setUnlockState(null)}>
+        <DialogContent className="max-w-sm bg-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Lock className="h-4 w-4 text-amber-600" />Введите пароль</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              submitUnlock()
+            }}
+            className="space-y-3"
+          >
+            <p className="text-sm text-slate-600">«{unlockState?.name}» защищено паролем.</p>
+            <Input type="password" autoFocus value={unlockPassword} onChange={(e) => setUnlockPassword(e.target.value)} placeholder="Пароль" />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setUnlockState(null)}>Отмена</Button>
+              <Button type="submit" disabled={!unlockPassword || unlocking}>{unlocking ? "Проверка…" : "Открыть"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Поставить / сменить / снять пароль (п.8) */}
+      <Dialog open={passwordNode !== null} onOpenChange={(open) => !open && setPasswordNode(null)}>
+        <DialogContent className="max-w-sm bg-white">
+          <DialogHeader>
+            <DialogTitle>{passwordNode?.protected ? "Пароль" : "Поставить пароль"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">
+              «{passwordNode?.name}»{passwordNode?.kind === "folder" ? " и всё внутри папки" : ""} будет открываться только после ввода пароля.
+            </p>
+            {passwordNode?.protected && !canManage && (
+              <Input type="password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} placeholder="Текущий пароль" />
+            )}
+            <Input type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} placeholder={passwordNode?.protected ? "Новый пароль" : "Пароль (не короче 4 символов)"} />
+            {passwordNode?.protected && canManage && (
+              <p className="text-xs text-slate-500">Администратор меняет и снимает пароль без ввода текущего.</p>
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            {passwordNode?.protected ? (
+              <Button variant="outline" className="text-red-600" disabled={pwSaving || (!canManage && !pwCurrent)} onClick={() => savePassword(true)}>
+                Снять пароль
+              </Button>
+            ) : <span />}
+            <Button disabled={pwSaving || pwNew.length < 4 || (passwordNode?.protected && !canManage && !pwCurrent)} onClick={() => savePassword(false)}>
+              {passwordNode?.protected ? "Сменить" : "Поставить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Создание папки / переименование */}
       <Dialog open={nameDialog !== null} onOpenChange={(open) => !open && setNameDialog(null)}>

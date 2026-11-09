@@ -294,7 +294,12 @@ api.interceptors.response.use(
       `Server error: ${status || 'Unknown'}`;
 
     console.error('Error message:', message);
-    return Promise.reject(new Error(message));
+    // Ответ сервера сохраняем и здесь, как для 400/403: без него вызывающий
+    // код не видел ни статус (404, 409, 423 «под паролем»), ни поля ошибки.
+    const otherError = new Error(message);
+    (otherError as any).response = error.response;
+    (otherError as any).status = status;
+    return Promise.reject(otherError);
   }
 )
 
