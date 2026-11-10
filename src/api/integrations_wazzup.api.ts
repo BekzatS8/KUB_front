@@ -403,3 +403,15 @@ export const getWazzupCRMUser = async (token: string, userId: string): Promise<C
   const response = await fetch(`/integrations/wazzup/crm/${token}/users/${userId}`);
   return response.json();
 };
+
+// Дополнительные филиалы каналов (Instagram для нескольких филиалов):
+// channel id → филиалы, кроме основного.
+export async function getWazzupChannelExtraBranches(): Promise<Record<string, number[]>> {
+  const res = await api.get('/integrations/wazzup/channel-branches')
+  return res.data?.items || {}
+}
+
+export async function setWazzupChannelBranches(channelId: number, branchId: number | null, extraBranchIds: number[]): Promise<{ moved_leads: number }> {
+  const res = await api.put(`/integrations/wazzup/channels/${channelId}/branches`, { branch_id: branchId, extra_branch_ids: extraBranchIds })
+  return res.data
+}

@@ -26,6 +26,8 @@ import {
   getWazzupChannels,
   setupWazzup,
   setWazzupChannelBranch,
+  getWazzupChannelExtraBranches,
+  setWazzupChannelBranches,
   getWazzupChannelConnectLink,
   deleteWazzupChannel,
   setWazzupChannelDepartment,
@@ -113,6 +115,8 @@ export default function MessengerChannelsPage() {
   const [connectingAccount, setConnectingAccount] = useState<WazzupAccount | null>(null)
   const [channels, setChannels] = useState<WazzupChannel[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
+  // Дополнительные филиалы канала: лиды канала видят и они.
+  const [extraBranches, setExtraBranches] = useState<Record<string, number[]>>({})
   const [departments, setDepartments] = useState<MessengerDepartment[]>([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<number | null>(null)
@@ -141,6 +145,7 @@ export default function MessengerChannelsPage() {
         getMessengerDepartments().catch(() => ({ value: [], count: 0 })),
         getWazzupAccounts().catch(() => ({ items: [] as WazzupAccountInfo[] })),
       ])
+      setExtraBranches(await getWazzupChannelExtraBranches().catch(() => ({})))
       setChannels(chRes?.value || [])
       setAccounts(accRes?.items || [])
       setBranches(Array.isArray(brRes) ? brRes : brRes?.data || [])
@@ -256,15 +261,39 @@ export default function MessengerChannelsPage() {
     }
   }
 
+  // Доп. филиалы: лиды этого канала (например, Instagram) видят и они.
+  const toggleExtraBranch = async (ch: { id: number; branch_id?: number | null }, branchId: number) => {
+    const current = extraBranches[String(ch.id)] || []
+    const next = current.includes(branchId) ? current.filter((b) => b !== branchId) : [...current, branchId]
+    setSavingId(ch.id)
+    try {
+      const res = await setWazzupChannelBranches(ch.id, ch.branch_id ?? null, next)
+      const primary = ch.branch_id ?? next[0] ?? null
+      setExtraBranches((prev) => ({ ...prev, [String(ch.id)]: next.filter((b) => b !== primary) }))
+      if (!ch.branch_id && primary) {
+        setChannels((prev) => prev.map((c) => (c.id === ch.id ? { ...c, branch_id: primary } : c)))
+      }
+      toast.success(res.moved_leads ? `Филиалы сохранены, лидов перенесено в основной филиал: ${res.moved_leads}` : "Филиалы канала сохранены")
+    } catch {
+      toast.error("Не удалось сохранить филиалы канала")
+    } finally {
+      setSavingId(null)
+    }
+  }
+
   const handleChange = async (channelId: number, branchIdRaw: string) => {
     const branchId = branchIdRaw ? Number(branchIdRaw) : null
     setSavingId(channelId)
     try {
-      await setWazzupChannelBranch(channelId, branchId)
+      // Сохраняем вместе с доп. филиалами: ничьи лиды канала переезжают в
+      // основной филиал.
+      const extras = (extraBranches[String(channelId)] || []).filter((b) => b !== branchId)
+      const res = await setWazzupChannelBranches(channelId, branchId, branchId ? extras : [])
       setChannels((prev) =>
         prev.map((c) => (c.id === channelId ? { ...c, branch_id: branchId } : c)),
       )
-      toast.success("Филиал канала сохранён")
+      setExtraBranches((prev) => ({ ...prev, [String(channelId)]: branchId ? extras : [] }))
+      toast.success(res.moved_leads ? `Филиал сохранён, лидов перенесено: ${res.moved_leads}` : "Филиал канала сохранён")
     } catch {
       toast.error("Не удалось сохранить филиал канала")
     } finally {
@@ -426,6 +455,35 @@ export default function MessengerChannelsPage() {
                               </option>
                             ))}
                           </select>
+                          {ch.branch_id && (
+                            <details className="relative">
+                              <summary
+                                className="flex h-9 cursor-pointer list-none items-center rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-700"
+                                title="Лиды этого канала увидят и другие филиалы"
+                              >
+                                {(() => {
+                                  const extra = extraBranches[String(ch.id)] || []
+                                  return extra.length ? `+ ещё филиалов: ${extra.length}` : "+ ещё филиалы"
+                                })()}
+                              </summary>
+                              <div className="absolute right-0 z-20 mt-1 w-64 rounded-md border bg-white p-2 shadow-lg">
+                                <p className="mb-1 px-1 text-xs text-slate-500">Лиды канала видят также:</p>
+                                {branches
+                                  .filter((b) => b.id !== ch.branch_id)
+                                  .map((b) => (
+                                    <label key={b.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50">
+                                      <input
+                                        type="checkbox"
+                                        disabled={savingId === ch.id}
+                                        checked={(extraBranches[String(ch.id)] || []).includes(b.id)}
+                                        onChange={() => toggleExtraBranch(ch, b.id)}
+                                      />
+                                      {b.name}
+                                    </label>
+                                  ))}
+                              </div>
+                            </details>
+                          )}
                           <select
                             className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm sm:w-56"
                             value={ch.department_id ? String(ch.department_id) : ""}

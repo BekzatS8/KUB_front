@@ -48,6 +48,9 @@ export type Auth_Login_Response = {
 export type Auth_Login_Request = {
   email: string
   password: string
+  // капча на вход (защита от подбора пароля)
+  captcha_id?: string
+  captcha_answer?: string
 }
 
 export type Auth_Refresh_token_Request = {

@@ -1865,8 +1865,9 @@ export default function DealsPage() {
         <CardContent>
           <div className="overflow-hidden rounded-md border">
             <Table className="w-full min-w-[1040px] table-fixed">
-              {/* 9 колонок: ID, Клиент, Лид, Сумма, Взнос/Остаток, Валюта,
-                  Статус, Дата, Действия. Раньше col для «Действия» отсутствовал —
+              {/* 9 колонок: ID, Клиент, Лид, Сумма, Взнос/Остаток, Ответственный,
+                  Статус, Дата, Действия. «Валюта» убрана из таблицы (сделки почти
+                  все в тенге; замечания 10.11.2026) — в карточке и форме осталась. Раньше col для «Действия» отсутствовал —
                   колонка выпадала за ширину таблицы (белый фон, съехавшие иконки). */}
               <colgroup>
                 <col className="w-[5%]" />
@@ -1874,10 +1875,10 @@ export default function DealsPage() {
                 <col className="w-[14%]" />
                 <col className="w-[9%]" />
                 <col className="w-[11%]" />
-                <col className="w-[7%]" />
+                <col className="w-[12%]" />
                 <col className="w-[11%]" />
                 <col className="w-[9%]" />
-                <col className="w-[19%]" />
+                <col className="w-[14%]" />
               </colgroup>
               <TableHeader>
                 <TableRow>
@@ -1886,7 +1887,7 @@ export default function DealsPage() {
                   <TableHead className="px-4">Лид</TableHead>
                   <TableHead className="px-4">Сумма</TableHead>
                   <TableHead className="px-4">Взнос / Остаток</TableHead>
-                  <TableHead className="px-4">Валюта</TableHead>
+                  <TableHead className="px-4">Ответственный</TableHead>
                   <TableHead className="px-4">Статус</TableHead>
                   <TableHead className="px-4">Дата</TableHead>
                   <TableHead className="px-2 text-right">Действия</TableHead>
@@ -1927,7 +1928,9 @@ export default function DealsPage() {
                           </div>
                         </TableCell>
                         <TableCell className="px-4 align-top">
-                          <Badge variant="outline">{deal.currency || "KZT"}</Badge>
+                          <div className="break-words text-sm leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                            {(deal as any).owner_name || (deal.owner_id ? getUserLabel(Number(deal.owner_id)) : "—")}
+                          </div>
                         </TableCell>
                         <TableCell className="px-4 align-top">
                           <div className="flex flex-col items-start gap-1">

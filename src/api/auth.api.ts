@@ -84,6 +84,12 @@ function normalizeRoleCode(roleCode: string): string {
   return codeMapping[roleCode] || roleCode
 }
 
+// Капча для формы входа: картинка и id. enabled=false — капча выключена на сервере.
+export async function get_login_captcha(): Promise<{ enabled: boolean; captcha_id?: string; image?: string }> {
+  const res = await api.get('/auth/captcha')
+  return res.data
+}
+
 export async function login(payload: Models.Auth_Login_Request, params?: Record<string, any>): Promise<Models.Auth_Login_Response> {
   const res = await api.post(`/auth/login`, payload)
   const data = res.data

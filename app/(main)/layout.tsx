@@ -28,7 +28,7 @@ export default function MainLayout({
   }, [pathname]);
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
+    <div className="flex h-[100dvh] bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
       <RoleBasedSidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
 
       {/* Затемнение под drawer на мобильном/планшете */}

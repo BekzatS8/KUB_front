@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Building2, Lock, User, AlertCircle, Info } from "lucide-react";
+import { Building2, Lock, User, AlertCircle, Info, RefreshCw, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuthMessage } from "@/hooks/useAuthMessage";
@@ -26,6 +26,21 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const router = useRouter();
   const { message: authMessage, clearMessage } = useAuthMessage();
+  // Капча на вход — защита от подбора пароля ботами.
+  const [captcha, setCaptcha] = useState<{ enabled: boolean; captcha_id?: string; image?: string } | null>(null);
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const loadCaptcha = async () => {
+    setCaptchaAnswer("");
+    try {
+      const { get_login_captcha } = await import("@/src/api/auth.api");
+      setCaptcha(await get_login_captcha());
+    } catch {
+      setCaptcha({ enabled: false });
+    }
+  };
+  useEffect(() => {
+    loadCaptcha();
+  }, []);
 
   useEffect(() => {
     // Check if user is already authenticated
@@ -43,10 +58,12 @@ export default function LoginPage() {
     try {
       const { login } = await import("@/src/api/auth.api");
       // Функция login уже сохраняет токен и пользователя через setAuthToken и setCurrentUser
-      await login({ email, password });
+      await login({ email, password, captcha_id: captcha?.captcha_id, captcha_answer: captchaAnswer });
       router.push("/dashboard");
     } catch (err: any) {
-      setError(err?.message || "Произошла ошибка при входе в систему");
+      setError(err?.response?.data?.message || err?.message || "Произошла ошибка при входе в систему");
+      // капча одноразовая — после любой неудачной попытки нужна новая
+      loadCaptcha();
     } finally {
       setIsLoading(false);
     }
@@ -135,6 +152,43 @@ export default function LoginPage() {
                 />
               </div>
             </div>
+
+            {captcha?.enabled && (
+              <div className="space-y-2">
+                <Label htmlFor="captcha" className="text-sm font-medium text-gray-700">
+                  Код с картинки
+                </Label>
+                <div className="flex items-center gap-2">
+                  {captcha.image && (
+                    <img src={captcha.image} alt="Код проверки" className="h-14 w-40 shrink-0 rounded-md border border-gray-300 bg-slate-100" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={loadCaptcha}
+                    disabled={isLoading}
+                    className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                    title="Другая картинка"
+                    aria-label="Другая картинка"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="relative group">
+                  <ShieldCheck className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-hover:text-primary transition-colors" />
+                  <Input
+                    id="captcha"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="Цифры с картинки"
+                    value={captchaAnswer}
+                    onChange={(e) => setCaptchaAnswer(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    className="pl-10 border-gray-300 focus:border-gray-900 border-2 focus:ring-2 focus:ring-primary/30 transition-all duration-200"
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+            )}
 
             <Button
               type="submit"

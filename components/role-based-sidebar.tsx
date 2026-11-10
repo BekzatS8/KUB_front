@@ -449,7 +449,7 @@ export function RoleBasedSidebar({
   if (isLoading) {
     return (
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 flex h-screen w-64 flex-col border-r border-slate-200/60 bg-white shadow-soft transition-transform duration-300",
+        "fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-64 flex-col border-r border-slate-200/60 bg-white shadow-soft transition-transform duration-300",
         "lg:sticky lg:top-0 lg:z-30 lg:translate-x-0",
         mobileOpen ? "translate-x-0" : "-translate-x-full",
       )}>
@@ -485,7 +485,7 @@ export function RoleBasedSidebar({
       className={cn(
         // Мобильные/планшеты (<lg): выезжающая панель (drawer) поверх контента.
         // Десктоп (lg+): обычная прилипшая колонка, сворачиваемая по ширине.
-        "fixed inset-y-0 left-0 z-50 flex h-screen w-64 flex-col border-r border-slate-200/60 bg-white shadow-soft transition-transform duration-300",
+        "fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-64 flex-col border-r border-slate-200/60 bg-white shadow-soft transition-transform duration-300",
         "lg:sticky lg:top-0 lg:z-30 lg:translate-x-0 lg:transition-all",
         mobileOpen ? "translate-x-0" : "-translate-x-full",
         isCollapsed ? "lg:w-16" : "lg:w-64"
@@ -559,7 +559,10 @@ export function RoleBasedSidebar({
       )}
 
       {/* ── Navigation ── */}
-      <nav className="custom-scrollbar flex-1 space-y-0.5 overflow-y-auto p-3">
+      {/* min-h-0 — иначе на телефоне список не сжимается и не листается, а
+          «Выйти» и «Настройки → Пользователи» уходят за край экрана
+          (замечания заказчика 10.11.2026). */}
+      <nav className="custom-scrollbar min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain p-3 [-webkit-overflow-scrolling:touch]">
         {MENU.map((entry) => {
           // ── Flat item ──
           if (entry.type === "item") {
@@ -719,8 +722,8 @@ export function RoleBasedSidebar({
         })}
       </nav>
 
-      {/* ── Logout ── */}
-      <div className="border-t border-slate-200/60 p-3">
+      {/* ── Logout ── (shrink-0 + отступ под «полоску» iPhone — кнопка всегда видна) */}
+      <div className="shrink-0 border-t border-slate-200/60 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <button
           onClick={handleLogout}
           title="Выйти"
