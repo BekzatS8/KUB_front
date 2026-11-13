@@ -35,14 +35,18 @@ export function InstagramConnectDialog({
   const [link, setLink] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  // Wazzup не смог переподключить старый канал и открыл добавление нового.
+  const [newChannel, setNewChannel] = useState(false)
 
   const loadLink = async () => {
     setLoading(true)
     setError("")
     setLink("")
+    setNewChannel(false)
     try {
       const res = await getWazzupInstagramLink(reauthChannelId)
       setLink(res.link)
+      setNewChannel(!!res.new_channel)
     } catch (err: any) {
       setError(errorText(err, "Не удалось открыть окно подключения Wazzup"))
     } finally {
@@ -73,6 +77,12 @@ export function InstagramConnectDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {newChannel && !loading && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Старый канал Instagram Wazzup восстановить не смог — подключаем его заново как новый канал.
+            После подключения старый неработающий канал можно удалить в списке каналов.
+          </p>
+        )}
         <div className="min-h-0 flex-1 overflow-hidden rounded-lg border bg-slate-50">
           {loading && (
             <div className="flex h-full items-center justify-center gap-2 text-sm text-slate-500">

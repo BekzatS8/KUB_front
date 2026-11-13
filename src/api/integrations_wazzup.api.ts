@@ -325,7 +325,7 @@ export const saveMetaAppSettings = async (appId: string, appSecret: string): Pro
 
 // Окно Wazzup для подключения Instagram к VISARIO (вход в Facebook через их
 // приложение). channelId — переавторизовать существующий канал.
-export const getWazzupInstagramLink = async (channelId?: string): Promise<{ link: string }> => {
+export const getWazzupInstagramLink = async (channelId?: string): Promise<{ link: string; new_channel?: boolean }> => {
   const response = await api.get('/integrations/wazzup/instagram/link', {
     params: channelId ? { channel_id: channelId } : {},
   });
