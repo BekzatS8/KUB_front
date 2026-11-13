@@ -137,9 +137,27 @@ function ComboboxSelect({
   loading?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  // Подпись выбранного пункта запоминаем: во время поиска его может не быть
+  // в результатах, а кнопка всё равно должна показывать выбранное.
+  const selectedLabel = useRef<{ value: string; label: string } | null>(null);
+  const currentValue = value ? value.toString() : "";
+  const foundLabel = options.find((option) => option.value === currentValue)?.label;
+  if (currentValue && foundLabel) selectedLabel.current = { value: currentValue, label: foundLabel };
+  const buttonLabel = foundLabel ?? (selectedLabel.current?.value === currentValue ? selectedLabel.current.label : undefined);
+  // При закрытии сбрасываем и текст поиска, и серверные результаты: при
+  // следующем открытии поле пустое, в списке — стартовые пункты (раньше старый
+  // текст оставался, и новый ввод дописывался к нему).
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) {
+      setSearch("");
+      onSearchChange?.("");
+    }
+  };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -149,9 +167,7 @@ function ComboboxSelect({
           disabled={disabled}
         >
           <span className="truncate">
-            {value
-              ? options.find((option) => option.value === value.toString())?.label
-              : placeholder}
+            {value ? buttonLabel : placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -163,7 +179,11 @@ function ComboboxSelect({
         <Command shouldFilter={!onSearchChange}>
           <CommandInput
             placeholder={searchPlaceholder}
-            onValueChange={onSearchChange}
+            value={search}
+            onValueChange={(v) => {
+              setSearch(v);
+              onSearchChange?.(v);
+            }}
           />
           <CommandList className="max-h-[min(18rem,calc(100vh-8rem))] touch-pan-y overscroll-contain [-webkit-overflow-scrolling:touch]">
             <CommandEmpty>{loading ? "Поиск…" : emptyText}</CommandEmpty>
@@ -177,7 +197,7 @@ function ComboboxSelect({
                   value={`${option.searchValue || option.label} ::${option.value}`}
                   onSelect={() => {
                     onChange(option.value);
-                    setOpen(false);
+                    handleOpenChange(false);
                   }}
                 >
                   <Check
@@ -236,6 +256,11 @@ export default function DealsPage() {
   const [leadSearchResults, setLeadSearchResults] = useState<any[] | null>(null);
   const [leadSearchLoading, setLeadSearchLoading] = useState(false);
   const leadSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Серверный поиск клиента: в памяти страницы только первые 100 клиентов
+  // (больше сервер за раз не отдаёт), остальных выпадашка не находила.
+  const [clientSearchResults, setClientSearchResults] = useState<any[] | null>(null);
+  const [clientSearchLoading, setClientSearchLoading] = useState(false);
+  const clientSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Kanban view state
   // rejected — список отказников (лиды на этапе отказа уходят с доски сюда).
@@ -1310,10 +1335,70 @@ export default function DealsPage() {
       searchValue: getClientSearchValue(client),
     }));
 
+  const handleClientSearch = (query: string, clientType?: string) => {
+    if (clientSearchTimer.current) clearTimeout(clientSearchTimer.current);
+    const term = query.trim();
+    if (!term) {
+      setClientSearchResults(null);
+      setClientSearchLoading(false);
+      return;
+    }
+    setClientSearchLoading(true);
+    clientSearchTimer.current = setTimeout(async () => {
+      try {
+        const params = { page: 1, size: 50, q: term, ...(clientType ? { client_type: clientType } : {}) };
+        let res;
+        try {
+          res = await ClientAPI.listClients(params);
+        } catch {
+          res = await ClientAPI.listMyClients(params);
+        }
+        setClientSearchResults(extractList(res));
+      } catch (err) {
+        console.error("Client search error:", err);
+        setClientSearchResults([]);
+      } finally {
+        setClientSearchLoading(false);
+      }
+    }, 300);
+  };
+
+  // Опции выпадашки клиента: результаты серверного поиска (если ищем) либо
+  // стартовый список; выбранный клиент всегда в списке — иначе в кнопке не
+  // будет его имени.
+  const getClientPickerOptions = (clientType: string | undefined, selectedId: number | string | undefined) => {
+    const opts = clientSearchResults
+      ? clientSearchResults
+          .filter((client) => !clientType || getClientType(client) === clientType)
+          .map((client) => ({
+            value: client.id.toString(),
+            label: getClientDisplayName(client),
+            searchValue: getClientSearchValue(client),
+          }))
+      : getClientOptions(clientType);
+    const sel = String(selectedId || "");
+    // Во время поиска — только найденные: выбранный клиент, не подходящий под
+    // запрос, в результатах не показываем (его имя остаётся в кнопке).
+    if (!clientSearchResults && sel && sel !== "0" && !opts.some((o) => o.value === sel)) {
+      const c = clients.find((x) => String(x.id) === sel);
+      if (c) opts.unshift({ value: sel, label: getClientDisplayName(c), searchValue: getClientSearchValue(c) });
+    }
+    return opts;
+  };
+
+  // Клиент, найденный поиском, запоминаем в общем списке — чтобы его имя
+  // показывалось в кнопке, карточке и таблице.
+  const rememberClient = (value: string) => {
+    const found = (clientSearchResults || []).find((c) => String(c.id) === value);
+    if (found && !clients.some((c) => String(c.id) === value)) {
+      setClients((prev) => [...prev, found]);
+    }
+  };
+
   // Get client name by ID
-  const getClientName = (clientId: number) => {
+  const getClientName = (clientId: number, serverName?: string) => {
     const client = clients.find(c => String(c.id) === String(clientId));
-    return client ? getClientDisplayName(client) : `Клиент #${clientId}`;
+    return client ? getClientDisplayName(client) : (serverName || `Клиент #${clientId}`);
   };
 
   const getUserDisplayName = (u?: Partial<User> & Record<string, any>) => {
@@ -1411,15 +1496,13 @@ export default function DealsPage() {
   };
 
   // Опции для выпадашки лида: результаты серверного поиска (если ищем) либо
-  // стартовый список. Гарантируем, что выбранный лид присутствует в списке —
-  // иначе в кнопке не будет его подписи.
+  // стартовый список. Без поиска выбранный лид всегда в списке; во время
+  // поиска — только найденные (подпись выбранного кнопка помнит сама).
   const getLeadPickerOptions = (selectedId: number) => {
     const source = leadSearchResults ?? leads;
     const opts = source.slice(0, 100).map(getLeadOption);
-    if (selectedId && !opts.some((o) => o.value === String(selectedId))) {
-      const sel =
-        leads.find((l) => l.id === selectedId) ||
-        (leadSearchResults || []).find((l) => l.id === selectedId);
+    if (!leadSearchResults && selectedId && !opts.some((o) => o.value === String(selectedId))) {
+      const sel = leads.find((l) => l.id === selectedId);
       if (sel) opts.unshift(getLeadOption(sel));
     }
     return opts;
@@ -1823,11 +1906,16 @@ export default function DealsPage() {
                 <div className="w-full sm:w-48 overflow-visible">
                   <ComboboxSelect
                     value={clientFilter}
-                    onChange={setClientFilter}
+                    onChange={(value) => {
+                      rememberClient(value);
+                      setClientFilter(value);
+                    }}
                     placeholder="Клиент"
-                    searchPlaceholder="Поиск клиента..."
+                    searchPlaceholder="Имя, телефон, ИИН..."
                     emptyText="Клиент не найден"
-                    options={getClientOptions()}
+                    options={getClientPickerOptions(undefined, clientFilter)}
+                    onSearchChange={(q) => handleClientSearch(q)}
+                    loading={clientSearchLoading}
                   />
                 </div>
                 {/* Branch filter - only for elevated roles */}
@@ -1908,7 +1996,7 @@ export default function DealsPage() {
                         <TableCell className="px-4 align-top font-mono text-sm">#{deal.id}</TableCell>
                         <TableCell className="px-4 align-top">
                           <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
-                            {deal.client_id ? getClientName(deal.client_id) : "Без клиента"}
+                            {deal.client_id ? getClientName(deal.client_id, (deal as any).client_name) : "Без клиента"}
                           </div>
                         </TableCell>
                         <TableCell className="px-4 align-top">
@@ -2161,6 +2249,7 @@ export default function DealsPage() {
               <ComboboxSelect
                 value={newDeal.client_id?.toString() || ""}
                 onChange={(value) => {
+                  rememberClient(value);
                   const clientId = parseInt(value) || 0;
                   setNewDeal({
                     ...newDeal,
@@ -2168,9 +2257,11 @@ export default function DealsPage() {
                   });
                 }}
                 placeholder="Выберите клиента"
-                searchPlaceholder="Поиск клиента..."
+                searchPlaceholder="Имя, телефон, ИИН..."
                 emptyText="Клиент не найден"
-                options={getClientOptions(newDeal.client_type)}
+                options={getClientPickerOptions(newDeal.client_type, newDeal.client_id)}
+                onSearchChange={(q) => handleClientSearch(q, newDeal.client_type)}
+                loading={clientSearchLoading}
               />
               {!newDeal.client_id && (
                 <p className="text-xs text-red-500">Выберите клиента для продолжения</p>
@@ -2329,6 +2420,7 @@ export default function DealsPage() {
               <ComboboxSelect
                 value={editDeal.client_id?.toString() || ""}
                 onChange={(value) => {
+                  rememberClient(value);
                   const clientId = parseInt(value) || 0;
                   setEditDeal({
                     ...editDeal,
@@ -2336,9 +2428,11 @@ export default function DealsPage() {
                   });
                 }}
                 placeholder="Выберите клиента"
-                searchPlaceholder="Поиск клиента..."
+                searchPlaceholder="Имя, телефон, ИИН..."
                 emptyText="Клиент не найден"
-                options={getClientOptions(editDeal.client_type)}
+                options={getClientPickerOptions(editDeal.client_type, editDeal.client_id)}
+                onSearchChange={(q) => handleClientSearch(q, editDeal.client_type)}
+                loading={clientSearchLoading}
               />
             </div>
 
@@ -2464,7 +2558,7 @@ export default function DealsPage() {
                 <div>
                   <Label className="text-sm text-gray-500">Клиент</Label>
                   <p className="font-medium">
-                    {currentDeal.client_id ? getClientName(currentDeal.client_id) : "Без клиента"}
+                    {currentDeal.client_id ? getClientName(currentDeal.client_id, (currentDeal as any).client_name) : "Без клиента"}
                   </p>
                 </div>
                 <div>
