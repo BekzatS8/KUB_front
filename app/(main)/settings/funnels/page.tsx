@@ -62,8 +62,15 @@ export default function FunnelsPage() {
   const [stageForm, setStageForm] = useState<UpsertFunnelStageRequest>(emptyStageForm)
   const [reassignDialog, setReassignDialog] = useState<{ stage: FunnelStage; targetId: number } | null>(null)
 
+  // Отделы: справочник с сервера + отделы уже существующих воронок. Раньше —
+  // только из воронок, и первую воронку колл-центра создать было нельзя
+  // (замечания 13.11.2026).
+  const [departmentOptions, setDepartmentOptions] = useState<FunnelsAPI.FunnelDepartmentOption[]>([])
+  const [routing, setRouting] = useState<FunnelsAPI.InboundRouting | null>(null)
+  const [routingSaving, setRoutingSaving] = useState(false)
   const departments = useMemo(() => {
     const map = new Map<number, { id: number; name: string; code: string }>()
+    departmentOptions.forEach((d) => map.set(d.id, { id: d.id, name: d.name, code: d.code }))
     funnels.forEach((funnel) => {
       if (funnel.department) {
         map.set(funnel.department.id, {
@@ -74,7 +81,7 @@ export default function FunnelsPage() {
       }
     })
     return Array.from(map.values())
-  }, [funnels])
+  }, [funnels, departmentOptions])
 
   async function load() {
     setIsLoading(true)
@@ -85,6 +92,9 @@ export default function FunnelsPage() {
       ])
       setCanManage(Boolean(permissionData.scopes["funnels.create"]))
       setFunnels(Array.isArray(funnelData) ? funnelData : [])
+      // Справочник отделов и маршрут входящих — не критичны для страницы.
+      FunnelsAPI.listFunnelDepartments().then(setDepartmentOptions).catch(() => setDepartmentOptions([]))
+      FunnelsAPI.getInboundRouting().then(setRouting).catch(() => setRouting(null))
     } catch (error: any) {
       toast.error(error?.message || "Не удалось загрузить воронки")
     } finally {
@@ -307,6 +317,50 @@ export default function FunnelsPage() {
           )}
         </div>
       </div>
+
+      {routing && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Входящие лиды сначала в колл-центр</CardTitle>
+            <CardDescription>
+              Новые лиды из WhatsApp, Instagram и звонков попадают в воронку «Обработка - Колл-центр».
+              Оператор разбирает их и нажимает «Передать в продажи» — лид уходит в воронку отдела продаж.
+              Выключено — входящие сразу идут в отдел продаж, как раньше.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={routing.to_callcenter}
+                disabled={routingSaving || !routing.funnel_exists}
+                onCheckedChange={async (checked) => {
+                  setRoutingSaving(true)
+                  try {
+                    setRouting(await FunnelsAPI.setInboundRouting(checked))
+                    toast.success(checked ? "Входящие лиды идут в колл-центр" : "Входящие лиды идут в отдел продаж")
+                    load()
+                  } catch (error: any) {
+                    toast.error(error?.response?.data?.message || error?.message || "Не удалось сохранить настройку")
+                  } finally {
+                    setRoutingSaving(false)
+                  }
+                }}
+              />
+              <span className="text-sm text-slate-700">
+                {routing.to_callcenter ? "Включено" : "Выключено"}
+              </span>
+            </div>
+            {routing.operators_active === 0 ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Нет ни одного работающего оператора (роль «Оператор (колл-центр)»). Пока их нет, не включайте —
+                входящие лиды некому будет разбирать.
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500">Работающих операторов: {routing.operators_active}</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

@@ -130,9 +130,58 @@ export async function purgeReportTable(id: number): Promise<void> {
 }
 
 // Скачать отчёт в Excel (руководство/админ/КК). Возвращает blob для сохранения.
-export async function exportReportTable(id: number): Promise<Blob> {
-  const res = await api.get(`/reports/table/report/${id}/export`, { responseType: 'blob' })
+// trash — отчёт из корзины (открыть/скачать, не восстанавливая).
+export async function exportReportTable(id: number, trash = false): Promise<Blob> {
+  const res = await api.get(`/reports/table/report/${id}/export`, {
+    responseType: 'blob',
+    params: trash ? { trash: 1 } : undefined,
+  })
   return res.data as Blob
+}
+
+// Отчёт из корзины сотрудников — просмотр без восстановления.
+export async function getTrashedReportTable(id: number): Promise<ManagerReport> {
+  const res = await api.get(`/reports/table/report/${id}`, { params: { trash: 1 } })
+  return res.data
+}
+
+// Свой отчёт из своей корзины — просмотр и Excel.
+export async function getMyTrashedReportTable(id: number): Promise<ManagerReport> {
+  const res = await api.get(`/reports/table/my/${id}`, { params: { trash: 1 } })
+  return res.data
+}
+
+export async function exportMyReportTable(id: number, trash = false): Promise<Blob> {
+  const res = await api.get(`/reports/table/my/${id}/export`, {
+    responseType: 'blob',
+    params: trash ? { trash: 1 } : undefined,
+  })
+  return res.data as Blob
+}
+
+// Блокнот (отчёт-текст) — файлом .txt.
+export function saveReportNoteText(text: string, title?: string) {
+  const blob = new Blob([text || ''], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${title || 'report'}.txt`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+// Сохранить blob отчёта файлом .xlsx.
+export function saveReportBlob(blob: Blob, title?: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${title || 'report'}.xlsx`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
 

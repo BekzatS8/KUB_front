@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { ArchiveRestore, ArrowLeft, FileSpreadsheet, RefreshCw, User, Download, Pencil, Trash2, X, Search, NotebookPen } from "lucide-react";
+import { ArchiveRestore, ArrowLeft, Eye, FileSpreadsheet, RefreshCw, User, Download, Pencil, Trash2, X, Search, NotebookPen } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ReportNoteEditor } from "@/components/report-note-editor";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,9 @@ import {
   listReportTrash,
   restoreReportTable,
   purgeReportTable,
+  getTrashedReportTable,
+  saveReportBlob,
+  saveReportNoteText,
   type ManagerReport,
   type ManagerReportOwner,
   type ReportTableContent,
@@ -101,6 +104,37 @@ export default function TeamReportsPage() {
   const [trashItems, setTrashItems] = useState<ManagerReport[]>([]);
   const [trashLoading, setTrashLoading] = useState(false);
   const [purgeTarget, setPurgeTarget] = useState<ManagerReport | null>(null);
+  // Отчёт открыт из корзины: только просмотр и скачивание (замечания 13.11.2026).
+  const [reportFromTrash, setReportFromTrash] = useState(false);
+
+  const openTrashedReport = async (id: number) => {
+    setReportLoading(true);
+    setEditing(false);
+    setReportFromTrash(true);
+    try {
+      setReport(await getTrashedReportTable(id));
+    } catch (err: any) {
+      setReportFromTrash(false);
+      toast.error(err?.message || "Не удалось открыть отчёт");
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  // Скачать отчёт из корзины: таблица — Excel, блокнот — текстовый файл.
+  const downloadTrashed = async (r: ManagerReport) => {
+    try {
+      // В списке корзины вида отчёта нет — берём отчёт целиком.
+      const full = r.content ? r : await getTrashedReportTable(r.id);
+      if ((full.content as ReportTableContent | undefined)?.kind === "note") {
+        saveReportNoteText((full.content as ReportTableContent)?.text || "", full.title);
+      } else {
+        saveReportBlob(await exportReportTable(r.id, true), full.title);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Не удалось скачать отчёт");
+    }
+  };
 
   const loadTrash = () => {
     setTrashLoading(true);
@@ -227,9 +261,9 @@ export default function TeamReportsPage() {
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => { setEditing(false); setReport(null); }}>
+            <Button variant="outline" size="sm" onClick={() => { setEditing(false); setReport(null); setReportFromTrash(false); }}>
               <ArrowLeft className="mr-1.5 h-4 w-4" />
-              К отчётам сотрудника
+              {reportFromTrash ? "К корзине" : "К отчётам сотрудника"}
             </Button>
             <div>
               <h1 className="text-xl font-bold text-slate-900">{report?.title || "..."}</h1>
@@ -241,7 +275,29 @@ export default function TeamReportsPage() {
               </p>
             </div>
           </div>
-          {report && !reportLoading && (
+          {report && !reportLoading && reportFromTrash && (
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-amber-100 px-2 py-1 text-xs text-amber-800">В корзине</span>
+              <Button variant="outline" size="sm" onClick={() => downloadTrashed(report)}>
+                <Download className="mr-1.5 h-4 w-4" />
+                Скачать
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-green-700 hover:bg-green-50"
+                onClick={async () => {
+                  await handleRestoreTrash(report);
+                  setReport(null);
+                  setReportFromTrash(false);
+                }}
+              >
+                <ArchiveRestore className="mr-1.5 h-4 w-4" />
+                Восстановить
+              </Button>
+            </div>
+          )}
+          {report && !reportLoading && !reportFromTrash && (
             <div className="flex items-center gap-2">
               {(report.content as ReportTableContent)?.kind !== "note" && (
                 <Button variant="outline" size="sm" onClick={handleExport}>
@@ -434,6 +490,14 @@ export default function TeamReportsPage() {
                     )}
                   </p>
                 </div>
+                <Button variant="ghost" size="sm" title="Открыть" onClick={() => openTrashedReport(r.id)}>
+                  <Eye className="mr-1 h-4 w-4" />
+                  <span className="hidden sm:inline text-xs">Открыть</span>
+                </Button>
+                <Button variant="ghost" size="sm" title="Скачать" onClick={() => downloadTrashed(r)}>
+                  <Download className="mr-1 h-4 w-4" />
+                  <span className="hidden sm:inline text-xs">Скачать</span>
+                </Button>
                 <Button variant="ghost" size="sm" className="text-green-600 hover:bg-green-50 hover:text-green-700" onClick={() => handleRestoreTrash(r)}>
                   <ArchiveRestore className="mr-1 h-4 w-4" />
                   <span className="hidden sm:inline text-xs">Восстановить</span>

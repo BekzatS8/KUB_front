@@ -74,6 +74,7 @@ import { getCurrentUser, getCurrentCompany, hasPermission, getRoleCode } from "@
 import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filter";
 import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import { getMe } from "@/src/api/auth.api";
+import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -1895,7 +1896,11 @@ export default function DealsPage() {
                         </TableCell>
                         <TableCell className="px-4 align-top">
                           <div className="break-words leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
-                            {deal.lead_id ? getLeadTitle(deal.lead_id) : "Без лида"}
+                            {deal.lead_id ? (
+                              <Link href={`/leads/${deal.lead_id}`} className="text-blue-600 hover:underline">
+                                {getLeadTitle(deal.lead_id)}
+                              </Link>
+                            ) : "Без лида"}
                           </div>
                         </TableCell>
                         <TableCell className="px-4 align-top">
@@ -2458,7 +2463,12 @@ export default function DealsPage() {
                 <div>
                   <Label className="text-sm text-gray-500">Лид</Label>
                   <p className="font-medium">
-                    {currentDeal.lead_id ? getLeadTitle(currentDeal.lead_id) : "Без лида"}
+                    {/* Ссылка на карточку лида (замечания 13.11.2026: «нет перехода к лиду») */}
+                    {currentDeal.lead_id ? (
+                      <Link href={`/leads/${currentDeal.lead_id}`} className="text-blue-600 hover:underline">
+                        {getLeadTitle(currentDeal.lead_id)}
+                      </Link>
+                    ) : "Без лида"}
                   </p>
                 </div>
                 <div>

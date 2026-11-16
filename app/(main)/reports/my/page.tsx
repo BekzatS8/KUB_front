@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { ArchiveRestore, ChevronLeft, ChevronRight, FileSpreadsheet, Pencil, Plus, Trash2, NotebookPen
+import { ArchiveRestore, ArrowLeft, ChevronLeft, ChevronRight, Download, Eye, FileSpreadsheet, Pencil, Plus, Trash2, NotebookPen
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,6 +47,10 @@ import {
   reorderMyReportTables,
   restoreMyReportTable,
   saveMyReportTable,
+  getMyTrashedReportTable,
+  exportMyReportTable,
+  saveReportBlob,
+  saveReportNoteText,
   type ManagerReport,
   type ReportTableContent,
 } from "@/src/api/reports-table.api";
@@ -201,6 +205,35 @@ export default function MyReportsPage() {
     }
   };
 
+  // Отчёт из корзины: просмотр без восстановления и скачивание (замечания 13.11.2026).
+  const [trashView, setTrashView] = useState<ManagerReport | null>(null);
+  const [trashViewLoading, setTrashViewLoading] = useState(false);
+
+  const openTrashed = async (id: number) => {
+    setTrashViewLoading(true);
+    try {
+      setTrashView(await getMyTrashedReportTable(id));
+    } catch (err: any) {
+      toast.error(err?.message || "Не удалось открыть отчёт");
+    } finally {
+      setTrashViewLoading(false);
+    }
+  };
+
+  const downloadTrashed = async (r: ManagerReport) => {
+    try {
+      // В списке корзины вида отчёта нет — берём отчёт целиком.
+      const full = r.content ? r : await getMyTrashedReportTable(r.id);
+      if ((full.content as ReportTableContent | undefined)?.kind === "note") {
+        saveReportNoteText((full.content as ReportTableContent)?.text || "", full.title);
+      } else {
+        saveReportBlob(await exportMyReportTable(r.id, true), full.title);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Не удалось скачать отчёт");
+    }
+  };
+
   const handleRestore = async (r: ManagerReport) => {
     try {
       await restoreMyReportTable(r.id);
@@ -238,7 +271,7 @@ export default function MyReportsPage() {
         <div className="flex items-center gap-2">
           <Button
             variant={showTrash ? "default" : "outline"}
-            onClick={() => { setActiveId(null); setShowTrash((v) => !v); }}
+            onClick={() => { setActiveId(null); setTrashView(null); setShowTrash((v) => !v); }}
           >
             <Trash2 className="mr-1.5 h-4 w-4" />
             {showTrash ? "К отчётам" : "Корзина"}
@@ -277,6 +310,47 @@ export default function MyReportsPage() {
             )}
           </CardContent>
         </Card>
+      ) : showTrash && (trashView || trashViewLoading) ? (
+        /* Отчёт из корзины — только просмотр */
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setTrashView(null)}>
+                <ArrowLeft className="mr-1.5 h-4 w-4" />
+                К корзине
+              </Button>
+              <span className="truncate text-sm font-medium text-slate-900">{trashView?.title}</span>
+              <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">В корзине</span>
+            </div>
+            {trashView && (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => downloadTrashed(trashView)}>
+                  <Download className="mr-1.5 h-4 w-4" />
+                  Скачать
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-green-700 hover:bg-green-50"
+                  onClick={async () => {
+                    await handleRestore(trashView);
+                    setTrashView(null);
+                  }}
+                >
+                  <ArchiveRestore className="mr-1.5 h-4 w-4" />
+                  Восстановить
+                </Button>
+              </div>
+            )}
+          </div>
+          {trashViewLoading || !trashView ? (
+            <Skeleton className="h-64 w-full rounded-lg" />
+          ) : (trashView.content as ReportTableContent)?.kind === "note" ? (
+            <ReportNoteEditor key={`trash-${trashView.id}`} content={trashView.content as ReportTableContent} readOnly />
+          ) : (
+            <ReportTableEditor key={`trash-${trashView.id}`} content={trashView.content as ReportTableContent} readOnly />
+          )}
+        </div>
       ) : showTrash ? (
         /* Корзина — вертикальный список с восстановлением/удалением */
         <div className="space-y-2">
@@ -293,6 +367,22 @@ export default function MyReportsPage() {
                   </p>
                 )}
               </div>
+              <button
+                type="button"
+                title="Открыть"
+                onClick={() => openTrashed(r.id)}
+                className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600"
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                title="Скачать"
+                onClick={() => downloadTrashed(r)}
+                className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
               <button
                 type="button"
                 title="Восстановить"

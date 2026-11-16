@@ -334,13 +334,9 @@ export default function UsersPage() {
         const res = await RolesAPI.listRoles({ limit: 100 });
         const rolesData = Array.isArray(res) ? res : res.data || [];
         
-        // Filter out invalid roles and only keep valid ones
-        const validRoles = rolesData.filter(role => {
-          const roleId = Number(role.id);
-          return [10, 30, 40, 50, 60, 70, 80, 90].includes(roleId); // Only active role IDs
-        });
-        
-        console.log('Filtered roles:', validRoles);
+        // Все роли с сервера. Раньше здесь был зашитый список id, и новая роль
+        // «Оператор (колл-центр)» (95) в выбор не попадала (замечания 13.11.2026).
+        const validRoles = rolesData.filter(role => Number(role.id) > 0);
         setAvailableRoles(validRoles);
       } catch (e) {
         console.error("Failed to load roles", e);
