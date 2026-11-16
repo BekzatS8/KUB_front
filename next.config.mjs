@@ -32,7 +32,11 @@ const nextConfig = {
     return [
       {
         source: '/api-proxy/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.kubcrm.kz'}/:path*`,
+        // API_PROXY_TARGET — адрес API для самого сервера сайта (на проде
+        // http://127.0.0.1:4000 в .env.production): прокси не зависит от DNS
+        // и nginx. 16.11.2026 первый DNS хостинга перестал отвечать, каждое
+        // разрешение api.kubcrm.kz ждало 5 с — запросы через /api-proxy висли.
+        destination: `${process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.kubcrm.kz'}/:path*`,
       },
     ];
   },
