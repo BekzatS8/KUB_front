@@ -1507,11 +1507,29 @@ export default function DocumentsPage() {
                                         />
                                     </div>
                                     <div className="w-full sm:w-48 overflow-visible">
-                                        <Input
-                                            placeholder="ID клиента"
+                                        {/* Раньше — поле «ID клиента»: искать по имени было нельзя. */}
+                                        <ComboboxSelect
                                             value={clientIdFilter}
-                                            onChange={(e) => setClientIdFilter(e.target.value)}
-                                            className="w-full"
+                                            onChange={(val) => {
+                                                const found = findClient(val)
+                                                if (found && !clients.some((c) => c.id.toString() === val)) {
+                                                    setClients((prev) => [...prev, found])
+                                                }
+                                                setClientIdFilter(val)
+                                            }}
+                                            options={[
+                                                { value: "", label: "Все клиенты" },
+                                                // Фильтр из ссылки на клиента не из загруженной сотни.
+                                                ...(clientIdFilter && !clientSearch.results && !clientOptions.some((o) => o.value === clientIdFilter)
+                                                    ? [{ value: clientIdFilter, label: `Клиент #${clientIdFilter}` }]
+                                                    : []),
+                                                ...clientOptions,
+                                            ]}
+                                            placeholder="Клиент"
+                                            searchPlaceholder="Имя, телефон, ИИН..."
+                                            emptyText="Клиент не найден"
+                                            onSearchChange={(q) => clientSearch.search(q)}
+                                            loading={clientSearch.loading}
                                         />
                                     </div>
                                     <div className="w-full sm:w-48 overflow-visible">

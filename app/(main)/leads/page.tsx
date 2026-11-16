@@ -86,6 +86,7 @@ import { getMe } from "@/src/api/auth.api";
 import type { Lead } from "@/lib/types";
 import * as leadsApi from "@/src/api/leads.api";
 import * as ClientAPI from "@/src/api/clients.api";
+import { useClientSearch } from "@/lib/use-client-search";
 import * as FeedAPI from "@/src/api/feed.api";
 import * as BranchesAPI from "@/src/api/branches.api";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -158,6 +159,10 @@ export default function LeadsPage() {
   });
   const [isClientSelectOpen, setIsClientSelectOpen] = useState(false);
   const [clientsList, setClientsList] = useState<any[]>([]);
+  // Поиск клиента при конвертации — на сервере по всей базе: загружены только
+  // первые 100 клиентов (16.11.2026).
+  const clientSearch = useClientSearch();
+  const [clientQuery, setClientQuery] = useState("");
   const [statusChangeData, setStatusChangeData] = useState({ to: "", comment: "" });
 
   const [user, setUser] = useState<any>(null);
@@ -1310,25 +1315,43 @@ export default function LeadsPage() {
                   onChange={(e) => setConvertLeadData({ ...convertLeadData, client_id: e.target.value })}
                   className="flex-1"
                 />
-                <Popover open={isClientSelectOpen} onOpenChange={setIsClientSelectOpen}>
+                <Popover
+                  open={isClientSelectOpen}
+                  onOpenChange={(next) => {
+                    setIsClientSelectOpen(next);
+                    if (!next) {
+                      setClientQuery("");
+                      clientSearch.search("");
+                    }
+                  }}
+                >
                   <PopoverTrigger asChild>
                     <Button variant="outline" size="icon">
                       <Users className="h-4 w-4" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[300px] p-0" align="end">
-                    <Command>
-                      <CommandInput placeholder="Поиск клиента..." />
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Имя, телефон, ИИН..."
+                        value={clientQuery}
+                        onValueChange={(v) => {
+                          setClientQuery(v);
+                          clientSearch.search(v);
+                        }}
+                      />
                       <CommandList>
-                        <CommandEmpty>Клиент не найден.</CommandEmpty>
+                        <CommandEmpty>{clientSearch.loading ? "Поиск…" : "Клиент не найден."}</CommandEmpty>
                         <CommandGroup>
-                          {clientsList.map((c) => (
+                          {(clientSearch.results ?? clientsList).map((c) => (
                             <CommandItem
                               key={c.id}
                               value={`${c.first_name || ""} ${c.last_name || ""} ${c.legal_profile?.company_name || ""} ${c.id}`}
                               onSelect={() => {
                                 setConvertLeadData({ ...convertLeadData, client_id: c.id.toString() });
                                 setIsClientSelectOpen(false);
+                                setClientQuery("");
+                                clientSearch.search("");
                               }}
                             >
                               <span>
