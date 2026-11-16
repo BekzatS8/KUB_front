@@ -115,6 +115,8 @@ import { ArchiveFilter, ArchiveFilterValue } from "@/components/ui/archive-filte
 import { CollapsibleFilter } from "@/components/ui/collapsible-filter";
 import * as AuthAPI from "@/src/api/auth.api"
 import * as ClientAPI from "@/src/api/clients.api"
+import { ComboboxSelect } from "@/components/searchable-combobox"
+import { useClientSearch } from "@/lib/use-client-search"
 import * as DealsAPI from "@/src/api/deals.api"
 import * as FeedAPI from "@/src/api/feed.api"
 import {
@@ -303,80 +305,6 @@ function getTotalPagesFromResponse(response: any, total: number, pageSize: numbe
     return response?.pagination?.total_pages ?? response?.data?.pagination?.total_pages ?? Math.ceil(total / pageSize)
 }
 
-// ─── Combobox Component ──────────────────────────────────────────
-
-function ComboboxSelect({
-    value,
-    onChange,
-    options,
-    placeholder = "Выберите...",
-    searchPlaceholder = "Поиск...",
-    emptyText = "Ничего не найдено",
-    disabled = false,
-}: {
-    value: string | number
-    onChange: (value: string) => void
-    options: { value: string; label: string }[]
-    placeholder?: string
-    searchPlaceholder?: string
-    emptyText?: string
-    disabled?: boolean
-}) {
-    const [open, setOpen] = useState(false)
-
-    return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    className={cn(
-                        "w-full justify-between font-normal bg-background px-3 py-2 text-sm border-input border rounded-xl h-10 hover:bg-accent hover:text-accent-foreground",
-                        !value && "text-muted-foreground"
-                    )}
-                    disabled={disabled}
-                >
-                    <span className="truncate">
-                        {value
-                            ? options.find((o) => o.value === value.toString())?.label || placeholder
-                            : placeholder}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                <Command>
-                    <CommandInput placeholder={searchPlaceholder} />
-                    <CommandList>
-                        <CommandEmpty>{emptyText}</CommandEmpty>
-                        <CommandGroup>
-                            {options.map((option) => (
-                                <CommandItem
-                                    key={option.value}
-                                    value={option.label}
-                                    onSelect={() => {
-                                        onChange(option.value)
-                                        setOpen(false)
-                                    }}
-                                >
-                                    <Check
-                                        className={cn(
-                                            "mr-2 h-4 w-4",
-                                            value?.toString() === option.value ? "opacity-100" : "opacity-0"
-                                        )}
-                                    />
-                                    {option.label}
-                                </CommandItem>
-                            ))}
-                        </CommandGroup>
-                    </CommandList>
-                </Command>
-            </PopoverContent>
-        </Popover>
-    )
-}
-
 // ─── Role helper ─────────────────────────────────────────────────
 
 // ─── Sign-history helpers ─────────────────────────────────────────
@@ -427,6 +355,9 @@ export default function DocumentsPage() {
     
     // Get fresh user data or fallback to state
     const user = freshUserData || currentUser;
+    // Поиск клиента в форме документа идёт на сервере по всей базе: в
+    // загруженном списке только первые 100 клиентов (16.11.2026).
+    const clientSearch = useClientSearch({ mine: user ? getRoleCode(user) === 'sales' : false });
 
     const [uploadOwnOpen, setUploadOwnOpen] = useState(false)
     const [legalOnlyMode, setLegalOnlyMode] = useState(false)
@@ -1277,10 +1208,20 @@ export default function DocumentsPage() {
         return d.amount ? `${Number(d.amount).toLocaleString()} ₸ (#${d.id})` : `Сделка #${d.id}`
     }
 
-    const clientOptions = clients.map((c) => ({
+    const clientLabel = (c: any) =>
+        c.first_name ? `${c.first_name} ${c.last_name || ""}`.trim() : (c.display_name || c.name || `#${c.id}`)
+    const toClientOption = (c: any) => ({
         value: c.id.toString(),
-        label: c.first_name ? `${c.first_name} ${c.last_name || ""}`.trim() : (c.name || `#${c.id}`),
-    }))
+        label: clientLabel(c),
+        searchValue: [clientLabel(c), c.name, c.display_name, c.phone, c.primary_phone, c.bin_iin, c.iin]
+            .filter(Boolean).join(" "),
+    })
+    // Во время поиска — найденные на сервере, иначе загруженный список.
+    const clientOptions = (clientSearch.results ?? clients).map(toClientOption)
+    // Клиент мог прийти из поиска, а не из загруженного списка.
+    const findClient = (id: string) =>
+        clients.find((c) => c.id.toString() === id) ||
+        (clientSearch.results || []).find((c) => c.id.toString() === id)
 
     const dealOptions = deals.map((d) => ({
         value: d.id.toString(),
@@ -1997,8 +1938,12 @@ export default function DocumentsPage() {
                             <ComboboxSelect
                                 value={createForm.client_id}
                                 onChange={(val) => {
-                                    const selectedClient = clients.find(c => c.id.toString() === val);
-                                    const clientType = selectedClient?.client_type || "";
+                                    const selectedClient = findClient(val);
+                                    // Найденного поиском запоминаем — для имени в таблице и карточке.
+                                    if (selectedClient && !clients.some((c) => c.id.toString() === val)) {
+                                        setClients((prev) => [...prev, selectedClient]);
+                                    }
+                                    const clientType = selectedClient?.client_type || "individual";
                                     setCreateForm({ 
                                         ...createForm, 
                                         client_id: val, 
@@ -2012,7 +1957,10 @@ export default function DocumentsPage() {
                                 }}
                                 options={clientOptions}
                                 placeholder="Выберите клиента"
-                                searchPlaceholder="Поиск клиента..."
+                                searchPlaceholder="Имя, телефон, ИИН..."
+                                emptyText="Клиент не найден"
+                                onSearchChange={(q) => clientSearch.search(q)}
+                                loading={clientSearch.loading}
                             />
                             {!createForm.client_id && (
                                 <p className="text-xs text-red-500">Выберите клиента</p>

@@ -20,6 +20,32 @@ export async function getDocumentById(id: number): Promise<Models.Document> {
 
 // ─── Create (only stable endpoint) ──────────────────────────────
 
+// Понятные названия полей, которых не хватает для документа.
+const MISSING_FIELD_LABELS: Record<string, string> = {
+  iin: 'ИИН/БИН',
+  bin_iin: 'ИИН/БИН',
+  iin_or_bin: 'ИИН/БИН',
+  bin: 'БИН компании',
+  address: 'адрес',
+  legal_address: 'юридический адрес',
+  phone: 'телефон',
+  full_name: 'ФИО',
+  last_name: 'ФИО',
+  first_name: 'ФИО',
+  company_name: 'название компании',
+  passport_number: 'номер паспорта',
+  id_number: 'номер удостоверения',
+  signer_full_name: 'ФИО подписанта',
+  signer_position: 'должность подписанта',
+  signer_email: 'e-mail подписанта',
+  signer_contact: 'контакт подписанта',
+  contract_number: 'номер договора',
+}
+
+function missingFieldLabel(key: string): string {
+  return MISSING_FIELD_LABELS[key] || key
+}
+
 export async function createDocumentFromClient(payload: Models.Documents_Create_from_client_Request): Promise<Models.Document> {
   try {
     console.log('Creating document with payload:', payload);
@@ -59,9 +85,12 @@ export async function createDocumentFromClient(payload: Models.Documents_Create_
         const missingFields = backendError.missing_fields || [];
         console.log('missingFields array:', missingFields);
         console.log('First missing field:', missingFields[0]);
-        const fieldNames = missingFields.map((field: any) => 
+        const rawNames: string[] = missingFields.map((field: any) =>
           typeof field === 'string' ? field : field.key || field.name || field.Key || field.toString()
         );
+        // Раньше показывались служебные ключи с повторами («iin, bin_iin,
+        // address, iin_or_bin, address») — менеджер не понимал, что заполнить.
+        const fieldNames = Array.from(new Set(rawNames.map(missingFieldLabel)));
         
         const source = missingFields[0]?.source || 'unknown';
         let messagePrefix = '';
