@@ -199,8 +199,10 @@ export function MessengerView({ account }: { account: WazzupAccount }) {
     }
   }, [account, chatId, chatTransport, router, searchQuery]);
 
-  // «Профиль» (ТЗ «доработки CRM КУБ», п.4): чат открыт по ссылке — ищем лид
-  // контакта. undefined — ищем, null — лида нет (кнопка неактивна).
+  // «Перейти к лиду» (ТЗ «доработки CRM КУБ», п.4; замечание 19.11.2026): чат
+  // открыт по ссылке — ищем лид контакта. undefined — ищем, null — лида нет
+  // (кнопка неактивна). У чатов, выбранных внутри окна Wazzup, та же ссылка —
+  // в выпадающем списке «Сделки» в шапке чата (контакт выгружает бэкенд).
   const [profileLeadId, setProfileLeadId] = useState<number | null | undefined>(undefined);
   useEffect(() => {
     if (!chatId) {
@@ -317,7 +319,7 @@ export function MessengerView({ account }: { account: WazzupAccount }) {
                 onClick={() => profileLeadId && router.push(`/leads/${profileLeadId}`)}
               >
                 <UserRound className="mr-2 h-4 w-4" />
-                Профиль
+                Перейти к лиду
               </Button>
             </span>
           )}
