@@ -33,6 +33,8 @@ interface Lead {
   source?: string;
   messenger_transport?: string;
   messenger_chat_id?: string;
+  // Все переписки лида: после объединения лидов их несколько (WhatsApp и Instagram).
+  messenger_chats?: { transport: string; chat_id: string }[];
   status: string;
   created_at?: string;
   owner_id: number;
@@ -221,6 +223,13 @@ function CallsSection({ leadId }: { leadId: number }) {
 
 // Иконка мессенджера под тип источника: у WhatsApp / Instagram / Telegram —
 // своя фирменная иконка и цвет; для прочих — универсальная (зелёный чат).
+const MESSENGER_LABELS: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  instagram: "Instagram",
+  telegram: "Telegram",
+  tgapi: "Telegram",
+};
+
 function MessengerIcon({ source, className = "w-3.5 h-3.5" }: { source?: string; className?: string }) {
   const s = (source || "").toLowerCase();
   if (s.includes("whatsapp")) {
@@ -264,6 +273,27 @@ function OverviewSection({
   showFunnel: boolean;
   canMoveBetweenDepartments: boolean;
 }) {
+  // Переписки лида: кнопка по телефону открывает WhatsApp, остальные
+  // переписки (Instagram, Telegram, второй номер) — отдельными кнопками.
+  const phoneDigits = (lead.phone || "").replace(/\D/g, "");
+  const allChats = lead.messenger_chats?.length
+    ? lead.messenger_chats
+    : lead.messenger_chat_id
+      ? [{ transport: lead.messenger_transport || lead.source || "whatsapp", chat_id: lead.messenger_chat_id }]
+      : [];
+  const phoneTransport =
+    allChats.some((c) => c.transport === "whatsapp") || lead.source === "instagram" || lead.source === "telegram" || !lead.source
+      ? "whatsapp"
+      : lead.source;
+  const otherChats = allChats.filter(
+    (c) =>
+      !(
+        phoneDigits.length >= 10 &&
+        c.transport === "whatsapp" &&
+        c.chat_id.replace(/\D/g, "").slice(-10) === phoneDigits.slice(-10)
+      ),
+  );
+
   return (
     <div className="space-y-4">
       {/* Title + status */}
@@ -301,11 +331,11 @@ function OverviewSection({
                 {/* Открыть переписку с лидом сразу в нашем мессенджере (Wazzup),
                     без ручного поиска (обратная связь заказчика 21.07.2026). */}
                 <a
-                  href={`/whatsapp?transport=${lead.source || "whatsapp"}&phone=${(lead.phone || "").replace(/\D/g, "")}`}
+                  href={`/whatsapp?transport=${phoneTransport}&phone=${phoneDigits}`}
                   className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-sm text-foreground hover:bg-muted"
                   title="Открыть переписку в мессенджере"
                 >
-                  <MessengerIcon source={lead.source} />
+                  <MessengerIcon source={phoneTransport} />
                   Открыть в мессенджере
                 </a>
                 {canCall && (
@@ -326,17 +356,24 @@ function OverviewSection({
           {/* Лиды из Telegram/Instagram приходят без телефона — переписку
               открываем по external_chat_id, так же как WhatsApp по номеру
               (обратная связь заказчика 23.07.2026). */}
-          {!lead.phone && lead.messenger_chat_id && (
-            <div className="flex items-center justify-between py-1">
+          {/* После объединения лидов (WhatsApp + Instagram) — кнопка на каждую
+              переписку (замечание заказчика 20.11.2026). */}
+          {otherChats.length > 0 && (
+            <div className="flex items-center justify-between gap-2 py-1">
               <span className="text-sm text-muted-foreground">Переписка</span>
-              <a
-                href={`/whatsapp?transport=${lead.messenger_transport || lead.source || "whatsapp"}&chat_id=${encodeURIComponent(lead.messenger_chat_id)}`}
-                className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-sm text-foreground hover:bg-muted"
-                title="Открыть переписку в мессенджере"
-              >
-                <MessengerIcon source={lead.messenger_transport || lead.source} />
-                Открыть в мессенджере
-              </a>
+              <div className="flex flex-wrap justify-end gap-2">
+                {otherChats.map((c) => (
+                  <a
+                    key={`${c.transport}:${c.chat_id}`}
+                    href={`/whatsapp?transport=${c.transport || lead.source || "whatsapp"}&chat_id=${encodeURIComponent(c.chat_id)}`}
+                    className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-sm text-foreground hover:bg-muted"
+                    title="Открыть переписку в мессенджере"
+                  >
+                    <MessengerIcon source={c.transport || lead.source} />
+                    {otherChats.length > 1 || lead.phone ? MESSENGER_LABELS[c.transport] ?? "Открыть в мессенджере" : "Открыть в мессенджере"}
+                  </a>
+                ))}
+              </div>
             </div>
           )}
           {lead.source && (
@@ -521,7 +558,16 @@ export default function LeadDetailPage() {
     leadsApi
       .get_lead(undefined, { id })
       .then((data) => setLead(data))
-      .catch(() => setLead(null))
+      .catch((err: any) => {
+        // Лид объединён с другим — открываем основной (старые ссылки из
+        // мессенджера и уведомлений, замечание 20.11.2026).
+        const target = Number(err?.response?.data?.details?.merged_into_id);
+        if (target > 0) {
+          router.replace(`/leads/${target}`);
+          return;
+        }
+        setLead(null);
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
